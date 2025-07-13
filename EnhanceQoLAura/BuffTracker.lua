@@ -488,7 +488,6 @@ end
 local function refreshTree(selectValue)
 	if not treeGroup then return end
 	treeGroup:SetTree(getCategoryTree())
-	if selectValue then treeGroup:SelectByValue(selectValue) end
 end
 
 local function handleDragDrop(src, dst)
@@ -529,10 +528,10 @@ local function handleDragDrop(src, dst)
 			end
 		end
 	end
-        table.insert(addon.db["buffTrackerOrder"][dCat], insertPos, sBuff)
+	table.insert(addon.db["buffTrackerOrder"][dCat], insertPos, sBuff)
 
-        refreshTree(selectedCategory)
-        scanBuffs()
+	refreshTree(selectedCategory)
+	scanBuffs()
 end
 
 function addon.Aura.functions.buildCategoryOptions(container, catId)
@@ -743,13 +742,13 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 	end)
 	wrapper:AddChild(cbGlow)
 
-	if IsSpellKnown(buffId) or IsSpellKnownOrOverridesKnown(buffId) then
-		local cbCast = addon.functions.createCheckboxAce(L["buffTrackerCastOnClick"], buff.castOnClick, function(_, _, val)
-			buff.castOnClick = val
-			scanBuffs()
-		end)
-		wrapper:AddChild(cbCast)
-	end
+	-- if IsSpellKnown(buffId) or IsSpellKnownOrOverridesKnown(buffId) then
+	-- 	local cbCast = addon.functions.createCheckboxAce(L["buffTrackerCastOnClick"], buff.castOnClick, function(_, _, val)
+	-- 		buff.castOnClick = val
+	-- 		scanBuffs()
+	-- 	end)
+	-- 	wrapper:AddChild(cbCast)
+	-- end
 
 	buff.altIDs = buff.altIDs or {}
 	for _, altId in ipairs(buff.altIDs) do
