@@ -529,9 +529,10 @@ local function handleDragDrop(src, dst)
 			end
 		end
 	end
-	table.insert(addon.db["buffTrackerOrder"][dCat], insertPos, sBuff)
+        table.insert(addon.db["buffTrackerOrder"][dCat], insertPos, sBuff)
 
-	refreshTree(selectedCategory)
+        refreshTree(selectedCategory)
+        scanBuffs()
 end
 
 function addon.Aura.functions.buildCategoryOptions(container, catId)
