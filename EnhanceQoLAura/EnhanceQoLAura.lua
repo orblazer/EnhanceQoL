@@ -590,23 +590,28 @@ end
 
 addon.variables.statusTable.groups["aura"] = true
 addon.variables.statusTable.groups["aura\001cooldownmanager"] = true
+addon.variables.statusTable.groups["aura\001unitframeaura"] = true
 addon.functions.addToTree(nil, {
 	value = "aura",
 	text = L["Aura"],
 	children = {
 		--    { value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
-		{ value = "bufftracker", text = L["BuffTracker"] },
-	},
+               { value = "bufftracker", text = L["BuffTracker"] },
+               { value = "unitframeaura", text = L["UnitFrameAura"] },
+       },
 })
 
 function addon.Aura.functions.treeCallback(container, group)
-	container:ReleaseChildren()
-	if group == "aura\001resourcebar" then
-		addResourceFrame(container)
-	elseif group == "aura\001bufftracker" then
-		addon.Aura.functions.addBuffTrackerOptions(container)
-		addon.Aura.scanBuffs()
-	end
+        container:ReleaseChildren()
+        if group == "aura\001resourcebar" then
+                addResourceFrame(container)
+        elseif group == "aura\001bufftracker" then
+                addon.Aura.functions.addBuffTrackerOptions(container)
+                addon.Aura.scanBuffs()
+        elseif group == "aura\001unitframeaura" then
+                addon.Aura.functions.addUnitFrameAuraOptions(container)
+                addon.Aura.unitFrame.RefreshAll()
+        end
 end
 
 -- local BLACKLISTED_EVENTS = {
