@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.28.0] – 2025-07-14
+### ✨ Added
+- **Aura Tracker (module)**
+  - Create draggable panels that show your own auras (buffs & debuffs).
+  - Extensive filters: role, class, spec, stack count, remaining time, and more.
+- **Truncate Raid-Frame Names**
+  - Limit the number of characters(name-length) shown in the default party/raid frames.
+- **Extended Raid-Frame Scale**
+  - Scale the default party/raid frames beyond Blizzard’s built-in maximum.
+### 🔄 Changed
+- **Option Re-organisation**
+  - Unit-Frame settings have been moved into their own *Unit Frame* category.
+### 🐛 Fixed
+- Performance issue when *Hide buffs on raid-style frames* was enabled.
+
 ## [3.27.0] – 2025-07-11
 ### ✨ Added
 - **Teleport Favorites in the Compendium**
