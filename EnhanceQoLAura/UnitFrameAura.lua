@@ -49,8 +49,7 @@ local function UpdateTrackedBuffs(frame, unit)
 	if not frame or not unit or not addon.db.unitFrameAuraIDs then return end
 
 	local index = 0
-	AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(icon, ...)
-		local spellId = select(9, ...)
+	AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(_, icon, _, _, _, _, _, _, _, spellId)
 		if addon.db.unitFrameAuraIDs[spellId] then
 			index = index + 1
 			local iconFrame = ensureIcon(frame, index)
