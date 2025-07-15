@@ -194,6 +194,7 @@ globals = {
 	"DELETE_ITEM_CONFIRM_STRING",
 	"PaperDollFrame",
 	"utf8sub",
+	"AzeriteLevelUpToast",
 	"OrderHallCommandBar",
 	"string.utf8sub",
 	"CharacterHeadSlot",
