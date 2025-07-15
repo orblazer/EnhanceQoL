@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.29.0] – 2025-07-20
+### ✨ Added
+- **Hide Boss-Kill Banner**  
+  Automatically suppresses the victory/loot banner that appears after a boss kill.
+- **Feature Descriptions**  
+  Added concise in-UI descriptions for several existing options to make them easier to understand.
+
 ## [3.28.1] – 2025-07-14
 ### 🔄 Changed
 - **Aura Tracker** – Some Buttons were moved

@@ -2347,6 +2347,7 @@ local function addLootFrame(container, d)
 			parent = "",
 			var = "enableLootToastFilter",
 			text = L["enableLootToastFilter"],
+			desc = L["enableLootToastFilterDesc"],
 			type = "CheckBox",
 			callback = function(self, _, value)
 				addon.db["enableLootToastFilter"] = value
@@ -2355,21 +2356,22 @@ local function addLootFrame(container, d)
 				addLootFrame(container)
 			end,
 		},
-                {
-                        parent = "",
-                        var = "autoQuickLoot",
-                        desc = L["autoQuickLootDesc"],
-                        type = "CheckBox",
-                        callback = function(self, _, value) addon.db["autoQuickLoot"] = value end,
-                },
-                {
-                        parent = "",
-                        var = "autoHideBossBanner",
-                        text = L["autoHideBossBanner"],
-                        type = "CheckBox",
-                        callback = function(self, _, value) addon.db["autoHideBossBanner"] = value end,
-                },
-        }
+		{
+			parent = "",
+			var = "autoQuickLoot",
+			desc = L["autoQuickLootDesc"],
+			type = "CheckBox",
+			callback = function(self, _, value) addon.db["autoQuickLoot"] = value end,
+		},
+		{
+			parent = "",
+			var = "autoHideBossBanner",
+			text = L["autoHideBossBanner"],
+			desc = L["autoHideBossBannerDesc"],
+			type = "CheckBox",
+			callback = function(self, _, value) addon.db["autoHideBossBanner"] = value end,
+		},
+	}
 
 	table.sort(data, function(a, b)
 		local textA = a.text or L[a.var]
@@ -3109,10 +3111,10 @@ local function initMisc()
 	addon.functions.InitDBValue("hideRaidTools", false)
 	addon.functions.InitDBValue("autoRepair", false)
 	addon.functions.InitDBValue("sellAllJunk", false)
-        addon.functions.InitDBValue("autoCancelCinematic", false)
-        addon.functions.InitDBValue("ignoreTalkingHead", false)
-        addon.functions.InitDBValue("autoHideBossBanner", false)
-        addon.functions.InitDBValue("hiddenLandingPages", {})
+	addon.functions.InitDBValue("autoCancelCinematic", false)
+	addon.functions.InitDBValue("ignoreTalkingHead", false)
+	addon.functions.InitDBValue("autoHideBossBanner", false)
+	addon.functions.InitDBValue("hiddenLandingPages", {})
 	addon.functions.InitDBValue("hideMinimapButton", false)
 	addon.functions.InitDBValue("hideBagsBar", false)
 	addon.functions.InitDBValue("hideMicroMenu", false)
@@ -3156,13 +3158,13 @@ local function initMisc()
 		if addon.db["sellAllJunk"] and MerchantSellAllJunkButton:IsEnabled() then MerchantSellAllJunkButton:Click() end
 	end)
 
-        hooksecurefunc(TalkingHeadFrame, "PlayCurrent", function(self)
-                if addon.db["ignoreTalkingHead"] then self:Hide() end
-        end)
-        hooksecurefunc(BossBanner, "PlayBanner", function(self)
-                if addon.db["autoHideBossBanner"] then self:Hide() end
-        end)
-        _G.CompactRaidFrameManager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
+	hooksecurefunc(TalkingHeadFrame, "PlayCurrent", function(self)
+		if addon.db["ignoreTalkingHead"] then self:Hide() end
+	end)
+	hooksecurefunc(BossBanner, "PlayBanner", function(self)
+		if addon.db["autoHideBossBanner"] then self:Hide() end
+	end)
+	_G.CompactRaidFrameManager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
 	ExpansionLandingPageMinimapButton:HookScript("OnShow", function(self)
 		local id = addon.variables.landingPageReverse[self.title]
 		if addon.db["enableSquareMinimap"] then

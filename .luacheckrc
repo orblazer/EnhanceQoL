@@ -187,6 +187,7 @@ globals = {
 	"StaticPopup1EditBox",
 	"StaticPopup_Visible",
 	"GlobalIgnoreDB",
+	"BossBanner",
 	"FriendsFrame",
 	"ChatFrame_RemoveMessageEventFilter",
 	"EnhanceQoL_IgnoreDB",
