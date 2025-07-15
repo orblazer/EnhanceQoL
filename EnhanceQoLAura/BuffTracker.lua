@@ -894,14 +894,18 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		applyLockState()
 		scanBuffs()
 		refreshTree(selectedCategory)
+		container:ReleaseChildren()
+		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
 	core:AddChild(enableCB)
 
-	local lockCB = addon.functions.createCheckboxAce(L["buffTrackerLocked"], addon.db["buffTrackerLocked"][catId], function(self, _, val)
-		addon.db["buffTrackerLocked"][catId] = val
-		applyLockState()
-	end)
-	core:AddChild(lockCB)
+	if addon.db["buffTrackerEnabled"][catId] then
+		local lockCB = addon.functions.createCheckboxAce(L["buffTrackerLocked"], addon.db["buffTrackerLocked"][catId], function(self, _, val)
+			addon.db["buffTrackerLocked"][catId] = val
+			applyLockState()
+		end)
+		core:AddChild(lockCB)
+	end
 
 	local nameEdit = addon.functions.createEditboxAce(L["CategoryName"], cat.name, function(self, _, text)
 		if text ~= "" then
