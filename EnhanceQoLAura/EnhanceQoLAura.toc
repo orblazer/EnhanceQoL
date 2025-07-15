@@ -20,8 +20,8 @@
 ## LoadOnDemand: 1
 ## Globe-Main: EnhanceQoL
 
-Init.lua
 locales.xml
+Init.lua
 ..\EnhanceQoL\widgets\DragTreeGroup.lua
 
 EnhanceQoLAura.lua
