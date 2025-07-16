@@ -10,7 +10,7 @@ local UIParent = _G.UIParent
 ]]
 
 local Type, Version = "EQOL_DragTreeGroup", 3
-local DRAG_DELAY = 0.25 -- seconds to hold before drag starts
+local DRAG_DELAY = 0.2 -- seconds to hold before drag starts
 
 local function Constructor()
 	local tree = AceGUI:Create("TreeGroup")

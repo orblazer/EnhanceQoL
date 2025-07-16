@@ -919,7 +919,7 @@ local function getCategoryTree()
 	})
 	table.insert(tree, {
 		value = "IMPORT_CATEGORY",
-		text = "|cff0000ff+ " .. (L["ImportCategory"] or "Import Category ..."),
+		text = "|cff00ccff+ " .. (L["ImportCategory"] or "Import Category ..."),
 	})
 	return tree
 end

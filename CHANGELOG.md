@@ -2,11 +2,11 @@
 
 ## [3.30.0] – 2025-07-16
 ### ✨ Added
-- **Aura Tracker**
-  - *Export/Import Categories* - Share your Auras to your friends
-    - Just copy/paste the string provided
+- **Aura Tracker**  
+  - **Export / Import of categories** – share your aura setups with friends.  
+    Simply copy the generated string and let others paste it to import.
 ### 🐛 Fixed
-- **Aura Tracker** - database missmatch in some rare cases
+- **Aura Tracker** – fixed a rare database **mismatch** that could cause errors.
 
 ## [3.29.0] – 2025-07-15
 ### ✨ Added
