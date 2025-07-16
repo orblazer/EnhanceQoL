@@ -789,6 +789,74 @@ local function removeBuff(catId, id)
 	scanBuffs()
 end
 
+local function sanitiseCategory(cat)
+	if not cat then return end
+	cat.allowedSpecs = nil
+	cat.allowedClasses = nil
+	cat.allowedRoles = nil
+	for _, buff in pairs(cat.buffs or {}) do
+		if not buff.altIDs then buff.altIDs = {} end
+		if buff.showAlways == nil then buff.showAlways = false end
+		if buff.glow == nil then buff.glow = false end
+		if buff.castOnClick == nil then buff.castOnClick = false end
+		if not buff.trackType then buff.trackType = "BUFF" end
+		if not buff.allowedSpecs then buff.allowedSpecs = {} end
+		if not buff.allowedClasses then buff.allowedClasses = {} end
+		if not buff.allowedRoles then buff.allowedRoles = {} end
+		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
+		if buff.showStacks == nil then
+			local def = addon.db["buffTrackerShowStacks"]
+			if def == nil then def = true end
+			buff.showStacks = def
+		end
+		if buff.showTimerText == nil then
+			local def = addon.db["buffTrackerShowTimerText"]
+			if def == nil then def = true end
+			buff.showTimerText = def
+		end
+	end
+end
+
+local function exportCategory(catId, forChat)
+	local cat = addon.db["buffTrackerCategories"][catId]
+	if not cat then return end
+	local data = {
+		category = cat,
+		order = addon.db["buffTrackerOrder"][catId] or {},
+		version = 1,
+	}
+	local serializer = LibStub("AceSerializer-3.0")
+	local deflate = LibStub("LibDeflate")
+	local serialized = serializer:Serialize(data)
+	local compressed = deflate:CompressDeflate(serialized)
+	if forChat then return deflate:EncodeForWoWChatChannel(compressed) end
+	return deflate:EncodeForPrint(compressed)
+end
+
+local function importCategory(encoded)
+	if type(encoded) ~= "string" or encoded == "" then return end
+	local deflate = LibStub("LibDeflate")
+	local serializer = LibStub("AceSerializer-3.0")
+	local decoded = deflate:DecodeForPrint(encoded) or deflate:DecodeForWoWChatChannel(encoded)
+	if not decoded then return end
+	local decompressed = deflate:DecompressDeflate(decoded)
+	if not decompressed then return end
+	local ok, data = serializer:Deserialize(decompressed)
+	if not ok or type(data) ~= "table" then return end
+	local cat = data.category or data.cat or data
+	if type(cat) ~= "table" then return end
+	sanitiseCategory(cat)
+	local newId = (#addon.db["buffTrackerCategories"] or 0) + 1
+	addon.db["buffTrackerCategories"][newId] = cat
+	addon.db["buffTrackerOrder"][newId] = data.order or {}
+	addon.db["buffTrackerEnabled"][newId] = true
+	addon.db["buffTrackerLocked"][newId] = false
+	ensureAnchor(newId)
+	rebuildAltMapping()
+	scanBuffs()
+	return newId
+end
+
 local treeGroup
 
 local function getCategoryTree()
@@ -952,6 +1020,29 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
 	spellEdit:SetRelativeWidth(0.6)
 	core:AddChild(spellEdit)
+
+	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
+		local data = exportCategory(catId)
+		if not data then return end
+		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"] = StaticPopupDialogs["EQOL_EXPORT_CATEGORY"]
+			or {
+				text = L["ExportCategory"],
+				button1 = CLOSE,
+				hasEditBox = true,
+				editBoxWidth = 320,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
+			self.editBox:SetText(data)
+			self.editBox:HighlightText()
+			self.editBox:SetFocus()
+		end
+		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
+	end)
+	core:AddChild(exportBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db["buffTrackerCategories"][catId].name or ""
@@ -1351,6 +1442,36 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 	treeGroup:SetCallback("OnDragDrop", function(_, _, src, dst) handleDragDrop(src, dst) end)
 
 	left:AddChild(treeGroup)
+
+	local importBtn = addon.functions.createButtonAce(L["ImportCategory"], 200, function()
+		StaticPopupDialogs["EQOL_IMPORT_CATEGORY"] = StaticPopupDialogs["EQOL_IMPORT_CATEGORY"]
+			or {
+				text = L["ImportCategory"],
+				button1 = ACCEPT,
+				button2 = CANCEL,
+				hasEditBox = true,
+				editBoxWidth = 320,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
+			self.editBox:SetText("")
+			self.editBox:SetFocus()
+		end
+		StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnAccept = function(self)
+			local text = self.editBox:GetText()
+			local id = importCategory(text)
+			if id then
+				refreshTree(id)
+			else
+				print(L["ImportCategoryError"] or "Invalid string")
+			end
+		end
+		StaticPopup_Show("EQOL_IMPORT_CATEGORY")
+	end)
+	left:AddChild(importBtn)
 
 	local ok = treeGroup:SelectByValue(tostring(selectedCategory))
 	if not ok then
