@@ -516,7 +516,9 @@ local function updateBuff(catId, id, changedId)
 		if aura then
 			if aura.duration and aura.duration > 0 then
 				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+				frame.cd:SetReverse(true)
 			else
+				frame.cd:SetReverse(false)
 				frame.cd:Clear()
 			end
 			frame.icon:SetDesaturated(false)
@@ -530,6 +532,7 @@ local function updateBuff(catId, id, changedId)
 				local cdDur = spellInfo.duration
 				local cdEnable = spellInfo.isEnabled
 				local modRate = spellInfo.modRate
+				frame.cd:SetReverse(false)
 				if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
 					frame.cd:SetCooldown(cdStart, cdDur, modRate)
 					frame.icon:SetDesaturated(true)
