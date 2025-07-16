@@ -1551,6 +1551,7 @@ local COMM_PREFIX = "EQOLBTSHARE"
 local AceComm = LibStub("AceComm-3.0")
 
 local incoming = {}
+local pending   = {}
 
 local function getCatName(catId)
        local cat = addon.db["buffTrackerCategories"][catId]
@@ -1558,14 +1559,15 @@ local function getCatName(catId)
 end
 
 ShareCategory = function(catId, targetPlayer)
-       local chatEncoded = exportCategory(catId, "chat")
        local addonEncoded = exportCategory(catId, "addon")
-       if not chatEncoded or not addonEncoded then return end
+       if not addonEncoded then return end
 
-       local placeholder = ("[EQOL: %s - %s]"):format(UnitName("player"), getCatName(catId))
+       local label = ("%s - %s"):format(UnitName("player"), getCatName(catId))
+       local placeholder = ("[EQOL: %s]"):format(label)
        ChatFrame_OpenChat(placeholder)
 
        local pktID = tostring(time() * 1000):gsub("%D", "")
+       pending[label] = pktID
        AceComm:SendCommMessage(
                COMM_PREFIX,
                ("<%s>%s"):format(pktID, addonEncoded),
@@ -1597,13 +1599,15 @@ end
 
 local origSetItemRef = SetItemRef
 function SetItemRef(link, text, button, frame, ...)
-       local id = link:match("^eqolaura:(.+)")
-       if id and incoming[id] then
-               StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
-                       or {
-                               text = L["ImportCategory"],
-                               button1 = ACCEPT,
-                               button2 = CANCEL,
+       local label = link:match("^garrmission:eqolaura:(.+)")
+       if label then
+               local pktID = pending[label]
+               if pktID and incoming[pktID] then
+                       StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
+                               or {
+                                       text = L["ImportCategory"],
+                                       button1 = ACCEPT,
+                                       button2 = CANCEL,
                                timeout = 0,
                                whileDead = true,
                                hideOnEscape = true,
@@ -1611,12 +1615,14 @@ function SetItemRef(link, text, button, frame, ...)
                                OnAccept = function(_, data)
                                        local encoded = incoming[data]
                                        incoming[data] = nil
+                                       pending[label] = nil
                                        local newId = importCategory(encoded)
                                        if newId then refreshTree(newId) end
                                end,
                        }
-               StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, id)
+               StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
                return
+               end
        end
        origSetItemRef(link, text, button, frame, ...)
 end
