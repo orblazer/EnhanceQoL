@@ -607,3 +607,12 @@ hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", updateSellMarks)
 for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
 	hooksecurefunc(frame, "UpdateItems", updateSellMarks)
 end
+
+hooksecurefunc(_G.ContainerFrameItemButtonMixin, "OnEnter", function(self)
+	local bag = self:GetBagID()
+	local slot = self:GetID()
+	if bag and slot and sellMarkLookup[bag .. "_" .. slot] then
+		GameTooltip:AddLine(L["vendorWillBeSold"], 1, 0, 0)
+		GameTooltip:Show()
+	end
+end)

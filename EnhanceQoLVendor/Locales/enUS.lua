@@ -43,3 +43,4 @@ L["andWord"] = "and"
 L["vendorCraftingExpansions"] = "Include crafting materials (grouped by expansion)"
 
 L["vendorSellNext"] = "Sell next"
+L["vendorWillBeSold"] = "Will be sold"
