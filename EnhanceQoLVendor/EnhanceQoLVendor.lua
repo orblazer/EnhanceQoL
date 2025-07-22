@@ -608,11 +608,14 @@ for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
 	hooksecurefunc(frame, "UpdateItems", updateSellMarks)
 end
 
-hooksecurefunc(_G.ContainerFrameItemButtonMixin, "OnEnter", function(self)
-	local bag = self:GetBagID()
-	local slot = self:GetID()
-	if bag and slot and sellMarkLookup[bag .. "_" .. slot] then
-		GameTooltip:AddLine(L["vendorWillBeSold"], 1, 0, 0)
-		GameTooltip:Show()
-	end
-end)
+if TooltipDataProcessor then
+	TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+		if not data or not tooltip.GetOwner then return end
+		local oTooltip = tooltip.GetOwner and tooltip:GetOwner()
+		if not oTooltip or not oTooltip.GetBagID or not oTooltip.GetID then return end
+		local bagID = oTooltip:GetBagID()
+		local slotIndex = oTooltip:GetID()
+		local key = bagID .. "_" .. slotIndex
+		if sellMarkLookup[key] then tooltip:AddLine(L["vendorWillBeSold"], 1, 0, 0) end
+	end)
+end
