@@ -282,6 +282,7 @@ local function addVendorFrame(container, type)
 
 		labelHeadlineExplain:SetText("|cffffd700" .. L["labelExplainedline"]:format(iqColor, lIlvl, table.concat(text, " " .. L["andWord"] .. " ")) .. "|r")
 		wrapper:DoLayout()
+		updateSellMarks()
 	end
 
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
@@ -356,12 +357,10 @@ local function addVendorFrame(container, type)
 			expList[i] = _G["EXPANSION_NAME" .. i]
 		end
 		local list, order = addon.functions.prepareListForDropdown(expList, true)
-		local dropCrafting = addon.functions.createDropdownAce(
-			L["vendorCraftingExpansions"],
-			list,
-			order,
-			function(self, event, key, checked) addon.db["vendor" .. value .. "CraftingExpansions"][key] = checked or nil end
-		)
+		local dropCrafting = addon.functions.createDropdownAce(L["vendorCraftingExpansions"], list, order, function(self, event, key, checked)
+			addon.db["vendor" .. value .. "CraftingExpansions"][key] = checked or nil
+			updateSellMarks()
+		end)
 		dropCrafting:SetMultiselect(true)
 		for id, val in pairs(addon.db["vendor" .. value .. "CraftingExpansions"]) do
 			if val then dropCrafting:SetItemValue(tonumber(id), true) end
@@ -385,6 +384,7 @@ local function addVendorFrame(container, type)
 		groupInfo:SetFullWidth(true)
 		labelHeadlineExplain:SetFullWidth(true)
 	end
+	updateSellMarks()
 end
 
 local function addInExcludeFrame(container, type)
@@ -420,6 +420,7 @@ local function addInExcludeFrame(container, type)
 					local list, order = addon.functions.prepareListForDropdown(addon.db[dbValue])
 					dropIncludeList:SetList(list, order)
 					dropIncludeList:SetValue(nil) -- Setze die Auswahl zurück
+					updateSellMarks()
 				end
 				eBox:SetText("")
 			end)
@@ -457,6 +458,7 @@ local function addInExcludeFrame(container, type)
 				local list, order = addon.functions.prepareListForDropdown(addon.db[dbValue])
 				dropIncludeList:SetList(list, order)
 				dropIncludeList:SetValue(nil) -- Setze die Auswahl zurück
+				updateSellMarks()
 			end
 		end
 	end)
