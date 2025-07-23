@@ -125,7 +125,8 @@ local function lookupItems()
 		for slot = 1, C_Container.GetContainerNumSlots(bag) do
 			local itemID = C_Container.GetContainerItemID(bag, slot)
 			if itemID then
-				local itemName, itemLink, quality, itemLevel, _, _, _, _, _, _, sellPrice, classID, subclassID, bindType, expansionID = C_Item.GetItemInfo(itemID)
+				local itemLink = C_Container.GetContainerItemLink(bag, slot)
+				local itemName, _, quality, itemLevel, _, _, _, _, _, _, sellPrice, classID, subclassID, bindType, expansionID = C_Item.GetItemInfo(itemLink)
 				if not itemName then
 					C_Item.RequestLoadItemDataByID(itemID)
 				else
