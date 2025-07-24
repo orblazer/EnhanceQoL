@@ -3016,6 +3016,7 @@ local function updateFlyoutButtonInfo(button)
 		local location = button.location
 		if not location then return end
 
+		-- TODO 12.0: EquipmentManager_UnpackLocation will change once Void Storage is removed
 		local player, bank, bags, voidStorage, slot, bag = EquipmentManager_UnpackLocation(location)
 
 		local itemLink
@@ -4800,6 +4801,7 @@ local eventHandlers = {
 	["ACTIVE_PLAYER_SPECIALIZATION_CHANGED"] = function(arg1)
 		addon.variables.unitSpec = GetSpecialization()
 		if addon.variables.unitSpec then
+			-- TODO 11.2: use C_SpecializationInfo.GetSpecializationInfo
 			addon.variables.unitSpecName = select(2, GetSpecializationInfo(addon.variables.unitSpec))
 			addon.variables.unitRole = GetSpecializationRole(GetSpecialization())
 		end
@@ -4869,7 +4871,7 @@ local eventHandlers = {
 		end
 	end,
 	--@end-debug@
-	--TODO completely remove BANKFRAME_OPENED as it's only needed in PRE 11.2 Patch - Wait for release in August 2025
+	-- TODO 11.2: remove BANKFRAME_OPENED handler once legacy support is dropped
 	["BANKFRAME_OPENED"] = function()
 		if not addon.db["showIlvlOnBankFrame"] then return end
 		--TODO Removed global variable in Patch 11.2 - has to be removed everywhere when patch is released
@@ -5068,6 +5070,7 @@ local eventHandlers = {
 		if addon.db["enableMinimapButtonBin"] then addon.functions.toggleButtonSink() end
 		addon.variables.unitSpec = GetSpecialization()
 		if addon.variables.unitSpec then
+			-- TODO 11.2: use C_SpecializationInfo.GetSpecializationInfo
 			addon.variables.unitSpecName = select(2, GetSpecializationInfo(addon.variables.unitSpec))
 			addon.variables.unitRole = GetSpecializationRole(GetSpecialization())
 		end

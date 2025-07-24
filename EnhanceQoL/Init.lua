@@ -505,6 +505,7 @@ addon.variables.unitSpec = GetSpecialization()
 addon.variables.unitSpecName = nil
 addon.variables.unitRole = nil
 if addon.variables.unitSpec then
+	-- TODO 11.2: use C_SpecializationInfo.GetSpecializationInfo
 	addon.variables.unitSpecName = select(2, GetSpecializationInfo(addon.variables.unitSpec))
 	addon.variables.unitRole = GetSpecializationRole(GetSpecialization())
 end

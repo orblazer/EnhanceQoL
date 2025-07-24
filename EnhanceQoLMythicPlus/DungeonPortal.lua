@@ -148,7 +148,8 @@ local function CreatePortalButtonsWithCooldown(frame, spells)
 	local favorites = {}
 	local others = {}
 	for spellID, data in pairs(spells) do
-		local known = IsSpellKnown(spellID)
+                -- TODO 11.2: migrate IsSpellKnown to C_SpellBook.IsSpellInSpellBook
+                local known = IsSpellKnown(spellID)
 		local isFavorite = favoriteLookup[spellID]
 		local passes = (not data.faction or data.faction == faction)
 		if addon.db["portalHideMissing"] then passes = passes and known end
@@ -373,8 +374,9 @@ local function CreatePortalCompendium(frame, compendium)
 
 		local sortedSpells = {}
 		if not addon.db["teleportsCompendiumHide" .. section.headline] then
-			for spellID, data in pairs(section.spells) do
-				local known = (IsSpellKnown(spellID) and not data.isToy)
+                for spellID, data in pairs(section.spells) do
+                        -- TODO 11.2: switch IsSpellKnown to C_SpellBook.IsSpellInSpellBook
+                        local known = (IsSpellKnown(spellID) and not data.isToy)
 					or (hasEngineering and data.toyID and not data.isHearthstone and isToyUsable(data.toyID))
 					or (data.isItem and GetItemCount(data.itemID) > 0)
 					or (data.isHearthstone and isToyUsable(data.toyID))
@@ -967,7 +969,8 @@ local function updateKeystoneInfo()
 					button.icon = icon
 
 					-- Überprüfen, ob der Zauber bekannt ist
-					if mapData.spellId and IsSpellKnown(mapData.spellId) then
+                        -- TODO 11.2: Replace IsSpellKnown with C_SpellBook.IsSpellInSpellBook
+                        if mapData.spellId and IsSpellKnown(mapData.spellId) then
 						local cooldownData = C_Spell.GetSpellCooldown(mapData.spellId)
 						if cooldownData and cooldownData.isEnabled then
 							button:EnableMouse(true) -- Aktiviert Klicks

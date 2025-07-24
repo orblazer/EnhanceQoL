@@ -167,7 +167,10 @@ local function checkShow()
 		removeBRFrame()
 		return
 	end
-	if IsInGroup() then removeBRFrame() return end
+	if IsInGroup() then
+		removeBRFrame()
+		return
+	end
 	if not enoughFood then
 		createBRFrame()
 	else
