@@ -596,7 +596,8 @@ function addon.functions.updateAllowedDrinks()
 				and not (isEarthen and not drink.isEarthenFood)
 				and not (drink.earthenOnly and not isEarthen)
 				and not (drink.earthenOnly and drink.isGem and ignoreGems)
-				and not (drink.isSpell and not IsSpellKnown(drink.id))
+                                -- TODO 11.2: migrate IsSpellKnown to C_SpellBook.IsSpellInSpellBook
+                                and not (drink.isSpell and not IsSpellKnown(drink.id))
 			then
 				if drink.isMageFood and preferMage then
 					tinsert(filtered, 1, newItem(drink.id, drink.desc, drink.isSpell))

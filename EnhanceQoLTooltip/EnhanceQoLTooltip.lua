@@ -249,7 +249,7 @@ local function checkUnit(tooltip)
 end
 
 local function CheckReagentBankCount(itemID)
-	-- TODO Remove the function after the launch of 11.2 as ReagentBank is removed
+       -- TODO 11.2: Remove this function as Reagent Bank is removed
 	if not IsReagentBankUnlocked then return end
 	local count = 0
 	if IsReagentBankUnlocked() then
@@ -273,7 +273,8 @@ local function checkItem(tooltip, id, name)
 	end
 	if addon.db["TooltipShowItemCount"] then
 		if id then
-			local rBankCount = CheckReagentBankCount(id) or 0
+                       -- TODO 11.2: remove reagent bank counting
+                       local rBankCount = CheckReagentBankCount(id) or 0
 			local bagCount = C_Item.GetItemCount(id)
 			local bankCount = C_Item.GetItemCount(id, true)
 			local totalCount = rBankCount + bankCount

@@ -634,6 +634,7 @@ local function updateBuff(catId, id, changedId, firstScan)
 			frame:Show()
 		else
 			local icon = buff.icon
+			-- TODO 11.2: Replace IsSpellKnown* usage with C_SpellBook.IsSpellInSpellBook
 			local shouldSecure = buff.castOnClick and (IsSpellKnown(id) or IsSpellKnownOrOverridesKnown(id))
 			local showTimer = buff.showTimerText
 			if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
@@ -1616,6 +1617,7 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 	wrapper:AddChild(specDrop)
 	wrapper:AddChild(addon.functions.createSpacerAce())
 
+	-- TODO 11.2: Replace IsSpellKnown* check with C_SpellBook.IsSpellInSpellBook
 	-- if IsSpellKnown(buffId) or IsSpellKnownOrOverridesKnown(buffId) then
 	-- 	local cbCast = addon.functions.createCheckboxAce(L["buffTrackerCastOnClick"], buff.castOnClick, function(_, _, val)
 	-- 		buff.castOnClick = val

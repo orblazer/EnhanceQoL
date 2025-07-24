@@ -73,6 +73,7 @@ L["TooltipShowItemID"] = "Показать ID предмета в подсказ
 
 L["TooltipShowItemCount"] = "Показать количество предметов в подсказке"
 L["TooltipShowSeperateItemCount"] = "Показать количество предметов по отдельным местам"
+-- TODO 11.2: remove Reagentbank localization
 L["Reagentbank"] = "Банк реагентов"
 L["Bank"] = "Банк"
 L["Bag"] = "Сумка"

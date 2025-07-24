@@ -62,6 +62,7 @@ L["TooltipShowItemID"] = "Show ItemID on Tooltip"
 
 L["TooltipShowItemCount"] = "Show item count on Tooltip"
 L["TooltipShowSeperateItemCount"] = "Show item count separated per location"
+-- TODO 11.2: remove Reagentbank localization
 L["Reagentbank"] = "Reagentbank"
 L["Bank"] = "Bank"
 L["Bag"] = "Bag"
