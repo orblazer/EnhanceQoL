@@ -275,14 +275,20 @@ local function getCategoryTree()
 			local ia = orderIndex[a] or math.huge
 			local ib = orderIndex[b] or math.huge
 			if ia ~= ib then return ia < ib end
-			local na = GetSpellInfo(a)
-			local nb = GetSpellInfo(b)
-			return (na or tostring(a)) < (nb or tostring(b))
-		end)
-		for _, spellId in ipairs(spells) do
-			local name, _, icon = GetSpellInfo(spellId)
-			table.insert(node.children, { value = catId .. "\001" .. spellId, text = name or tostring(spellId), icon = icon })
-		end
+                        local na = C_Spell.GetSpellInfo(a)
+                        local nb = C_Spell.GetSpellInfo(b)
+                        local naName = na and na.name
+                        local nbName = nb and nb.name
+                        return (naName or tostring(a)) < (nbName or tostring(b))
+                end)
+                for _, spellId in ipairs(spells) do
+                        local info = C_Spell.GetSpellInfo(spellId)
+                        table.insert(node.children, {
+                                value = catId .. "\001" .. spellId,
+                                text = info and info.name or tostring(spellId),
+                                icon = info and info.iconID,
+                        })
+                end
 		table.insert(tree, node)
 	end
 	table.sort(tree, function(a, b) return a.value < b.value end)
@@ -447,8 +453,9 @@ local function buildCategoryOptions(container, catId)
                 if db.spells[spellId] then
                         local line = addon.functions.createContainer("SimpleGroup", "Flow")
                         line:SetFullWidth(true)
-                        local name = GetSpellInfo(spellId) or tostring(spellId)
-			local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
+                        local info = C_Spell.GetSpellInfo(spellId)
+                        local name = info and info.name or tostring(spellId)
+                        local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
 			label:SetRelativeWidth(0.7)
 			line:AddChild(label)
                         local btn = addon.functions.createButtonAce(L["Remove"], 80, function()
@@ -544,7 +551,8 @@ local function buildSpellOptions(container, catId, spellId)
         wrapper:SetFullWidth(true)
         container:AddChild(wrapper)
 
-        local name = GetSpellInfo(spellId) or tostring(spellId)
+        local info = C_Spell.GetSpellInfo(spellId)
+        local name = info and info.name or tostring(spellId)
         local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
         wrapper:AddChild(label)
 
@@ -662,8 +670,11 @@ function CastTracker.functions.LayoutBars(catId)
 end
 
 function CastTracker.functions.StartBar(spellId, sourceGUID, catId)
-	local name, _, icon, castTime = GetSpellInfo(spellId)
-	castTime = (castTime or 0) / 1000
+        local spellData = C_Spell.GetSpellInfo(spellId)
+        local name = spellData and spellData.name
+        local icon = spellData and spellData.iconID
+        local castTime = spellData and spellData.castTime
+        castTime = (castTime or 0) / 1000
 	local db = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId] or {}
 	if db.duration and db.duration > 0 then castTime = db.duration end
 	if castTime <= 0 then return end
