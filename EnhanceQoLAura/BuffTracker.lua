@@ -753,36 +753,36 @@ local function updateBuff(catId, id, changedId, firstScan)
 			else
 				frame.charges:Hide()
 			end
-
-			if buff and buff.customTextEnabled and buff.customText and buff.customText ~= "" then
-				local pos = buff.customTextPosition or "TOP"
-				frame.customText:ClearAllPoints()
-				local margin = 2
-				if pos == "TOP" then
-					frame.customText:SetPoint("BOTTOM", frame, "TOP", 0, margin)
-				elseif pos == "BOTTOM" then
-					frame.customText:SetPoint("TOP", frame, "BOTTOM", 0, -margin)
-				elseif pos == "LEFT" then
-					frame.customText:SetPoint("RIGHT", frame, "LEFT", -margin, 0)
-				else
-					frame.customText:SetPoint("LEFT", frame, "RIGHT", margin, 0)
-				end
-
-				local stack = aura and aura.applications or 0
-				local val = stack
-				if buff.customTextUseStacks then
-					val = stack * (buff.customTextBase or 1)
-					if buff.customTextMin and val < buff.customTextMin then val = buff.customTextMin end
-				end
-				local text = tostring(buff.customText)
-				text = text:gsub("<stack>", tostring(val))
-				frame.customText:SetText(text)
-				frame.customText:Show()
-			else
-				frame.customText:Hide()
-			end
 		else
 			frame.charges:Hide()
+		end
+
+		if buff and buff.customTextEnabled and buff.customText and buff.customText ~= "" then
+			local pos = buff.customTextPosition or "TOP"
+			frame.customText:ClearAllPoints()
+			local margin = 2
+			if pos == "TOP" then
+				frame.customText:SetPoint("BOTTOM", frame, "TOP", 0, margin)
+			elseif pos == "BOTTOM" then
+				frame.customText:SetPoint("TOP", frame, "BOTTOM", 0, -margin)
+			elseif pos == "LEFT" then
+				frame.customText:SetPoint("RIGHT", frame, "LEFT", -margin, 0)
+			else
+				frame.customText:SetPoint("LEFT", frame, "RIGHT", margin, 0)
+			end
+
+			local stack = aura and aura.applications or 0
+			local val = stack
+			if buff.customTextUseStacks then
+				val = stack * (buff.customTextBase or 1)
+				if buff.customTextMin and val < buff.customTextMin then val = buff.customTextMin end
+			end
+			local text = tostring(buff.customText)
+			text = text:gsub("<stack>", tostring(val))
+			frame.customText:SetText(text)
+			frame.customText:Show()
+		else
+			frame.customText:Hide()
 		end
 
 		if frame.border then
@@ -1570,6 +1570,12 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		wrapper:AddChild(cbMult)
 
 		if buff.customTextUseStacks then
+			local info = AceGUI:Create("Label")
+			info:SetText(L["buffTrackerCustomTextInfo"] or "")
+			info:SetFullWidth(true)
+			info:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
+			wrapper:AddChild(info)
+			wrapper:AddChild(addon.functions.createSpacerAce())
 			local baseEdit = addon.functions.createEditboxAce(L["buffTrackerCustomTextBase"], tostring(buff.customTextBase or 1), function(self, _, text)
 				local num = tonumber(text)
 				if num then buff.customTextBase = num end
@@ -1589,12 +1595,7 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 			end)
 			minEdit:SetRelativeWidth(0.3)
 			wrapper:AddChild(minEdit)
-
-			local info = AceGUI:Create("Label")
-			info:SetText(L["buffTrackerCustomTextInfo"] or "")
-			info:SetFullWidth(true)
-			info:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
-			wrapper:AddChild(info)
+			wrapper:AddChild(addon.functions.createSpacerAce())
 		end
 	end
 
