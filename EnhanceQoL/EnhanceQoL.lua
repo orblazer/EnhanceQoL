@@ -3203,7 +3203,7 @@ local function initMisc()
 				end
 			end
 		end
-		if addon.db["sellAllJunk"] and MerchantSellAllJunkButton:IsEnabled() then MerchantSellAllJunkButton:Click() end
+		if addon.db["sellAllJunk"] and C_MerchantFrame.IsSellAllJunkEnabled() then C_MerchantFrame.SellAllJunkItems() end
 	end)
 
 	hooksecurefunc(TalkingHeadFrame, "PlayCurrent", function(self)

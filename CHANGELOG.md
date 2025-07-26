@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.34.0] – 2025-07-?
+### ✨ Added
+- **Umbral Essentia**
+  - Shadowmelt Potion added
+### 🔄 Changed
+- Sell all Junk API changed to a newer and more reliant one
+- **Talent Reminder behaviour for mega dungeon**
+  - Mega-Dungeons like Tazavash now work seperately for Talent reminder
+- **Talent Reminder first load performance**
+### 🐛 Fixed
+
 ## [3.33.1] – 2025-07-25
 ### 🐛 Fixed
 - **Taint error when copying character names**
