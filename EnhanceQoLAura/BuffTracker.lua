@@ -12,6 +12,12 @@ local AceGUI = addon.AceGUI
 
 -- luacheck: globals ChatFrame_OpenChat
 
+local bleedList = {
+	-- Cinderbrew Meatery
+	[441413] = true, -- Shredding Sting
+	[434773] = true, -- mean mug
+}
+
 local selectedCategory = addon.db["buffTrackerSelectedCategory"] or 1
 
 for _, cat in pairs(addon.db["buffTrackerCategories"]) do
@@ -745,10 +751,12 @@ local function updateBuff(catId, id, changedId, firstScan)
 
 		if frame.border then
 			local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
-			if tType == "DEBUFF" and displayAura and displayAura.dispelName then
-				local dtype = displayAura.dispelName or displayAura.debuffType or "none"
-				local col = DebuffBorderColors[dtype] or DebuffBorderColors.none
-				frame.border:SetColorTexture(col[1], col[2], col[3], 1)
+			if tType == "DEBUFF" and displayAura then
+				if displayAura.dispelName or bleedList[displayAura.spellId] then
+					local dtype = displayAura.dispelName or displayAura.debuffType or "none"
+					local col = DebuffBorderColors[dtype] or DebuffBorderColors.none
+					frame.border:SetColorTexture(col[1], col[2], col[3], 1)
+				end
 			else
 				frame.border:SetColorTexture(0, 0, 0, 0)
 			end
