@@ -7,6 +7,10 @@
     Organise spells with drag-and-drop categories, pick custom icons and add optional sounds.
   - Ultra-lightweight: even with every tracked cast **and** buff in a Mythic-plus run  
     the tracker uses **≤ 1 ms CPU time per frame** and **≈ 400 KB RAM**.
+### 🔄 Changed
+- **Mouse Trail performance improved**
+### 🐛 Fixed
+- WuE, BoE and BA Gear was sometimes incorrectly shown in the bag
 
 ---
 
