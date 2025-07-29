@@ -939,7 +939,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 	end
 
 	if event == "SPELL_UPDATE_COOLDOWN" then
-		local changedSpell = ...
+		local changedSpell = unit
 		local needsLayout = {}
 
 		if changedSpell then
@@ -974,33 +974,16 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 	end
 
 	if event == "SPELL_UPDATE_CHARGES" then
-		local changedSpell = ...
 		local needsLayout = {}
 
-		if changedSpell then
-			local baseSpell = altToBase[changedSpell] or changedSpell
-			if chargeSpells[baseSpell] then
-				for catId in pairs(spellToCat[baseSpell] or {}) do
-					local cat = addon.db["buffTrackerCategories"][catId]
-					if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
-						local buff = cat.buffs[baseSpell]
-						if buff and (buff.showCharges or buff.showCooldown) then
-							updateBuff(catId, baseSpell)
-							needsLayout[catId] = true
-						end
-					end
-				end
-			end
-		else
-			for spellId in pairs(chargeSpells) do
-				for catId in pairs(spellToCat[spellId] or {}) do
-					local cat = addon.db["buffTrackerCategories"][catId]
-					if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
-						local buff = cat.buffs[spellId]
-						if buff and (buff.showCharges or buff.showCooldown) then
-							updateBuff(catId, spellId)
-							needsLayout[catId] = true
-						end
+		for spellId in pairs(chargeSpells) do
+			for catId in pairs(spellToCat[spellId] or {}) do
+				local cat = addon.db["buffTrackerCategories"][catId]
+				if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+					local buff = cat.buffs[spellId]
+					if buff and (buff.showCharges or buff.showCooldown) then
+						updateBuff(catId, spellId)
+						needsLayout[catId] = true
 					end
 				end
 			end

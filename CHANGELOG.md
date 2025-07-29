@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.36.1] – 2025-07-30
+### 🐛 Fixed
+- Cooldown check in AuraTracker had a missing variable which impacted the performance
+
 ## [3.36.0] – 2025-07-29
 ### ✨ Added
 - **Item-level display position**
