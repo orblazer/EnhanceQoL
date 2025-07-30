@@ -103,7 +103,7 @@ local function OnUpdate(_, update)
 				currentCatId = info[4]
 				if cat.showName and info[3] then
 					local txt = info[3]
-					if cat.customText and cat.customText ~= "" then txt = cat.customText end
+					if cat.customTextEnabled and cat.customText and cat.customText ~= "" then txt = cat.customText end
 					DCP.text:SetText(txt)
 				end
 				DCP.texture:SetTexture(info[1])
