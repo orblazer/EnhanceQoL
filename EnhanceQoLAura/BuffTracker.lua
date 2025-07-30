@@ -543,19 +543,62 @@ local function updateBuff(catId, id, changedId, firstScan)
 	if firstScan == nil then firstScan = false end
 	local cat = getCategory(catId)
 	local buff = cat and cat.buffs and cat.buffs[id]
-	local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
-	local key = catId .. ":" .. id
-	local before = timedAuras[key] ~= nil
-	if buff and hasTimeCondition(buff.conditions) then
-		timedAuras[key] = { catId = catId, buffId = id }
-	else
-		timedAuras[key] = nil
-	end
-	if before ~= (timedAuras[key] ~= nil) and refreshTimeTicker then refreshTimeTicker() end
-	if buff and not buffAllowed(buff) then
-		if activeBuffFrames[catId] and activeBuffFrames[catId][id] then activeBuffFrames[catId][id]:Hide() end
-		return
-	end
+        local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
+        local key = catId .. ":" .. id
+        local before = timedAuras[key] ~= nil
+        if buff and hasTimeCondition(buff.conditions) then
+                timedAuras[key] = { catId = catId, buffId = id }
+        else
+                timedAuras[key] = nil
+        end
+        if before ~= (timedAuras[key] ~= nil) and refreshTimeTicker then refreshTimeTicker() end
+        if buff and not buffAllowed(buff) then
+                if activeBuffFrames[catId] and activeBuffFrames[catId][id] then activeBuffFrames[catId][id]:Hide() end
+                return
+        end
+
+        if tType == "ITEM" and buff and buff.slot then
+                activeBuffFrames[catId] = activeBuffFrames[catId] or {}
+                local frame = activeBuffFrames[catId][id]
+                local showTimer = buff.showTimerText
+                if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
+                if showTimer == nil then showTimer = true end
+                local icon = GetInventoryItemTexture("player", buff.slot) or buff.icon
+                if not frame then
+                        frame = createBuffFrame(icon, ensureAnchor(catId), getCategory(catId).size, false, id, showTimer)
+                        activeBuffFrames[catId][id] = frame
+                else
+                        frame.cd:SetHideCountdownNumbers(not showTimer)
+                end
+                frame.icon:SetTexture(icon)
+                buff.icon = icon
+                local cdStart, cdDur, cdEnable = GetInventoryItemCooldown("player", buff.slot)
+                if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
+                        frame.cd:SetCooldown(cdStart, cdDur)
+                        frame.icon:SetDesaturated(true)
+                        frame.icon:SetAlpha(0.5)
+                        frame.cd:SetScript("OnCooldownDone", CDResetScript)
+                        frame.isActive = true
+                else
+                        frame.cd:Clear()
+                        frame.cd:SetScript("OnCooldownDone", nil)
+                        frame.icon:SetDesaturated(false)
+                        frame.icon:SetAlpha(1)
+                        frame.isActive = false
+                end
+                if buff.glow then
+                        if frame.isActive then
+                                ActionButton_ShowOverlayGlow(frame)
+                        else
+                                ActionButton_HideOverlayGlow(frame)
+                        end
+                else
+                        ActionButton_HideOverlayGlow(frame)
+                end
+                frame:Show()
+                buffInstances[key] = nil
+                return
+        end
 
 	local aura
 	local triggeredId = id
@@ -1010,8 +1053,8 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		return
 	end
 
-	if event == "SPELL_UPDATE_CHARGES" then
-		local needsLayout = {}
+       if event == "SPELL_UPDATE_CHARGES" then
+               local needsLayout = {}
 
 		for spellId in pairs(chargeSpells) do
 			for catId in pairs(spellToCat[spellId] or {}) do
@@ -1029,10 +1072,15 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		for catId in pairs(needsLayout) do
 			updatePositions(catId)
 		end
-		return
-	end
+               return
+       end
 
-	scanBuffs()
+       if event == "BAG_UPDATE_COOLDOWN" or event == "PLAYER_EQUIPMENT_CHANGED" then
+               scanBuffs()
+               return
+       end
+
+       scanBuffs()
 end)
 eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
@@ -1040,6 +1088,8 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
+eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
+eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 
 local function addBuff(catId, id)
 	-- get spell name and icon once
@@ -1085,6 +1135,55 @@ local function addBuff(catId, id)
 
 	rebuildAltMapping()
 	scanBuffs()
+end
+
+function addon.Aura.functions.addTrinketBuff(catId, slot)
+       local itemID = GetInventoryItemID("player", slot)
+       if not itemID then return end
+
+       local icon = GetInventoryItemTexture("player", slot)
+       local itemName = GetItemInfo(itemID)
+       if not itemName then itemName = L["TrackTrinketSlot"]:format(slot == 13 and 1 or 2) end
+
+       local id = -slot
+       local cat = getCategory(catId)
+       if not cat then return end
+
+       local defTimer = addon.db["buffTrackerShowTimerText"]
+       if defTimer == nil then defTimer = true end
+
+       cat.buffs[id] = {
+               name = itemName,
+               icon = icon,
+               altIDs = {},
+               showAlways = true,
+               glow = false,
+               castOnClick = false,
+               showCooldown = true,
+               showCharges = false,
+               trackType = "ITEM",
+               slot = slot,
+               conditions = { join = "AND", conditions = {} },
+               allowedSpecs = {},
+               allowedClasses = {},
+               allowedRoles = {},
+               showStacks = false,
+               showTimerText = defTimer,
+               customTextEnabled = false,
+               customTextPosition = "TOP",
+               customText = "",
+               customTextUseStacks = false,
+               customTextBase = 1,
+               customTextMin = 0,
+       }
+
+       if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
+       if not tContains(addon.db["buffTrackerOrder"][catId], id) then table.insert(addon.db["buffTrackerOrder"][catId], id) end
+
+       addon.db["buffTrackerHidden"][id] = nil
+
+       rebuildAltMapping()
+       scanBuffs()
 end
 
 local function removeBuff(catId, id)
@@ -1429,8 +1528,24 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		end
 		self:SetText("")
 	end)
-	spellEdit:SetRelativeWidth(0.6)
-	core:AddChild(spellEdit)
+       spellEdit:SetRelativeWidth(0.6)
+       core:AddChild(spellEdit)
+
+       local trinket1Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(1), 150, function()
+               addon.Aura.functions.addTrinketBuff(catId, 13)
+               refreshTree(catId)
+               container:ReleaseChildren()
+               addon.Aura.functions.buildCategoryOptions(container, catId)
+       end)
+       core:AddChild(trinket1Btn)
+
+       local trinket2Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(2), 150, function()
+               addon.Aura.functions.addTrinketBuff(catId, 14)
+               refreshTree(catId)
+               container:ReleaseChildren()
+               addon.Aura.functions.buildCategoryOptions(container, catId)
+       end)
+       core:AddChild(trinket2Btn)
 
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
 		local data = exportCategory(catId)
@@ -1650,10 +1765,10 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		end
 	end
 
-	local typeDrop = addon.functions.createDropdownAce(L["TrackType"], { BUFF = L["Buff"], DEBUFF = L["Debuff"] }, nil, function(self, _, val)
-		buff.trackType = val
-		scanBuffs()
-	end)
+       local typeDrop = addon.functions.createDropdownAce(L["TrackType"], { BUFF = L["Buff"], DEBUFF = L["Debuff"], ITEM = L["Item"] }, nil, function(self, _, val)
+               buff.trackType = val
+               scanBuffs()
+       end)
 	typeDrop:SetValue(buff.trackType or "BUFF")
 	typeDrop:SetRelativeWidth(0.4)
 	wrapper:AddChild(typeDrop)
