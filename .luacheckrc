@@ -29,6 +29,7 @@ exclude_files = {
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Dragonflight.lua",
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Era.lua",
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Cata.lua",
+	".git/**"
 }
 ignore = {
 	"11./SLASH_.*", -- Setting an undefined (Slash handler) global variable
