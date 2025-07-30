@@ -560,6 +560,7 @@ local function buildSpellOptions(container, catId, spellId)
 
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
 	wrapper:SetFullWidth(true)
+	wrapper:SetFullHeight(true)
 	container:AddChild(wrapper)
 
 	local info = C_Spell.GetSpellInfo(spellId)
