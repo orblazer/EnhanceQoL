@@ -22,11 +22,19 @@ local treeGroup
 local anchors = {}
 -- store the category id of the cooldown currently shown
 local currentCatId
+-- list of spellIDs currently known to the player
+local playerSpells = {}
 -- forward declaration for functions referenced before definition
 local applyAnchor
 local ShareCategory
 local importCategory
 local exportCategory
+
+for _, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
+	if cat.useAdvancedTracking == nil then cat.useAdvancedTracking = true end
+	cat.spells = cat.spells or {}
+	cat.ignoredSpells = cat.ignoredSpells or {}
+end
 
 local DCP = CreateFrame("Frame", nil, UIParent)
 DCP:SetPoint("CENTER")
@@ -56,6 +64,21 @@ local function IsAnimatingCooldown(name, catId)
 		if info[2] == name and info[3] == catId then return true end
 	end
 	return false
+end
+
+local function BuildPlayerSpellList()
+	wipe(playerSpells)
+	for tab = 1, C_SpellBook.GetNumSpellBookSkillLines() do
+		local spellBookInfo = C_SpellBook.GetSpellBookSkillLineInfo(tab)
+		if not spellBookInfo.offSpecID and spellBookInfo.itemIndexOffset and spellBookInfo.numSpellBookItems then
+			local offset, numSlots = spellBookInfo.itemIndexOffset, spellBookInfo.numSpellBookItems
+			for j = offset + 1, offset + numSlots do
+				local name, subName = C_SpellBook.GetSpellBookItemName(j, Enum.SpellBookSpellBank.Player)
+				local spellID = select(3, C_SpellBook.GetSpellBookItemType(j, Enum.SpellBookSpellBank.Player))
+				if spellID and not C_Spell.IsSpellPassive(spellID) then playerSpells[spellID] = true end
+			end
+		end
+	end
 end
 
 local function OnUpdate(_, update)
@@ -258,11 +281,13 @@ local function updateEventRegistration()
 		if not DCP:IsEventRegistered("SPELL_UPDATE_COOLDOWN") then
 			DCP:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 			DCP:RegisterEvent("PLAYER_LOGIN")
+			DCP:RegisterEvent("SPELLS_CHANGED")
 		end
 	else
 		if DCP:IsEventRegistered("SPELL_UPDATE_COOLDOWN") then
 			DCP:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
 			DCP:UnregisterEvent("PLAYER_LOGIN")
+			DCP:UnregisterEvent("SPELLS_CHANGED")
 		end
 	end
 end
@@ -298,8 +323,14 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 	if not spellID then
 		for cid, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 			if addon.db.cooldownNotifyEnabled[cid] then
-				for sid in pairs(cat.spells or {}) do
-					self:SPELL_UPDATE_COOLDOWN(sid)
+				if cat.useAdvancedTracking == false then
+					for sid in pairs(playerSpells) do
+						if not (cat.ignoredSpells and cat.ignoredSpells[sid]) then self:SPELL_UPDATE_COOLDOWN(sid) end
+					end
+				else
+					for sid in pairs(cat.spells or {}) do
+						self:SPELL_UPDATE_COOLDOWN(sid)
+					end
 				end
 			end
 		end
@@ -308,10 +339,12 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 	local found = false
 	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 		if addon.db.cooldownNotifyEnabled[catId] then
-			-- only handle spells for this category
-			if cat.spells and cat.spells[spellID] then
+			if
+				(cat.useAdvancedTracking ~= false and cat.spells and cat.spells[spellID])
+				or (cat.useAdvancedTracking == false and playerSpells[spellID] and not (cat.ignoredSpells and cat.ignoredSpells[spellID]))
+			then
 				local cd = C_Spell.GetSpellCooldown(spellID)
-				if cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
+				if cd and cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
 					local key = spellID .. ":" .. catId
 					cooldowns[key] = {
 						start = cd.startTime,
@@ -333,14 +366,23 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 end
 
 function CN:PLAYER_LOGIN()
+	BuildPlayerSpellList()
 	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 		if addon.db.cooldownNotifyEnabled[catId] then
-			for spellID in pairs(cat.spells or {}) do
-				self:SPELL_UPDATE_COOLDOWN(spellID)
+			if cat.useAdvancedTracking == false then
+				for spellID in pairs(playerSpells) do
+					if not (cat.ignoredSpells and cat.ignoredSpells[spellID]) then self:SPELL_UPDATE_COOLDOWN(spellID) end
+				end
+			else
+				for spellID in pairs(cat.spells or {}) do
+					self:SPELL_UPDATE_COOLDOWN(spellID)
+				end
 			end
 		end
 	end
 end
+
+function CN:SPELLS_CHANGED() BuildPlayerSpellList() end
 
 CN.frame = DCP
 
@@ -410,6 +452,31 @@ local function buildCategoryOptions(container, catId)
 		buildCategoryOptions(container, catId)
 	end)
 	group:AddChild(nameEdit)
+
+	local advCB = addon.functions.createCheckboxAce(L["UseAdvancedTracking"] or "Use advanced tracking", cat.useAdvancedTracking ~= false, function(_, _, val)
+		cat.useAdvancedTracking = val
+		container:ReleaseChildren()
+		buildCategoryOptions(container, catId)
+	end)
+	advCB:SetRelativeWidth(0.6)
+
+	local infoIcon = AceGUI:Create("Icon")
+	infoIcon:SetImage("Interface\\FriendsFrame\\InformationIcon")
+	infoIcon:SetImageSize(16, 16)
+	infoIcon:SetRelativeWidth(0.4)
+	infoIcon:SetWidth(16)
+	infoIcon:SetCallback("OnEnter", function(widget)
+		GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+		GameTooltip:SetText(L["advancedTrackingInfo"])
+		GameTooltip:Show()
+	end)
+	infoIcon:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+
+	local infoGroup = addon.functions.createContainer("SimpleGroup", "Flow")
+	infoGroup:SetFullWidth(true)
+	infoGroup:AddChild(advCB)
+	infoGroup:AddChild(infoIcon)
+	group:AddChild(infoGroup)
 
 	local showNameCB = addon.functions.createCheckboxAce(L["ShowCooldownName"], cat.showName, function(_, _, val)
 		cat.showName = val
@@ -594,8 +661,21 @@ local function buildSpellOptions(container, catId, spellId)
 		wrapper:AddChild(dropSound)
 	end
 
+	if cat.useAdvancedTracking == false then
+		cat.ignoredSpells = cat.ignoredSpells or {}
+		local cbIgnore = addon.functions.createCheckboxAce(L["CooldownIgnoreSpell"] or "Ignore this spell", cat.ignoredSpells[spellId], function(_, _, val)
+			if val then
+				cat.ignoredSpells[spellId] = true
+			else
+				cat.ignoredSpells[spellId] = nil
+			end
+		end)
+		wrapper:AddChild(cbIgnore)
+	end
+
 	local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
 		cat.spells[spellId] = nil
+		if cat.ignoredSpells then cat.ignoredSpells[spellId] = nil end
 		if addon.db.cooldownNotifySounds[catId] then addon.db.cooldownNotifySounds[catId][spellId] = nil end
 		if addon.db.cooldownNotifySoundsEnabled[catId] then addon.db.cooldownNotifySoundsEnabled[catId][spellId] = nil end
 		refreshTree(catId)
@@ -736,6 +816,7 @@ function importCategory(encoded)
 	cat.holdTime = cat.holdTime or 0
 	cat.showName = cat.showName ~= false
 	cat.spells = cat.spells or {}
+	cat.ignoredSpells = cat.ignoredSpells or {}
 	local newId = 1
 	for id in pairs(addon.db.cooldownNotifyCategories) do
 		if id >= newId then newId = id + 1 end
