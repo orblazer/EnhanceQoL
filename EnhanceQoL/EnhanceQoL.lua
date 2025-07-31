@@ -3244,8 +3244,19 @@ local function initParty()
 	end
 
 	local last_solo
+	local pending_update = false
+	local updateFrame = CreateFrame("Frame")
+
 	local function manage_raid_frame()
 		if not addon.db["showPartyFrameInSoloContent"] then return end
+		if InCombatLockdown() then
+			if not pending_update then
+				pending_update = true
+				updateFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+			end
+			return
+		end
+
 		local solo = 1
 		if IsInGroup() or IsInRaid() then solo = 0 end
 
@@ -3254,6 +3265,14 @@ local function initParty()
 		CompactPartyFrame:SetShown(solo)
 		last_solo = solo
 	end
+
+	updateFrame:SetScript("OnEvent", function(self, event)
+		if event == "PLAYER_REGEN_ENABLED" and pending_update then
+			self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+			pending_update = false
+			manage_raid_frame()
+		end
+	end)
 
 	hooksecurefunc(CompactPartyFrame, "UpdateVisibility", manage_raid_frame)
 end
