@@ -540,6 +540,7 @@ globals = {
 	"C_ArtifactUI.Clear",
 	"C_ArtifactUI.ClearForgeCamera",
 	"C_ArtifactUI.ConfirmRespec",
+	"C_SpellBook",
 	"C_ArtifactUI.DoesEquippedArtifactHaveAnyRelicsSlotted",
 	"C_ArtifactUI.GetAppearanceInfo",
 	"C_ArtifactUI.GetAppearanceInfoByID",
