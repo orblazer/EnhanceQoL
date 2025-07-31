@@ -74,10 +74,7 @@ local function BuildPlayerSpellList()
 			for j = offset + 1, offset + numSlots do
 				local name, subName = C_SpellBook.GetSpellBookItemName(j, Enum.SpellBookSpellBank.Player)
 				local spellID = select(3, C_SpellBook.GetSpellBookItemType(j, Enum.SpellBookSpellBank.Player))
-				if spellID and not C_Spell.IsSpellPassive(spellID) then
-					playerSpells[spellID] = true
-					print("Added", spellID, spellBookInfo.specID, name)
-				end
+				if spellID and not C_Spell.IsSpellPassive(spellID) then playerSpells[spellID] = true end
 			end
 		end
 	end
