@@ -1,19 +1,21 @@
 # Changelog
 
 ## [3.37.0] – 2025-07-30
-### 🐛 Fixed
-- Catalyst charges weren't display correctly as of close to season end
-
----
-
-## [3.37.0] – 2025-07-30
 ### ✨ Added
 - **Cooldown Notify**
-  - Get a simple popup when your abilities are ready
+  - Pops up a small alert when an ability is ready.
+  - Works in *blacklist* mode (track everything except excluded spells) or *whitelist* mode (track only selected spells).
+  - Can play a custom sound when the spell comes off cooldown.
 - **Aura Tracker**
-  - Option to change the *Spacing* between the auras
+  - New *Spacing* setting to adjust the gap between icons.
+  - Now tracks on-use **trinket cooldowns**.
+- **Talent Reminder – Build Info**
+  - Displays the name of the currently active talent build.
+  - Option to show the text only **outside instances**, only **inside 5-man/Delves**, or only **in raids**.
+
 ### 🐛 Fixed
-- Cooldown check in AuraTracker had a missing variable which impacted performance.
+- Catalyst charges were not shown correctly near the end of the season.
+- Missing variable check in the Aura Tracker cooldown logic caused unnecessary CPU usage; fixed.
 
 ---
 
