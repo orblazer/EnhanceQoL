@@ -1,0 +1,50 @@
+# Text;Speed;Pitch;Filename  (alle bis auf Text optional, leere Felder mit Semikolon überspringen)
+# It generates speech audio files for each entry.
+# Default Speed: 150
+# Default Pitch -30
+Adds
+Add
+AoE;190;"[[pbas -60]]"
+Assist;180
+Avoid;180
+Bait;180
+Bleed;180
+CC;220
+Charge;180
+Clear
+Dance
+Deebuff;;;Debuff
+Deecurse;180;;Decurse
+Defensive;180;"[[pbas -20]]"
+Dispell;185
+Dot
+Don't move;;;Don't move
+Drop
+Enrage;170;"[[pbas -60]]"
+Enter
+Feet
+Fixate;180
+Focus
+Frontal
+Hide
+Immunity;180
+Intermission;180
+Interrupt;170;"[[pbas -60]]"
+Invis
+Jump
+Knock
+Move;170;"[[pbas -60]]"
+Pull
+Reflect
+Root
+Soak;200;"[[pbas -60]]"
+Soon
+Spread;170;"[[pbas -60]]"
+Stack;170;"[[pbas -60]]"
+Stopcast;200;"[[pbas -60]]"
+Stun
+Targeted;200;"[[pbas -60]]"
+Turn;160;"[[pbas -60]]"
+Use
+# Abilities
+Roar;190;"[[pbas -20]]";;|T463283:16|t
