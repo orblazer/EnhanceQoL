@@ -21,3 +21,4 @@
 ## Globe-Main: EnhanceQoL
 
 EnhanceQoLSharedMedia.lua
+Init.lua
