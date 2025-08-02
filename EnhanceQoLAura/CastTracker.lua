@@ -237,6 +237,9 @@ local function AcquireBar(catId)
 	local bar = table.remove(pool)
 	if not bar then
 		bar = CreateFrame("Frame", nil, ensureAnchor(catId))
+		bar:SetFrameStrata("MEDIUM")
+		local anchorLevel = ensureAnchor(catId):GetFrameLevel() or 0
+		bar:SetFrameLevel(anchorLevel + 200)
 		bar.status = CreateFrame("StatusBar", nil, bar)
 		bar.status:SetAllPoints()
 		bar.status:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -1050,11 +1053,13 @@ local function HandleCLEU()
 		local castTime
 		local unit = GetUnitFromGUID(sourceGUID)
 		if not unit then return end
-		local threat = UnitThreatSituation("player", unit)
-		if (not threat or threat == 0) and UnitGroupRolesAssigned("player") ~= "TANK" then
-			if actTank then threat = UnitThreatSituation(actTank, unit) end
+		if not UnitPlayerControlled(unit) then
+			local threat = UnitThreatSituation("player", unit)
+			if (not threat or threat == 0) and UnitGroupRolesAssigned("player") ~= "TANK" then
+				if actTank then threat = UnitThreatSituation(actTank, unit) end
+			end
+			if not threat or threat == 0 then return end
 		end
-		if not threat or threat == 0 then return end
 
 		if unit then
 			_, castTime = getCastInfo(unit)
@@ -1086,11 +1091,13 @@ local function HandleCLEU()
 end
 
 local function HandleUnitChannelStart(unit, castGUID, spellId)
-	local threat = UnitThreatSituation("player", unit)
-	if (not threat or threat == 0) and UnitGroupRolesAssigned("player") ~= "TANK" then
-		if actTank then threat = UnitThreatSituation(actTank, unit) end
+	if not UnitPlayerControlled(unit) then
+		local threat = UnitThreatSituation("player", unit)
+		if (not threat or threat == 0) and UnitGroupRolesAssigned("player") ~= "TANK" then
+			if actTank then threat = UnitThreatSituation(actTank, unit) end
+		end
+		if not threat or threat == 0 then return end
 	end
-	if not threat or threat == 0 then return end
 	local sourceGUID = UnitGUID(unit)
 	if not sourceGUID then return end
 	local baseSpell, cats = resolveSpellCats(spellId)
