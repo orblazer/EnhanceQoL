@@ -84,13 +84,29 @@ local function checkCurrency(tooltip, id)
 	end
 end
 
-local function checkSpell(tooltip, id, name)
+local function checkSpell(tooltip, id, name, isSpell)
+	local first = true
 	if addon.db["TooltipShowSpellID"] then
 		if id then
-			tooltip:AddLine(" ")
+			if first then
+				tooltip:AddLine(" ")
+				first = false
+			end
 			tooltip:AddDoubleLine(name, id)
 		end
 	end
+
+	if addon.db["TooltipShowSpellIcon"] and isSpell then
+		local spellInfo = C_Spell.GetSpellInfo(id)
+		if spellInfo and spellInfo.iconID then
+			if first then
+				tooltip:AddLine(" ")
+				first = false
+			end
+			tooltip:AddDoubleLine(L["IconID"], spellInfo.iconID)
+		end
+	end
+
 	if addon.db["TooltipSpellHideType"] == 1 then return end -- only hide when ON
 	if addon.db["TooltipSpellHideInDungeon"] and select(1, IsInInstance()) == false then return end -- only hide in dungeons
 	if addon.db["TooltipSpellHideInCombat"] and UnitAffectingCombat("player") == false then return end -- only hide in combat
@@ -267,9 +283,13 @@ local function CheckReagentBankCount(itemID)
 end
 
 local function checkItem(tooltip, id, name, guid)
+	local first = true
 	if addon.db["TooltipShowItemID"] then
 		if id then
-			tooltip:AddLine(" ")
+			if first then
+				tooltip:AddLine(" ")
+				first = false
+			end
 			tooltip:AddDoubleLine(name, id)
 		end
 	end
@@ -277,10 +297,18 @@ local function checkItem(tooltip, id, name, guid)
 		local mhHas, mhExp, _, mhID, ohHas, ohExp, _, ohID, rhHas, rhExp = GetWeaponEnchantInfo()
 		if mhHas and guid == Item:CreateFromEquipmentSlot(16):GetItemGUID() then
 			if mhID then
+				if first then
+					tooltip:AddLine(" ")
+					first = false
+				end
 				tooltip:AddDoubleLine(L["Temp. EnchantID"], mhID)
 			end
 		elseif ohHas and guid == Item:CreateFromEquipmentSlot(17):GetItemGUID() then
 			if ohID then
+				if first then
+					tooltip:AddLine(" ")
+					first = false
+				end
 				tooltip:AddDoubleLine(L["Temp. EnchantID"], ohID)
 			end
 		end
@@ -296,10 +324,27 @@ local function checkItem(tooltip, id, name, guid)
 			if addon.db["TooltipShowSeperateItemCount"] then
 				if bagCount > 0 then
 					bankCount = bankCount - bagCount
+
+					if first then
+						tooltip:AddLine(" ")
+						first = false
+					end
 					tooltip:AddDoubleLine(L["Bag"], bagCount)
 				end
-				if bankCount > 0 then tooltip:AddDoubleLine(L["Bank"], bankCount) end
-				if rBankCount > 0 then tooltip:AddDoubleLine(L["Reagentbank"], rBankCount) end
+				if bankCount > 0 then
+					if first then
+						tooltip:AddLine(" ")
+						first = false
+					end
+					tooltip:AddDoubleLine(L["Bank"], bankCount)
+				end
+				if rBankCount > 0 then
+					if first then
+						tooltip:AddLine(" ")
+						first = false
+					end
+					tooltip:AddDoubleLine(L["Reagentbank"], rBankCount)
+				end
 			else
 				tooltip:AddDoubleLine(L["Itemcount"], totalCount)
 			end
@@ -312,12 +357,28 @@ local function checkItem(tooltip, id, name, guid)
 end
 
 local function checkAura(tooltip, id, name)
+	local first = true
 	if addon.db["TooltipShowSpellID"] then
 		if id then
-			tooltip:AddLine(" ")
+			if first then
+				tooltip:AddLine(" ")
+				first = false
+			end
 			tooltip:AddDoubleLine(name, id)
 		end
 	end
+
+	if addon.db["TooltipShowSpellIcon"] then
+		local spellInfo = C_Spell.GetSpellInfo(id)
+		if spellInfo and spellInfo.iconID then
+			if first then
+				tooltip:AddLine(" ")
+				first = false
+			end
+			tooltip:AddDoubleLine(L["IconID"], spellInfo.iconID)
+		end
+	end
+
 	if addon.db["TooltipBuffHideType"] == 1 then return end -- only hide when ON
 	if addon.db["TooltipBuffHideInDungeon"] and select(1, IsInInstance()) == false then return end -- only hide in dungeons
 	if addon.db["TooltipBuffHideInCombat"] and UnitAffectingCombat("player") == false then return end -- only hide in combat
@@ -333,7 +394,7 @@ if TooltipDataProcessor then
 		if kind == "spell" then
 			id = data.id
 			name = L["SpellID"]
-			checkSpell(tooltip, id, name)
+			checkSpell(tooltip, id, name, true)
 			return
 		elseif kind == "macro" then
 			id = data.id
@@ -434,7 +495,7 @@ local function addItemFrame(container)
 		{ text = L["TooltipItemHideInCombat"], var = "TooltipItemHideInCombat" },
 		{ text = L["TooltipItemHideInDungeon"], var = "TooltipItemHideInDungeon" },
 		{ text = L["TooltipShowItemID"], var = "TooltipShowItemID" },
-		{ text = L["TooltipShowTempEnchant"], var = "TooltipShowTempEnchant", desc = L["TooltipShowTempEnchantDesc"]},
+		{ text = L["TooltipShowTempEnchant"], var = "TooltipShowTempEnchant", desc = L["TooltipShowTempEnchantDesc"] },
 		{ text = L["TooltipShowItemCount"], var = "TooltipShowItemCount" },
 		{ text = L["TooltipShowSeperateItemCount"], var = "TooltipShowSeperateItemCount" },
 	}
@@ -465,6 +526,7 @@ local function addSpellFrame(container)
 		{ text = L["TooltipSpellHideInCombat"], var = "TooltipSpellHideInCombat" },
 		{ text = L["TooltipSpellHideInDungeon"], var = "TooltipSpellHideInDungeon" },
 		{ text = L["TooltipShowSpellID"], var = "TooltipShowSpellID" },
+		{ text = L["TooltipShowSpellIcon"], var = "TooltipShowSpellIcon" },
 	}
 
 	table.sort(data, function(a, b) return a.text < b.text end)

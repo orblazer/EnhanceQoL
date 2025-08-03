@@ -50,6 +50,8 @@ L["TooltipSpellHideInDungeon"] = "Only hide it in dungeons"
 L["TooltipShowSpellID"] = "Show SpellID on Tooltip"
 L["SpellID"] = "SpellID"
 L["MacroID"] = "MacroID"
+L["IconID"] = "IconID"
+L["TooltipShowSpellIcon"] = "Show Spell Icon ID on Tooltip"
 
 -- Item
 L["TooltipItemHideType"] = "Hide tooltip on Items"
