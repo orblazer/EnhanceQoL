@@ -14,6 +14,8 @@
   - Now tracks on-use **trinket cooldowns**.
   - *Show for Difficulty* added to Aura Tracker
     - Filter for any difficult or the Outside world
+  - Now tracks temporary weapon enchants
+    - Additionally condition to filter by Enchant ID
 - **Talent Reminder – Build Info**
   - Displays the name of the currently active talent build.
   - Option to show the text **only outside instances**, **only in 5-man/Delves**, or **only in raids**.
