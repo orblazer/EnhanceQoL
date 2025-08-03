@@ -111,7 +111,7 @@ local function addDrinkFrame(container)
 		{
 			text = L["mageFoodReminder"],
 			var = "mageFoodReminder",
-			desc = L["mageFoodReminderDesc"],
+			desc = L["mageFoodReminderDesc2"],
 			func = function(self, _, value)
 				addon.db["mageFoodReminder"] = value
 				addon.Drinks.functions.updateRole()
