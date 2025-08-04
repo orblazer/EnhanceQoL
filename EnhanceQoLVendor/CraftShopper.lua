@@ -63,6 +63,7 @@ local function UnregisterHeavyEvents()
 	f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
 	f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
 	f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+	f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 end
 
 local function isAHBuyable(itemID)
@@ -163,14 +164,20 @@ local function ScheduleRescan()
 end
 
 local mapQuality = {
-	[0] = Enum.AuctionHouseFilter.PoorQuality,
-	[1] = Enum.AuctionHouseFilter.CommonQuality,
-	[2] = Enum.AuctionHouseFilter.UncommonQuality,
-	[3] = Enum.AuctionHouseFilter.RareQuality,
-	[4] = Enum.AuctionHouseFilter.EpicQuality,
-	[5] = Enum.AuctionHouseFilter.LegendaryQuality,
-	[6] = Enum.AuctionHouseFilter.ArtifactQuality,
-	[7] = Enum.AuctionHouseFilter.LegendaryCraftedItemOnly,
+        [0] = Enum.AuctionHouseFilter.PoorQuality,
+        [1] = Enum.AuctionHouseFilter.CommonQuality,
+        [2] = Enum.AuctionHouseFilter.UncommonQuality,
+        [3] = Enum.AuctionHouseFilter.RareQuality,
+        [4] = Enum.AuctionHouseFilter.EpicQuality,
+        [5] = Enum.AuctionHouseFilter.LegendaryQuality,
+        [6] = Enum.AuctionHouseFilter.ArtifactQuality,
+        [7] = Enum.AuctionHouseFilter.LegendaryCraftedItemOnly,
+}
+
+-- Only handle generic Auction House errors relevant to commodity purchases.
+local purchaseErrorCodes = {
+        [Enum.AuctionHouseError.NotEnoughMoney] = true,
+        [Enum.AuctionHouseError.ItemNotFound] = true,
 }
 
 -- Shows a small confirmation window for a pending commodity purchase.
@@ -256,6 +263,7 @@ local function ShowPurchasePopup(item, buyWidget)
 		f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
 		f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
 		f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+		f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 		AceGUI:Release(popup)
 		pendingPurchase = nil
 		buyWidget:SetDisabled(false)
@@ -439,6 +447,7 @@ local function CreateCraftShopperFrame()
 						if pendingPurchase then return end
 						f:RegisterEvent("COMMODITY_PRICE_UPDATED")
 						f:RegisterEvent("COMMODITY_PURCHASE_FAILED")
+						f:RegisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 						ShowPurchasePopup(item, buy)
 						C_AuctionHouse.StartCommoditiesPurchase(item.itemID, item.missing)
 					end)
@@ -496,6 +505,7 @@ function ShowCraftShopperFrameIfNeeded()
 		f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
 		f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
 		f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+		f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 	end
 end
 
@@ -549,14 +559,16 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
 			f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
 			f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
 			f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+			f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 		end
-	elseif event == "COMMODITY_PRICE_UPDATED" then
-		UpdatePurchasePopup(arg1, arg2)
-	elseif event == "COMMODITY_PURCHASE_FAILED" then
-		if pendingPurchase then
-			f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
-			f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
-			f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+       elseif event == "COMMODITY_PRICE_UPDATED" then
+               UpdatePurchasePopup(arg1, arg2)
+       elseif event == "COMMODITY_PURCHASE_FAILED" or (event == "AUCTION_HOUSE_SHOW_ERROR" and purchaseErrorCodes[arg1]) then
+               if pendingPurchase then
+                       f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
+                       f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
+                       f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+                       f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 			if pendingPurchase.popup.ticker then pendingPurchase.popup.ticker:Cancel() end
 			if pendingPurchase.popup.spinner then pendingPurchase.popup.spinner:Hide() end
 			pendingPurchase.popup.text:SetText(L["vendorCraftShopperPurchaseFailed"])
@@ -567,6 +579,7 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
 		end
 	elseif event == "COMMODITY_PURCHASE_SUCCEEDED" then
 		f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+		f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
 		f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
 		local itemID = arg1
 		for _, item in ipairs(addon.Vendor.CraftShopper.items) do
