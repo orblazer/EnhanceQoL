@@ -105,6 +105,15 @@ local function ScheduleRescan()
 	pendingScan = C_Timer.NewTimer(SCAN_DELAY, Rescan)
 end
 
+local mapQuality = {
+	[0] = Enum.AuctionHouseFilter.PoorQuality,
+	[1] = Enum.AuctionHouseFilter.CommonQuality,
+	[2] = Enum.AuctionHouseFilter.UncommonQuality,
+	[3] = Enum.AuctionHouseFilter.RareQuality,
+	[4] = Enum.AuctionHouseFilter.EpicQuality,
+	[5] = Enum.AuctionHouseFilter.LegendaryQuality,
+}
+
 local function CreateCraftShopperFrame()
 	if addon.Vendor.CraftShopper.frame then return addon.Vendor.CraftShopper.frame end
 	local frame = AceGUI:Create("Window")
@@ -203,20 +212,20 @@ local function CreateCraftShopperFrame()
 					searchBtn:SetRelativeWidth(0.1)
 					searchBtn:SetWidth(20)
 					searchBtn:SetCallback("OnClick", function()
-						local itemName = C_Item.GetItemInfo(item.itemID)
+						local itemName, _, quality, _, _, _, _, _, itemEquipLoc, _, _, classID, subclassID = C_Item.GetItemInfo(item.itemID)
+						local qualityFilter = { mapQuality[quality], Enum.AuctionHouseFilter.ExactMatch }
 						if not itemName then return end
 						local query = {
 							searchString = itemName,
 							sorts = {
-								{ sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false },
 								{ sortOrder = Enum.AuctionHouseSortOrder.Name, reverseSort = false },
+								{ sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false },
 							},
-							filters = {
-								Enum.AuctionHouseFilter.PoorQuality,
-								Enum.AuctionHouseFilter.CommonQuality,
-								Enum.AuctionHouseFilter.UncommonQuality,
-								Enum.AuctionHouseFilter.RareQuality,
-								Enum.AuctionHouseFilter.EpicQuality,
+							filters = qualityFilter,
+							itemClassFilters = {
+								classID = classID,
+								subClassID = subclassID,
+								inventoryType = itemEquipLoc,
 							},
 						}
 						C_AuctionHouse.SendBrowseQuery(query)
