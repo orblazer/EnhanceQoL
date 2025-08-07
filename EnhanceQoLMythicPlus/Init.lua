@@ -627,6 +627,11 @@ addon.MythicPlus.variables.portalCompendium = {
 -- Pre-Stage all icon to have less calls to LUA API
 local RANDOM_HS_ID = 999999
 local hearthstoneID = {
+	-- 11.2
+	{ isToy = true, icon = 133469, id = 245970, spellID = 1240219 }, -- P.O.S.T. Master's Express Hearthstone
+	{ isToy = true, icon = 5852174, id = 246565, spellID = 1242509 }, -- Cosmic Hearthstone
+
+	--TWW
 	{ isToy = true, icon = 4622300, id = 235016, spellID = 1217281 }, -- Redeployment Module
 	{ isItem = true, icon = 134414, id = 6948, spellID = 8690 }, -- Default Hearthstone
 	{ isToy = true, icon = 236222, id = 54452, spellID = 75136 }, -- Ethereal Portal

@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.1.2] – 2025-08-06
+
+### 🐛 Fixed
+
+- Missing Hearthstone **P.O.S.T. Master's Express Hearthstone**
+- Missing Hearthstone **Cosmic Hearthstone**
+
+---
+
 ## [4.1.1] – 2025-08-06
 
 ### 🐛 Fixed
