@@ -4,8 +4,8 @@
 
 ### 🐛 Fixed
 
-- Overlapping elements when **Mythic+ Rating** and **Dungeon Teleport** is enableb
-- Changes to EditBoxes in 11.2 broke some features
+- Overlapping UI elements when **Mythic+ Rating** and **Dungeon Teleport** were both enabled.
+- Blizzard’s 11.2 EditBox changes that broke several text-entry features.
 
 ---
 
