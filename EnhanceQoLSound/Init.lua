@@ -525,6 +525,12 @@ addon.Sounds.soundFiles = {
 			569794,
 			569821,
 		},
+		["alchemy"] = {
+			-- Soundkit 1105
+			569793,
+			569802,
+			569812
+		}
 	},
 	["interface"] = {
 		["general"] = {

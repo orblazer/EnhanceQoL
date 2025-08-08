@@ -71,6 +71,7 @@ L["mount_g99_breakneck"] = "G-99 Breakneck"
 L["mount_chopper"] = "Chopper"
 L["skinning"] = "Skinning"
 L["herbalism"] = "Herbalism"
+L["alchemy"] = "Alchemy"
 L["mining"] = "Mining"
 L["chat"] = "Chat"
 
