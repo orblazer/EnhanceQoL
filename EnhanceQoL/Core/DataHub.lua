@@ -39,8 +39,10 @@ local function runUpdate(stream)
 	releaseRows(stream)
 	if stream.update then stream.update(stream) end
 	if stream.interval and stream.interval > 0 then stream.nextPoll = GetTime() + stream.interval end
-	for cb in pairs(stream.subscribers) do
-		pcall(cb, stream.snapshot, stream.name)
+	if stream.subscribers then
+		for cb in pairs(stream.subscribers) do
+			pcall(cb, stream.snapshot, stream.name)
+		end
 	end
 end
 
@@ -88,12 +90,8 @@ function DataHub:RegisterStream(name, opts)
 		end
 	end
 
-	if stream.interval and stream.interval > 0 then
-		self.polling[name] = stream
-		self:UpdateDriver()
-	end
+	if stream.interval and stream.interval > 0 then stream.nextPoll = GetTime() end
 
-	self:RequestUpdate(name)
 	return stream
 end
 
@@ -112,6 +110,15 @@ function DataHub:UnregisterStream(name)
 	self.polling[name] = nil
 	self:UpdateDriver()
 
+	local key = stream.throttleKey or stream.name
+	local timer = self.throttleTimers[key]
+	if timer then
+		timer:Cancel()
+		self.throttleTimers[key] = nil
+	end
+
+	stream.subscribers = nil
+	stream.pending = nil
 	releaseRows(stream)
 	self.streams[name] = nil
 end
@@ -139,6 +146,7 @@ end
 function DataHub:RequestUpdate(name, throttleKey)
 	local stream = type(name) == "table" and name or self.streams[name]
 	if not stream then return end
+	if not stream.subscribers or not next(stream.subscribers) then return end
 	local key = throttleKey or stream.throttleKey or stream.name
 	if self.throttleTimers[key] then return end
 	stream.pending = true
@@ -162,12 +170,35 @@ end
 
 function DataHub:Subscribe(name, callback)
 	local stream = self.streams[name]
-	if stream and callback then stream.subscribers[callback] = true end
+	if not stream or type(callback) ~= "function" then return end
+	stream.subscribers = stream.subscribers or {}
+	local isFirst = not next(stream.subscribers)
+	stream.subscribers[callback] = true
+	if isFirst and stream.interval and stream.interval > 0 then
+		self.polling[name] = stream
+		self:UpdateDriver()
+	end
+	self:RequestUpdate(name)
+	return function() self:Unsubscribe(name, callback) end
 end
 
 function DataHub:Unsubscribe(name, callback)
 	local stream = self.streams[name]
-	if stream and callback then stream.subscribers[callback] = nil end
+	if not stream or not stream.subscribers then return end
+	stream.subscribers[callback] = nil
+	if next(stream.subscribers) then return end
+	stream.subscribers = nil
+	if stream.interval and stream.interval > 0 then
+		self.polling[name] = nil
+		self:UpdateDriver()
+	end
+	local key = stream.throttleKey or stream.name
+	local timer = self.throttleTimers[key]
+	if timer then
+		timer:Cancel()
+		self.throttleTimers[key] = nil
+	end
+	stream.pending = nil
 end
 
 function DataHub:ExportCSV(name)
