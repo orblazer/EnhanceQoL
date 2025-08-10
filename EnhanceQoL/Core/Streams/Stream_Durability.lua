@@ -16,6 +16,20 @@ local slots = {
 	[INVSLOT_OFFHAND] = SECONDARYHANDSLOT,
 }
 
+local slotOrder = {
+	INVSLOT_HEAD,
+	INVSLOT_SHOULDER,
+	INVSLOT_CHEST,
+	INVSLOT_WAIST,
+	INVSLOT_LEGS,
+	INVSLOT_FEET,
+	INVSLOT_WRIST,
+	INVSLOT_HAND,
+	INVSLOT_BACK,
+	INVSLOT_MAINHAND,
+	INVSLOT_OFFHAND,
+}
+
 local provider = {
 	id = "durability",
 	version = 1,
@@ -27,11 +41,11 @@ local provider = {
 	poll = 30,
 	collect = function(ctx)
 		local rows = ctx.rows
-		for slotId, name in pairs(slots) do
+		for _, slotId in ipairs(slotOrder) do
 			local cur, max = GetInventoryItemDurability(slotId)
 			if cur and max and max > 0 then
 				local row = ctx.acquireRow()
-				row.slot = name
+				row.slot = slots[slotId]
 				row.percent = floor((cur / max) * 100)
 				rows[#rows + 1] = row
 			end
