@@ -9,7 +9,7 @@ local AceDB = LibStub("AceDB-3.0")
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDlg = LibStub("AceConfigDialog-3.0")
 local AceDBOptions = LibStub("AceDBOptions-3.0")
-local defaults = { profile = {} }
+local defaults = { profile = { dataPanels = {} } }
 
 addon.AceGUI = AceGUI
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL")
