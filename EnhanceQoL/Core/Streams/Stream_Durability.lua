@@ -26,14 +26,17 @@ local provider = {
 	},
 	poll = 30,
 	collect = function(ctx)
+		local rows = {}
 		for slotId, name in pairs(slots) do
 			local cur, max = GetInventoryItemDurability(slotId)
 			if cur and max and max > 0 then
 				local row = ctx.acquireRow()
 				row.slot = name
 				row.percent = floor((cur / max) * 100)
+				table.insert(rows, row)
 			end
 		end
+		return { rows = rows }
 	end,
 }
 
