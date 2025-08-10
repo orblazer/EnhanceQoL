@@ -5518,4 +5518,4 @@ registerEvents(frameLoad)
 frameLoad:SetScript("OnEvent", eventHandler)
 
 SLASH_EQOLDASH1 = "/eqoldash"
-SlashCmdList.EQOLDASH = function() EnhanceQoL.UI.Dashboard:Show() end
+SlashCmdList.EQOLDASH = function() EnhanceQoL.DataHubUI:Toggle() end
