@@ -11,14 +11,13 @@ local provider = {
 	columns = {
 		{ key = "gold", title = "Gold" },
 	},
-	poll = 30,
-	collect = function(ctx)
-		local rows = {}
-		local row = ctx.acquireRow()
-		row.gold = floor(GetMoney() / COPPER_PER_GOLD)
-		table.insert(rows, row)
-		return { rows = rows }
-	end,
+	events = {
+		PLAYER_MONEY = function(stream)
+			local row = EnhanceQoL.DataHub:AcquireRow(stream)
+			row.gold = floor(GetMoney() / COPPER_PER_GOLD)
+			EnhanceQoL.DataHub.Publish(stream, { row })
+		end,
+	},
 }
 
 EnhanceQoL.DataHub.RegisterStream(provider)
