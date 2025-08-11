@@ -84,7 +84,10 @@ local function handleEvent(self, event, ...)
 			}
 		end
 		addon.db["combatMeterHistory"] = addon.db["combatMeterHistory"] or {}
-		table.insert(addon.db["combatMeterHistory"], 1, fight)
+		local hist = addon.db["combatMeterHistory"]
+		hist[#hist + 1] = fight
+		local MAX = 30
+		if #hist > MAX then table.remove(hist, 1) end
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if not addon.CombatMeter.inCombat then return end
 		local a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25 = CombatLogGetCurrentEventInfo()
