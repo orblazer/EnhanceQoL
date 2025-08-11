@@ -16,6 +16,10 @@ local function ensureDB()
 	db.mastery = db.mastery or { enabled = true, rating = false }
 	db.versatility = db.versatility or { enabled = true, rating = false }
 	db.crit = db.crit or { enabled = true, rating = false }
+	db.haste.color = db.haste.color or { r = 1, g = 1, b = 1 }
+	db.mastery.color = db.mastery.color or { r = 1, g = 1, b = 1 }
+	db.versatility.color = db.versatility.color or { r = 1, g = 1, b = 1 }
+	db.crit.color = db.crit.color or { r = 1, g = 1, b = 1 }
 end
 
 local function RestorePosition(frame)
@@ -49,6 +53,16 @@ local function addStatOptions(frame, key, label)
 		addon.DataHub:RequestUpdate(stream)
 	end)
 	group:AddChild(rating)
+
+	local color = AceGUI:Create("ColorPicker")
+	color:SetLabel("Color")
+	local c = db[key].color
+	color:SetColor(c.r, c.g, c.b)
+	color:SetCallback("OnValueChanged", function(_, _, r, g, b)
+		db[key].color = { r = r, g = g, b = b }
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	group:AddChild(color)
 
 	frame:AddChild(group)
 end
@@ -109,6 +123,11 @@ local function formatStat(label, rating, percent)
 	end
 end
 
+local function colorize(text, color)
+	if color and color.r and color.g and color.b then return ("|cff%02x%02x%02x%s|r"):format(color.r * 255, color.g * 255, color.b * 255, text) end
+	return text
+end
+
 local function checkStats(stream)
 	ensureDB()
 	local texts = {}
@@ -124,7 +143,7 @@ local function checkStats(stream)
 		else
 			text = formatStat(STAT_HASTE or "Haste", nil, GetHaste())
 		end
-		texts[#texts + 1] = text
+		texts[#texts + 1] = colorize(text, db.haste.color)
 	end
 
 	if db.mastery.enabled then
@@ -134,7 +153,7 @@ local function checkStats(stream)
 		else
 			text = formatStat(STAT_MASTERY or "Mastery", nil, GetMastery())
 		end
-		texts[#texts + 1] = text
+		texts[#texts + 1] = colorize(text, db.mastery.color)
 	end
 
 	if db.versatility.enabled then
@@ -146,7 +165,7 @@ local function checkStats(stream)
 			local red = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_TAKEN) + GetVersatilityBonus(CR_VERSATILITY_DAMAGE_TAKEN)
 			text = ("%s %.2f%%/%.2f%%"):format(STAT_VERSATILITY or "Vers", dmg, red)
 		end
-		texts[#texts + 1] = text
+		texts[#texts + 1] = colorize(text, db.versatility.color)
 	end
 
 	if db.crit.enabled then
@@ -156,7 +175,7 @@ local function checkStats(stream)
 		else
 			text = formatStat(STAT_CRITICAL_STRIKE or "Crit", nil, GetCritChance())
 		end
-		texts[#texts + 1] = text
+		texts[#texts + 1] = colorize(text, db.crit.color)
 	end
 
 	stream.snapshot.text = table.concat(texts, sep)

@@ -80,7 +80,16 @@ function DataPanel.Create(id, name)
 			savePosition(f, id)
 		end
 	end)
-	frame:SetScript("OnSizeChanged", function(f) savePosition(f, id) end)
+
+	local panel = { frame = frame, id = id, name = info.name, streams = {}, order = {}, info = info }
+
+	frame:SetScript("OnSizeChanged", function(f)
+		savePosition(f, id)
+		for _, data in pairs(panel.streams) do
+			data.button:SetHeight(f:GetHeight())
+		end
+	end)
+
 	frame:SetBackdrop({
 		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
 		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -90,8 +99,6 @@ function DataPanel.Create(id, name)
 		insets = { left = 4, right = 4, top = 4, bottom = 4 },
 	})
 	frame:SetBackdropColor(0, 0, 0, 0.5)
-
-	local panel = { frame = frame, id = id, name = info.name, streams = {}, order = {}, info = info }
 
 	function panel:Refresh()
 		local changed = false
@@ -136,6 +143,7 @@ function DataPanel.Create(id, name)
 		local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		text:SetAllPoints()
 		text:SetJustifyH("LEFT")
+		text:SetJustifyV("TOP")
 		local data = { button = button, text = text, lastWidth = text:GetStringWidth(), lastText = "" }
 		button.slot = data
 		button:SetScript("OnEnter", function(b)
