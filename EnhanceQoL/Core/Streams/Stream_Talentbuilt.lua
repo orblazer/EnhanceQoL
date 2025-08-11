@@ -4,6 +4,7 @@ local L = addon.L
 
 local AceGUI = addon.AceGUI
 local db
+local stream
 local provider
 
 local function ensureDB()
@@ -48,7 +49,7 @@ local function createAceWindow()
 	prefix:SetText(db.prefix)
 	prefix:SetCallback("OnEnterPressed", function(_, _, val)
 		db.prefix = val or ""
-		addon.DataHub:RequestUpdate(provider)
+		addon.DataHub:RequestUpdate(stream)
 	end)
 	frame:AddChild(prefix)
 
@@ -58,7 +59,7 @@ local function createAceWindow()
 	fontSize:SetValue(db.fontSize)
 	fontSize:SetCallback("OnValueChanged", function(_, _, val)
 		db.fontSize = val
-		addon.DataHub:RequestUpdate(provider)
+		addon.DataHub:RequestUpdate(stream)
 	end)
 	frame:AddChild(fontSize)
 
@@ -67,7 +68,7 @@ local function createAceWindow()
 	hide:SetValue(db.hideIcon)
 	hide:SetCallback("OnValueChanged", function(_, _, val)
 		db.hideIcon = val and true or false
-		addon.DataHub:RequestUpdate(provider)
+		addon.DataHub:RequestUpdate(stream)
 	end)
 	frame:AddChild(hide)
 
@@ -121,6 +122,6 @@ provider = {
 	end,
 }
 
-EnhanceQoL.DataHub.RegisterStream(provider)
+stream = EnhanceQoL.DataHub.RegisterStream(provider)
 
 return provider
