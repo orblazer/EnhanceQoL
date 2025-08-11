@@ -8,6 +8,41 @@ end
 
 addon.CombatMeter.inCombat = false
 addon.CombatMeter.fightStartTime = 0
+addon.CombatMeter.fightDuration = 0
+
+addon.CombatMeter.players = addon.CombatMeter.players or {}
+addon.CombatMeter.overallPlayers = addon.CombatMeter.overallPlayers or {}
+addon.CombatMeter.playerPool = addon.CombatMeter.playerPool or {}
+addon.CombatMeter.overallDuration = addon.CombatMeter.overallDuration or 0
+
+local function acquirePlayer(tbl, guid, name)
+	local players = tbl
+	local player = players[guid]
+	if not player then
+		local pool = addon.CombatMeter.playerPool
+		if #pool > 0 then
+			player = table.remove(pool)
+			wipe(player)
+		else
+			player = {}
+		end
+		player.guid = guid
+		player.name = name
+		player.damage = 0
+		player.healing = 0
+		players[guid] = player
+	end
+	return player
+end
+
+local function releasePlayers(players)
+	local pool = addon.CombatMeter.playerPool
+	for guid, player in pairs(players) do
+		wipe(player)
+		table.insert(pool, player)
+		players[guid] = nil
+	end
+end
 
 local frame = CreateFrame("Frame")
 addon.CombatMeter.frame = frame
@@ -16,10 +51,32 @@ local function handleEvent(self, event, ...)
 	if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
 		addon.CombatMeter.inCombat = true
 		addon.CombatMeter.fightStartTime = GetTime()
+		releasePlayers(addon.CombatMeter.players)
 	elseif event == "PLAYER_REGEN_ENABLED" or event == "ENCOUNTER_END" then
 		addon.CombatMeter.inCombat = false
+		addon.CombatMeter.fightDuration = GetTime() - addon.CombatMeter.fightStartTime
+		addon.CombatMeter.overallDuration = addon.CombatMeter.overallDuration + addon.CombatMeter.fightDuration
+		releasePlayers(addon.CombatMeter.players)
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-		-- Combat log handling will be implemented later
+		local _, subevent, _, sourceGUID, sourceName, _, _, _, _, _, _, arg12, _, _, arg15 = CombatLogGetCurrentEventInfo()
+		if not sourceGUID then return end
+		local player = acquirePlayer(addon.CombatMeter.players, sourceGUID, sourceName)
+		local overall = acquirePlayer(addon.CombatMeter.overallPlayers, sourceGUID, sourceName)
+
+		local amount
+		if subevent == "SWING_DAMAGE" then
+			amount = arg12
+			player.damage = player.damage + amount
+			overall.damage = overall.damage + amount
+		elseif subevent:find("_DAMAGE") then
+			amount = arg15
+			player.damage = player.damage + amount
+			overall.damage = overall.damage + amount
+		elseif subevent:find("_HEAL") then
+			amount = arg15
+			player.healing = player.healing + amount
+			overall.healing = overall.healing + amount
+		end
 	end
 end
 
@@ -34,6 +91,10 @@ SLASH_EQOLCM1 = "/eqolcm"
 SlashCmdList["EQOLCM"] = function(msg)
 	if msg == "reset" then
 		addon.db["combatMeterHistory"] = {}
+		releasePlayers(addon.CombatMeter.players)
+		releasePlayers(addon.CombatMeter.overallPlayers)
+		addon.CombatMeter.overallDuration = 0
+		addon.CombatMeter.fightDuration = 0
 		print("EnhanceQoL Combat Meter data reset.")
 	end
 end
