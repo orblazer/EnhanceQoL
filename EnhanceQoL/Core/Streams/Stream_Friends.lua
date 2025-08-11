@@ -49,7 +49,7 @@ end
 local provider = {
 	id = "friends",
 	version = 1,
-	title = "Friends",
+	title = FRIENDS,
 	update = getFriends,
 	events = {
 		PLAYER_LOGIN = function(stream) addon.DataHub:RequestUpdate(stream) end,

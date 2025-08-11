@@ -42,10 +42,10 @@ libs\AceComm-3.0\AceComm-3.0.xml
 Bindings\Slider.xml
 Sounds\sounds.lua
 General\functions.lua
+EnhanceQoL.lua
 Core\DataHub.lua
 Core\DataPanel.lua
 Core\Streams\Streams.xml
-EnhanceQoL.lua
 Submodules\GemHelper.lua
 Submodules\ChatIM\UI.lua
 Submodules\ChatIM\Core.lua

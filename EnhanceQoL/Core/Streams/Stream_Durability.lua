@@ -71,7 +71,7 @@ end
 local provider = {
 	id = "durability",
 	version = 1,
-	title = "Durability",
+	title = DURABILITY,
 	update = calculateDurability,
 	events = {
 		GUILDBANK_UPDATE_MONEY = function(stream) addon.DataHub:RequestUpdate(stream) end,

@@ -18,18 +18,18 @@ local function checkMoney(stream)
 	local gText, s, c = formatGoldString(money)
 	stream.snapshot.text = ("|TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t %s"):format(gText)
 	-- stream.snapshot.tooltip = ("Gold: %s  Silver: %d  Copper: %d"):format(gText, s, c)
-	-- stream.snapshot.OnClick = function() ToggleCharacter("PaperDollFrame") end
 end
 
 local provider = {
 	id = "gold",
 	version = 1,
-	title = "Gold",
+	title = WORLD_QUEST_REWARD_FILTERS_GOLD,
 	update = checkMoney,
 	events = {
 		PLAYER_MONEY = function(stream) addon.DataHub:RequestUpdate(stream) end,
 		PLAYER_LOGIN = function(stream) addon.DataHub:RequestUpdate(stream) end,
 	},
+	-- OnClick = function(...) end,
 }
 
 EnhanceQoL.DataHub.RegisterStream(provider)

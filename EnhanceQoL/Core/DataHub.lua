@@ -149,6 +149,7 @@ function DataHub:RegisterStream(name, opts)
 		meta = provider, -- keep original provider for UI/metadata
 	}
 	if provider and provider.OnClick then stream.snapshot.OnClick = provider.OnClick end
+	if provider and provider.OnMouseEnter then stream.snapshot.OnMouseEnter = provider.OnMouseEnter end
 	hub.streams[name] = stream
 	hub.eventsByStream[name] = {}
 
