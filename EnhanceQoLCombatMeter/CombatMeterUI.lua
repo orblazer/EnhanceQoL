@@ -9,11 +9,29 @@ end
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_CombatMeter")
 
 local config = addon.db
-local barHeight = 30
+local barHeight = 25
 local specIcons = {}
 local pendingInspect = {}
 local groupFrames = {}
 local ticker
+
+-- font helpers ---------------------------------------------------------------
+local function getOutlineFlags()
+	local f = (config and config["combatMeterFontOutline"]) or "OUTLINE"
+	if f == "NONE" or f == "" then return "" end
+	if f == "THIN" then return "OUTLINE" end -- compat alias
+	return f -- OUTLINE / THICKOUTLINE / MONOCHROME / combos
+end
+
+local NUMBER_FONT_PATH = (NumberFontNormal and select(1, NumberFontNormal:GetFont()))
+	or (addon.variables and addon.variables.numberFont)
+	or (addon.variables and addon.variables.defaultFont)
+	or "Fonts\\FRIZQT__.TTF"
+
+-- fixed number columns to avoid jitter
+local COL_TOTAL_W = (config and config["combatMeterTotalWidth"]) or 55
+local COL_RATE_W  = (config and config["combatMeterRateWidth"])  or 55
+local COL_GAP     = (config and config["combatMeterColumnGap"])  or 0
 
 local metricNames = {
 	dps = L["DPS"],
@@ -65,7 +83,7 @@ end
 
 local function createGroupFrame(groupConfig)
 	local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-	frame:SetSize(220, barHeight)
+	frame:SetSize(210, barHeight)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
 	frame:Hide()
@@ -113,18 +131,43 @@ local function createGroupFrame(groupConfig)
 			bar.icon:SetSize(barHeight, barHeight)
 			bar.icon:SetPoint("LEFT", bar, "LEFT")
 
+			-- Right-side fixed columns to keep numbers steady (no jitter)
+			bar.rate = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			bar.rate:SetJustifyH("RIGHT")
+			bar.rate:SetPoint("RIGHT", bar, "RIGHT", -2, 0)
+			bar.rate:SetSize(COL_RATE_W, barHeight)
+
+			bar.total = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			bar.total:SetJustifyH("RIGHT")
+			bar.total:SetPoint("RIGHT", bar.rate, "LEFT", -COL_GAP, 0)
+			bar.total:SetSize(COL_TOTAL_W, barHeight)
+
+			-- Single-value field (used for non-rate metrics); spans both columns
+			bar.value = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			bar.value:SetJustifyH("RIGHT")
+			bar.value:SetPoint("RIGHT", bar, "RIGHT", -2, 0)
+			bar.value:SetSize(COL_TOTAL_W + COL_GAP + COL_RATE_W, barHeight)
+			bar.value:Hide()
+
+			-- Name between icon and numeric columns
 			bar.name = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 			bar.name:SetPoint("LEFT", bar.icon, "RIGHT", 2, 0)
-
-			bar.value = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-			bar.value:SetPoint("RIGHT", bar, "RIGHT", -2, 0)
+			bar.name:SetPoint("RIGHT", bar.total, "LEFT", -6, 0)
+			bar.name:SetJustifyH("LEFT")
+			bar.name:SetWordWrap(false)
+			bar.name:SetMaxLines(1)
 
 			bar.name:SetTextColor(1, 1, 1)
 			bar.value:SetTextColor(1, 1, 1)
+			bar.total:SetTextColor(1, 1, 1)
+			bar.rate.SetTextColor = bar.value.SetTextColor -- keep API parity if needed
 
 			local size = config["combatMeterFontSize"]
-			bar.name:SetFont(addon.variables.defaultFont, size, "OUTLINE")
-			bar.value:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+			local outline = getOutlineFlags()
+			bar.name:SetFont(addon.variables.defaultFont, size, outline)
+			bar.value:SetFont(NUMBER_FONT_PATH, size, outline)
+			bar.total:SetFont(NUMBER_FONT_PATH, size, outline)
+			bar.rate:SetFont(NUMBER_FONT_PATH, size, outline)
 
 			frame.bars[index] = bar
 		end
@@ -134,9 +177,12 @@ local function createGroupFrame(groupConfig)
 	frame.getBar = getBar
 
 	function frame:setFontSize(size)
+		local outline = getOutlineFlags()
 		for _, bar in ipairs(self.bars) do
-			bar.name:SetFont(addon.variables.defaultFont, size, "OUTLINE")
-			bar.value:SetFont(addon.variables.defaultFont, size, "OUTLINE")
+			bar.name:SetFont(addon.variables.defaultFont, size, outline)
+			bar.value:SetFont(NUMBER_FONT_PATH, size, outline)
+			if bar.total then bar.total:SetFont(NUMBER_FONT_PATH, size, outline) end
+			if bar.rate  then bar.rate:SetFont(NUMBER_FONT_PATH, size, outline)  end
 		end
 	end
 
@@ -150,15 +196,14 @@ local function createGroupFrame(groupConfig)
 		local maxValue = 0
 		if self.metric == "damageOverall" or self.metric == "healingOverall" then
 			local stats = addon.CombatMeter.functions.getOverallStats()
+			local dur = (addon.CombatMeter.functions.getOverallDuration and addon.CombatMeter.functions.getOverallDuration())
+				or addon.CombatMeter.overallDuration or 0
+			if dur <= 0 then dur = 1 end
 			for guid, p in pairs(stats) do
 				if groupUnits[guid] then
-					local value
-					if self.metric == "damageOverall" then
-						value = p.damage
-					else
-						value = p.hps
-					end
-					table.insert(list, { guid = guid, name = p.name, value = value })
+					local total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+					local value = total / dur -- rate over total tracked time
+					table.insert(list, { guid = guid, name = p.name, value = value, total = total })
 					if value > maxValue then maxValue = value end
 				end
 			end
@@ -204,9 +249,9 @@ local function createGroupFrame(groupConfig)
 			local icon = specIcons[p.guid]
 			if not icon and unit then
 				if unit == "player" then
-					local specIndex = GetSpecialization()
+					local specIndex = C_SpecializationInfo.GetSpecialization()
 					if specIndex then
-						icon = select(4, GetSpecializationInfo(specIndex))
+						icon = select(4, C_SpecializationInfo.GetSpecializationInfo(specIndex))
 						specIcons[p.guid] = icon
 					end
 				elseif not pendingInspect[p.guid] then
@@ -217,14 +262,29 @@ local function createGroupFrame(groupConfig)
 			bar.icon:SetTexture(icon)
 
 			bar.name:SetText(abbreviateName(p.name))
-			if (self.metric == "dps" or self.metric == "hps") and p.total then
-				local decimals = 0
-				if p.value > 1000000 then decimals = 2 end
+			if p.total and (self.metric == "dps" or self.metric == "healingPerFight" or self.metric == "damageOverall" or self.metric == "healingOverall") then
+				local decimals = (p.value >= 1e6) and 2 or 0
 				local rate = abbreviateNumber(p.value, decimals)
 				local total = abbreviateNumber(p.total)
-				bar.value:SetText(total .. "     " .. rate)
+				bar.value:Hide(); bar.total:Show(); bar.rate:Show()
+				bar.total:SetText(total)
+				bar.rate:SetText(rate)
+				-- ensure name anchors to total when dual columns are used
+				if bar.nameRightAnchorTarget ~= bar.total then
+					bar.name:ClearAllPoints()
+					bar.name:SetPoint("LEFT", bar.icon, "RIGHT", 2, 0)
+					bar.name:SetPoint("RIGHT", bar.total, "LEFT", -6, 0)
+					bar.nameRightAnchorTarget = bar.total
+				end
 			else
+				bar.total:Hide(); bar.rate:Hide(); bar.value:Show()
 				bar.value:SetText(abbreviateNumber(p.value))
+				if bar.nameRightAnchorTarget ~= bar.value then
+					bar.name:ClearAllPoints()
+					bar.name:SetPoint("LEFT", bar.icon, "RIGHT", 2, 0)
+					bar.name:SetPoint("RIGHT", bar.value, "LEFT", -6, 0)
+					bar.nameRightAnchorTarget = bar.value
+				end
 			end
 		end
 
