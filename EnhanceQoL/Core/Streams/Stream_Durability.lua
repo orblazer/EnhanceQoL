@@ -62,29 +62,29 @@ local function calculateDurability(stream)
 	local tooltipData = table.concat(lines, "\n")
 
 	local critDuraText = ""
-	if critDura > 0 then critDuraText = "|cffff0000" .. critDura .. "|r " .. ITEMS .. " < 50%"end
-	EnhanceQoL.DataHub:Publish(stream, {
-		text = ("|T136241:16|t |cff%s%.0f|r%% %s"):format(color, durValue, critDuraText),
-		tooltip = tooltipData,
-	})
+	if critDura > 0 then critDuraText = "|cffff0000" .. critDura .. "|r " .. ITEMS .. " < 50%" end
+
+	stream.snapshot.text = ("|T136241:16|t |cff%s%.0f|r%% %s"):format(color, durValue, critDuraText)
+	stream.snapshot.tooltip = tooltipData
 end
 
 local provider = {
 	id = "durability",
 	version = 1,
 	title = "Durability",
+	update = calculateDurability,
 	events = {
-		GUILDBANK_UPDATE_MONEY = function(stream) calculateDurability(stream) end,
+		GUILDBANK_UPDATE_MONEY = function(stream) addon.DataHub:RequestUpdate(stream) end,
 		PLAYER_DEAD = function(stream)
-			C_Timer.After(1, function() calculateDurability(stream) end)
+			C_Timer.After(1, function() addon.DataHub:RequestUpdate(stream) end)
 		end,
-		PLAYER_EQUIPMENT_CHANGED = function(stream) calculateDurability(stream) end,
-		PLAYER_MONEY = function(stream) calculateDurability(stream) end,
-		PLAYER_REGEN_ENABLED = function(stream) calculateDurability(stream) end,
+		PLAYER_EQUIPMENT_CHANGED = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		PLAYER_MONEY = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		PLAYER_REGEN_ENABLED = function(stream) addon.DataHub:RequestUpdate(stream) end,
 		PLAYER_UNGHOST = function(stream)
-			C_Timer.After(1, function() calculateDurability(stream) end)
+			C_Timer.After(1, function() addon.DataHub:RequestUpdate(stream) end)
 		end,
-		PLAYER_LOGIN = function(stream) calculateDurability(stream) end,
+		PLAYER_LOGIN = function(stream) addon.DataHub:RequestUpdate(stream) end,
 	},
 }
 

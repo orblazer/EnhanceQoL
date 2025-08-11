@@ -1,4 +1,5 @@
 -- luacheck: globals EnhanceQoL
+local addonName, addon = ...
 local floor = math.floor
 local GetMoney = GetMoney
 
@@ -15,20 +16,19 @@ end
 local function checkMoney(stream)
 	local money = GetMoney() or 0
 	local gText, s, c = formatGoldString(money)
-	EnhanceQoL.DataHub:Publish(stream, {
-		text = ("|TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t %s"):format(gText),
-		-- tooltip = ("Gold: %s  Silver: %d  Copper: %d"):format(gText, s, c),
-		-- OnClick = function() ToggleCharacter("PaperDollFrame") end,
-	})
+	stream.snapshot.text = ("|TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t %s"):format(gText)
+	-- stream.snapshot.tooltip = ("Gold: %s  Silver: %d  Copper: %d"):format(gText, s, c)
+	-- stream.snapshot.OnClick = function() ToggleCharacter("PaperDollFrame") end
 end
 
 local provider = {
 	id = "gold",
 	version = 1,
 	title = "Gold",
+	update = checkMoney,
 	events = {
-		PLAYER_MONEY = function(stream) checkMoney(stream) end,
-		PLAYER_LOGIN = function(stream) checkMoney(stream) end,
+		PLAYER_MONEY = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		PLAYER_LOGIN = function(stream) addon.DataHub:RequestUpdate(stream) end,
 	},
 }
 

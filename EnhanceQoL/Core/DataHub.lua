@@ -115,6 +115,7 @@ function DataHub:RegisterStream(name, opts)
 			opts.throttleKey = opts.throttleKey or p.throttleKey
 			opts.throttle = opts.throttle or p.throttleDelay or p.delay
 		end
+		if not opts.update and type(provider.update) == "function" then opts.update = provider.update end
 		-- wrap collect into update if present
 		if not opts.update and type(provider.collect) == "function" then
 			opts.update = function(stream)
@@ -152,6 +153,7 @@ function DataHub:RegisterStream(name, opts)
 
 	if opts and opts.events then
 		for _, event in ipairs(opts.events) do
+			-- store event definition without registering yet
 			hub:RegisterEvent(stream, event)
 		end
 	end
@@ -159,6 +161,7 @@ function DataHub:RegisterStream(name, opts)
 		for event, fn in pairs(provider.events) do
 			local ev = event
 			local handler = fn
+			-- store handler without registering yet
 			hub:RegisterEvent(stream, ev, function(...) handler(stream, ev, ...) end)
 		end
 	end
@@ -197,15 +200,18 @@ function DataHub:UnregisterStream(name)
 end
 
 function DataHub:RegisterEvent(stream, event, handler)
+	-- always store definition
 	self.eventsByStream[stream.name][event] = handler or true
-	self.eventMap[event] = self.eventMap[event] or {}
-	self.eventMap[event][stream] = handler or true
-	eventFrame:RegisterEvent(event)
+	-- only register with the event frame when the stream has subscribers
+	if stream.subscribers and next(stream.subscribers) then
+		self.eventMap[event] = self.eventMap[event] or {}
+		self.eventMap[event][stream] = handler or true
+		eventFrame:RegisterEvent(event)
+	end
 end
 
-function DataHub:UnregisterEvent(stream, event)
-	local events = self.eventsByStream[stream.name]
-	if events then events[event] = nil end
+function DataHub:UnregisterEvent(stream, event, keep)
+	-- remove from the live event map
 	local map = self.eventMap[event]
 	if map then
 		map[stream] = nil
@@ -213,6 +219,11 @@ function DataHub:UnregisterEvent(stream, event)
 			self.eventMap[event] = nil
 			eventFrame:UnregisterEvent(event)
 		end
+	end
+	-- drop the stored definition unless explicitly kept
+	if not keep then
+		local events = self.eventsByStream[stream.name]
+		if events then events[event] = nil end
 	end
 end
 
@@ -265,9 +276,18 @@ function DataHub:Subscribe(name, callback)
 	stream.subscribers = stream.subscribers or {}
 	local isFirst = not next(stream.subscribers)
 	stream.subscribers[callback] = true
-	if isFirst and stream.interval and stream.interval > 0 then
-		self.polling[name] = stream
-		self:UpdateDriver()
+	if isFirst then
+		-- register stored events now that there's a subscriber
+		local events = self.eventsByStream[name]
+		if events then
+			for event, handler in pairs(events) do
+				self:RegisterEvent(stream, event, handler)
+			end
+		end
+		if stream.interval and stream.interval > 0 then
+			self.polling[name] = stream
+			self:UpdateDriver()
+		end
 	end
 	self:RequestUpdate(name)
 	return function() self:Unsubscribe(name, callback) end
@@ -278,7 +298,14 @@ function DataHub:Unsubscribe(name, callback)
 	if not stream or not stream.subscribers then return end
 	stream.subscribers[callback] = nil
 	if next(stream.subscribers) then return end
+	-- last subscriber removed: unregister events and polling
 	stream.subscribers = nil
+	local events = self.eventsByStream[name]
+	if events then
+		for event in pairs(events) do
+			self:UnregisterEvent(stream, event, true)
+		end
+	end
 	if stream.interval and stream.interval > 0 then
 		self.polling[name] = nil
 		self:UpdateDriver()

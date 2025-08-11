@@ -1,4 +1,5 @@
 -- luacheck: globals EnhanceQoL C_FriendList
+local addonName, addon = ...
 local GetNumFriends = C_FriendList.GetNumFriends
 local GetFriendInfoByIndex = C_FriendList.GetFriendInfoByIndex
 
@@ -40,22 +41,21 @@ local function getFriends(stream)
 			table.insert(tooltipData, unit)
 		end
 	end
-	EnhanceQoL.DataHub:Publish(stream, {
-		text = numFriendsOnline .. " " .. FRIENDS,
-		tooltip = table.concat(tooltipData, "\n"),
-		-- OnClick = function() ToggleCharacter("PaperDollFrame") end,
-	})
+	stream.snapshot.text = numFriendsOnline .. " " .. FRIENDS
+	stream.snapshot.tooltip = table.concat(tooltipData, "\n")
+	-- stream.snapshot.OnClick = function() ToggleCharacter("PaperDollFrame") end
 end
 
 local provider = {
 	id = "friends",
 	version = 1,
 	title = "Friends",
+	update = getFriends,
 	events = {
-		PLAYER_LOGIN = function(stream) getFriends(stream) end,
-		BN_FRIEND_ACCOUNT_ONLINE = function(stream) getFriends(stream) end,
-		BN_FRIEND_ACCOUNT_OFFLINE = function(stream) getFriends(stream) end,
-		FRIENDLIST_UPDATE = function(stream) getFriends(stream) end,
+		PLAYER_LOGIN = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		BN_FRIEND_ACCOUNT_ONLINE = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		BN_FRIEND_ACCOUNT_OFFLINE = function(stream) addon.DataHub:RequestUpdate(stream) end,
+		FRIENDLIST_UPDATE = function(stream) addon.DataHub:RequestUpdate(stream) end,
 	},
 }
 
