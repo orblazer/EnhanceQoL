@@ -364,6 +364,5 @@ SlashCmdList["EQOLCM"] = function(msg)
 		releasePlayers(cm.overallPlayers)
 		cm.overallDuration = 0
 		cm.fightDuration = 0
-		print("EnhanceQoL Combat Meter data reset.")
 	end
 end
