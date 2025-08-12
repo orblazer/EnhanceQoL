@@ -82,14 +82,14 @@ local function rebuildPetOwnerFromRoster()
 	wipe(petOwner)
 	if IsInRaid() then
 		for i = 1, GetNumGroupMembers() do
-			local owner = UnitGUID("raid"..i)
-			local pguid = UnitGUID("raid"..i.."pet")
+			local owner = UnitGUID("raid" .. i)
+			local pguid = UnitGUID("raid" .. i .. "pet")
 			if owner and pguid then petOwner[pguid] = owner end
 		end
 	else
 		for i = 1, GetNumGroupMembers() do
-			local owner = UnitGUID("party"..i)
-			local pguid = UnitGUID("party"..i.."pet")
+			local owner = UnitGUID("party" .. i)
+			local pguid = UnitGUID("party" .. i .. "pet")
 			if owner and pguid then petOwner[pguid] = owner end
 		end
 		local me = UnitGUID("player")
@@ -116,6 +116,14 @@ local healIdx = {
 }
 
 local function handleCLEU(timestamp, subevent, hideCaster, sourceGUID, sourceName, sourceFlags, sourceRaidFlags, destGUID, destName, destFlags, destRaidFlags, ...)
+	-- Maintain pet/guardian owner mapping via CLEU
+	if subevent == "SPELL_SUMMON" or subevent == "SPELL_CREATE" then
+		if destGUID and sourceGUID then petOwner[destGUID] = sourceGUID end
+		return
+	elseif subevent == "UNIT_DIED" or subevent == "UNIT_DESTROYED" then
+		if destGUID then petOwner[destGUID] = nil end
+		return
+	end
 	-- Note: We intentionally ignore *_MISSED ABSORB to avoid double-counting with SPELL_ABSORBED (matches Details behavior)
 	if not (dmgIdx[subevent] or healIdx[subevent] or subevent == "SPELL_ABSORBED") then return end
 
