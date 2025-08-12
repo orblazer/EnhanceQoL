@@ -22,8 +22,13 @@ local groupUnitsCached = {}
 local shortNameCache = {}
 local rawNameCache = {}
 local ticker
-local tickerRate = config["combatMeterUpdateRate"] or 0.3
+local baseTickerRate = config["combatMeterUpdateRate"] or 0.3
+local tickerRate = baseTickerRate
 local lastMaxValue = 0
+local stableTicks = 0
+local STABLE_TICK_THRESHOLD = 10
+local BACKOFF_FACTOR = 2
+local MAX_TICKER_RATE = 1.0
 local EPSILON = 0.01
 local tinsert, tsort = table.insert, table.sort
 local historyMenu = CreateFrame("Frame", addonName .. "CMHistoryMenu", UIParent, "UIDropDownMenuTemplate")
@@ -699,14 +704,25 @@ local function UpdateAllFrames()
 		if frameMax and frameMax > maxValue then maxValue = frameMax end
 	end
 	if math.abs(maxValue - lastMaxValue) < EPSILON then
-		if ticker then
-			ticker:Cancel()
-			ticker = nil
-			addon.CombatMeter.ticker = nil
-			C_Timer.After(tickerRate, function()
+		stableTicks = stableTicks + 1
+		if stableTicks >= STABLE_TICK_THRESHOLD and tickerRate < MAX_TICKER_RATE then
+			tickerRate = math.min(tickerRate * BACKOFF_FACTOR, MAX_TICKER_RATE)
+			if ticker then
+				ticker:Cancel()
 				ticker = C_Timer.NewTicker(tickerRate, UpdateAllFrames)
 				addon.CombatMeter.ticker = ticker
-			end)
+			end
+			stableTicks = 0
+		end
+	else
+		stableTicks = 0
+		if tickerRate ~= baseTickerRate then
+			tickerRate = baseTickerRate
+			if ticker then
+				ticker:Cancel()
+				ticker = C_Timer.NewTicker(tickerRate, UpdateAllFrames)
+				addon.CombatMeter.ticker = ticker
+			end
 		end
 	end
 	lastMaxValue = maxValue
@@ -736,7 +752,9 @@ controller:SetScript("OnEvent", function(self, event, ...)
 		if ticker then ticker:Cancel() end
 		buildGroupUnits()
 		local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or config["combatMeterUpdateRate"]
+		baseTickerRate = hz
 		tickerRate = hz
+		stableTicks = 0
 		lastMaxValue = 0
 		ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
 		addon.CombatMeter.ticker = ticker
@@ -794,7 +812,9 @@ function addon.CombatMeter.functions.setUpdateRate(rate)
 	if ticker then
 		ticker:Cancel()
 		local hz = (tableSize(groupUnitsCached) > 20) and 0.3 or rate
+		baseTickerRate = hz
 		tickerRate = hz
+		stableTicks = 0
 		lastMaxValue = 0
 		ticker = C_Timer.NewTicker(hz, UpdateAllFrames)
 		addon.CombatMeter.ticker = ticker
