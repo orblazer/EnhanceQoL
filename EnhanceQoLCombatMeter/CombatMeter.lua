@@ -146,16 +146,14 @@ local function handleEvent(self, event)
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if not cm.inCombat then return end
 
-		-- Call 1: early filter for subevent
-		local _, sub = CombatLogGetCurrentEventInfo()
+		-- Call 1: early filter for subevent and capture GUIDs
+		local _, sub, _, sourceGUID, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
 
 		-- Maintain pet/guardian owner mapping via CLEU
 		if sub == "SPELL_SUMMON" or sub == "SPELL_CREATE" then
-			local _, _, _, sourceGUID, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
 			if destGUID and sourceGUID then petOwner[destGUID] = sourceGUID end
 			return
 		elseif sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" then
-			local _, _, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
 			if destGUID then petOwner[destGUID] = nil end
 			return
 		elseif not (dmgIdx[sub] or healIdx[sub] or sub == "SPELL_ABSORBED") then
