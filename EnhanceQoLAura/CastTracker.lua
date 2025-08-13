@@ -1142,7 +1142,10 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 	bar.sourceGUID = sourceGUID
 	bar.spellId = spellId
 	bar.catId = catId
-	bar.icon:SetTexture(icon)
+	if bar._icon ~= icon then
+		bar.icon:SetTexture(icon)
+		bar._icon = icon
+	end
 	bar.castType = castType or "cast"
 	if spellInfo.customTextEnabled and spellInfo.customText and spellInfo.customText ~= "" then
 		bar.text:SetText(spellInfo.customText)
