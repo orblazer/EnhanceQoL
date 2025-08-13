@@ -598,6 +598,7 @@ globals = {
 	"C_BlackMarket.GetNumItems",
 	"C_BlackMarket.IsViewOnly",
 	"C_BlackMarket.ItemPlaceBid",
+	"NumberFontNormal",
 	"C_BlackMarket.RequestItems",
 	"C_ChallengeMode",
 	"C_ChallengeMode.ClearKeystone",
