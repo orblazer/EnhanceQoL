@@ -77,8 +77,8 @@ local function updateColumnWidths(size)
 	widthMeasure = widthMeasure or UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	widthMeasure:Hide()
 	widthMeasure:SetFont(NUMBER_FONT_PATH, size, getOutlineFlags())
-	widthMeasure:SetText("888.88m")
-	local w = math.ceil(widthMeasure:GetStringWidth() + 2)
+	widthMeasure:SetText("8888.88b")
+	local w = math.ceil(widthMeasure:GetStringWidth() + 8)
 	COL_TOTAL_W = w
 	COL_RATE_W = w
 end
