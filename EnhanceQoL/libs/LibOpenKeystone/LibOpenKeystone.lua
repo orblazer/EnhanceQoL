@@ -87,13 +87,7 @@ end
 
 -- Safe/logged send (compatible with LOR expectations)
 local function SendLogged(text, channel)
-	-- encode like LOR does:
-	local plain = text
-	plain = plain:gsub("\n", "%%")
-	plain = plain:gsub(",", ";")
-	local commId = tostring(GetServerTime() + GetTime())
-	plain = plain .. "#" .. commId
-	-- target channel
+	-- Zielkanal ermitteln
 	local ch = channel
 	if not ch then
 		if IsInRaid() then
@@ -104,22 +98,42 @@ local function SendLogged(text, channel)
 			ch = "WHISPER"
 		end
 	end
-	if ch == "WHISPER" then return end -- no need
+	if ch == "WHISPER" then return end -- keine Whisper-Broadcasts
+
+	-- Preferred: compressed AceComm on LRS (this is LibOpenRaid's main path)
+	local AceComm    = LibStub:GetLibrary("AceComm-3.0", true)
+	local LibDeflate = LibStub:GetLibrary("LibDeflate", true)
+	if AceComm and LibDeflate then
+		local compressed = LibDeflate:CompressDeflate(text, { level = 9 })
+		local encoded    = LibDeflate:EncodeForWoWAddonChannel(compressed)
+		AceComm:SendCommMessage(PREFIX, encoded, ch, nil, "ALERT")
+		return
+	end
+
+	-- Fallback: LOGGED-safe (works with LOR's logged handler)
 	if ChatThrottleLib and ChatThrottleLib.SendAddonMessageLogged then
+		local plain = text:gsub("\n", "%%"):gsub(",", ";")
+		local commId = tostring(GetServerTime() + GetTime())
+		plain = plain .. "#" .. commId
 		ChatThrottleLib:SendAddonMessageLogged("NORMAL", PREFIX_LOGGED, plain, ch)
-	else
-		-- Fallback (unthrottled). Receivers with LOR still parse it.
+		return
+	end
+
+	-- Last resort: plain logged via C_ChatInfo
+	local plain = text:gsub("\n", "%%"):gsub(",", ";")
+	local commId = tostring(GetServerTime() + GetTime())
+	plain = plain .. "#" .. commId
+	if C_ChatInfo and C_ChatInfo.SendAddonMessage then
 		C_ChatInfo.SendAddonMessage(PREFIX_LOGGED, plain, ch)
 	end
 end
 
 -- Build / parse payloads
-local function BuildKPayload(nameRealm, mapID, level)
-	nameRealm = nameRealm or FullName("player")
+-- LOR-compatible: no name in payload
+local function BuildKPayload(mapID, level)
 	mapID = tonumber(mapID) or 0
 	level = tonumber(level) or 0
-	-- Keep it tiny and LOR-friendly. Extra fields can be added at the end.
-	return string.format("%s,%s,%d,%d", KDATA_PREFIX, nameRealm, mapID, level)
+	return string.format("%s,%d,%d", KDATA_PREFIX, mapID, level)
 end
 local function ParseLoggedPayload(text)
 	-- reverse LOR safe-encoding
@@ -129,51 +143,54 @@ local function ParseLoggedPayload(text)
 	return s
 end
 
--- Receive & handle data
-local recvParts = {} -- sender -> { total, chunks={} }
-local function HandleCompleteLogged(sender, channel, msg)
-	local data = ParseLoggedPayload(msg)
+-- Common processor for decoded data (either from LOGGED-safe or AceComm-compressed)
+local function ProcessData(sender, channel, data)
 	local dtype = data:sub(1, 1)
 	if dtype == KREQ_PREFIX then
 		-- someone asked → respond with our key
 		local me = FullName("player")
 		local mapID, level = ReadOwnKeystone()
-		SendLogged(BuildKPayload(me, mapID, level), channel)
+		SendLogged(BuildKPayload(mapID, level), channel)
+		return
 	elseif dtype == KDATA_PREFIX then
-		-- tableize, tolerate extra/unknown fields
 		local tokens = { strsplit(",", data) }
-		-- tokens[1] == "K"
-		local key = NormalizeKey(tokens[2], sender)
+		local key, mapID, level
 
-		-- erste zwei Zahlen im Payload als mapID/level
-		local nums = {}
-		for i = 3, #tokens do
-			local n = tonumber(tokens[i])
-			if n then nums[#nums + 1] = n end
+		-- A) LOR: K,<mapID>,<level>  (kein Name im Payload)
+		-- B) Alt: K,<name>,<mapID>,<level>
+		if tonumber(tokens[2]) then
+			key = NormalizeKey(sender, sender) -- Sender ist der Spieler
+			mapID = tonumber(tokens[2]) or 0
+			level = tonumber(tokens[3]) or 0
+		else
+			key = NormalizeKey(tokens[2], sender)
+			mapID = tonumber(tokens[3]) or 0
+			level = tonumber(tokens[4]) or 0
 		end
-		local mapID = nums[1] or 0
-		local level = nums[2] or 0
 
 		if key and key ~= "" then
-			-- Alt-Form (short<->full) in kanonischen Key zusammenführen
+			-- Kurz <-> Voll konsolidieren
 			local short = key:match("^[^-]+")
 			local alt = (key:find("-", 1, true) and short) or (short .. "-" .. ownRealm)
-			if alt ~= key and lib.UnitData[alt] then
-				lib.UnitData[key] = lib.UnitData[key] or {}
-				for k, v in pairs(lib.UnitData[alt]) do
-					lib.UnitData[key][k] = v
-				end
-				lib.UnitData[alt] = nil
-			end
+			if alt ~= key and lib.UnitData[alt] then lib.UnitData[alt] = nil end
 
-			lib.UnitData[key] = lib.UnitData[key] or {}
-			local entry = lib.UnitData[key]
-			entry.challengeMapID = mapID
-			entry.level = level
-			entry.lastSeen = Now()
-			Fire("KeystoneUpdate", key, entry)
+			-- WICHTIG: kompletten Eintrag ersetzen -> keine Fremdfelder wie classColor behalten
+			lib.UnitData[key] = {
+				challengeMapID = mapID,
+				level = level,
+				lastSeen = Now(),
+			}
+
+			Fire("KeystoneUpdate", key, lib.UnitData[key])
 		end
 	end
+end
+
+-- Receive & handle data
+local recvParts = {} -- sender -> { total, chunks={} }
+local function HandleCompleteLogged(sender, channel, msg)
+	local data = ParseLoggedPayload(msg)
+	ProcessData(sender, channel, data)
 end
 
 local function OnLogged(self, event, prefix, text, channel, sender)
@@ -211,6 +228,32 @@ local function OnLogged(self, event, prefix, text, channel, sender)
 	end
 end
 
+-- Also accept compressed AceComm traffic on PREFIX ("LRS") like LibOpenRaid
+do
+	local AceComm = LibStub:GetLibrary("AceComm-3.0", true)
+	local LibDeflate = LibStub:GetLibrary("LibDeflate", true)
+	if AceComm and LibDeflate then
+		lib._ace = lib._ace or {}
+		function lib._ace:OnReceiveComm(prefix, text, channel, sender)
+			if prefix ~= PREFIX then return end
+			sender = Ambiguate(sender, "none")
+			-- ignore self (short or full)
+			local meShort = UnitName("player")
+			local meFull = FullName("player")
+			local senderShort = sender and sender:match("^[^-]+")
+			if sender == meShort or sender == meFull or (senderShort and senderShort == meShort) then return end
+
+			local decoded = LibDeflate:DecodeForWoWAddonChannel(text)
+			if not decoded then return end
+			local data = LibDeflate:DecompressDeflate(decoded)
+			if type(data) ~= "string" or #data < 1 then return end
+			ProcessData(sender, channel, data)
+		end
+		AceComm:Embed(lib._ace)
+		lib._ace:RegisterComm(PREFIX, "OnReceiveComm")
+	end
+end
+
 -- Register for logged comms
 if C_ChatInfo then C_ChatInfo.RegisterAddonMessagePrefix(PREFIX_LOGGED) end
 local f = lib._frame or CreateFrame("Frame")
@@ -242,7 +285,7 @@ f:SetScript("OnEvent", function(_, ev, ...)
 		if not e or e.challengeMapID ~= mapID or e.level ~= level then
 			lib.UnitData[me] = { challengeMapID = mapID, level = level, lastSeen = Now() }
 			Fire("KeystoneUpdate", me, lib.UnitData[me])
-			if IsInGroup() then SendLogged(BuildKPayload(me, mapID, level)) end
+			if IsInGroup() then SendLogged(BuildKPayload(mapID, level)) end
 		end
 	end
 end)
@@ -250,10 +293,10 @@ end)
 -- Public: request from party/raid + send own key proactively
 function lib.RequestKeystoneDataFromParty()
 	if not (IsInGroup() or IsInRaid()) then return end
-	-- broadcast request
-	SendLogged(KREQ_PREFIX .. "," .. FullName("player"))
-	-- answer for ourselves too (immediate)
-	local me = FullName("player")
+	-- Anfrage
+	SendLogged(KREQ_PREFIX)
+
+	-- sofortige Eigen-Antwort
 	local mapID, level = ReadOwnKeystone()
-	SendLogged(BuildKPayload(me, mapID, level))
+	SendLogged(BuildKPayload(mapID, level))
 end
