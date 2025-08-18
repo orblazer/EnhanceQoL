@@ -319,7 +319,7 @@ local function ApplyEQOLFilters(isInitial)
 		end
 	end
 
-	local selectedID = (LFGListSearchPanel_GetSelectedResult and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
+	local selectedID = ((type(LFGListSearchPanel_GetSelectedResult) == "function") and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
 	local pinnedID = lastIntendedSelection or selectedID
 
 	-- Build removal list without mutating the provider during enumeration
@@ -344,7 +344,7 @@ local function ApplyEQOLFilters(isInitial)
 		initialAllEntries[r.id] = false
 	end
 
-	if pinnedID and LFGListSearchPanel_SelectResult then
+	if pinnedID and type(LFGListSearchPanel_SelectResult) == "function" then
 		local cur = selectedID
 		if cur ~= pinnedID then LFGListSearchPanel_SelectResult(panel, pinnedID) end
 	end
@@ -399,18 +399,22 @@ function addon.MythicPlus.functions.addDungeonFilter()
 		LFGListFrame:Show()
 	end
 	local panel = LFGListFrame.SearchPanel
-	if panel.SignUpButton and not panel.SignUpButton.eqolHooked then
-		panel.SignUpButton.eqolHooked = true
-		panel.SignUpButton:HookScript("OnMouseDown", function()
-			local id = (LFGListSearchPanel_GetSelectedResult and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
-			if id then
-				lastIntendedSelection = id
-				if LFGListSearchPanel_SelectResult then LFGListSearchPanel_SelectResult(panel, id) end
-			end
-			SuspendFilters(IsInGroup() and 2.5 or 1.5)
-		end)
-
-		panel.SignUpButton:HookScript("OnClick", function() SuspendFilters(IsInGroup() and 2.5 or 1.5) end)
+	if panel.SignUpButton then
+		if not panel.eqolDownHooked then
+			panel.eqolDownHooked = true
+			panel.SignUpButton:HookScript("OnMouseDown", function()
+				local id = ((type(LFGListSearchPanel_GetSelectedResult) == "function") and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
+				if id then
+					lastIntendedSelection = id
+					if type(LFGListSearchPanel_SelectResult) == "function" then LFGListSearchPanel_SelectResult(panel, id) end
+				end
+				SuspendFilters(IsInGroup() and 2.5 or 1.5)
+			end)
+		end
+		if not panel.eqolHooked then
+			panel.eqolHooked = true
+			panel.SignUpButton:HookScript("OnClick", function() SuspendFilters(IsInGroup() and 2.5 or 1.5) end)
+		end
 	end
 	f = CreateFrame("Frame")
 	UpdateAppliedCache()
