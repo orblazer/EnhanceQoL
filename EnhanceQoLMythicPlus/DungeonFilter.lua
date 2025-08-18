@@ -190,8 +190,14 @@ local function FilterEntry(entry)
 		return
 	end
 	local selectedID = (type(LFGListSearchPanel_GetSelectedResult) == "function" and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
-	if selectedID and resultID == selectedID then return end
-	if appliedLookup[resultID] then return end
+	if selectedID and resultID == selectedID then
+		entry:SetShown(true)
+		return
+	end
+	if appliedLookup[resultID] then
+		entry:SetShown(true)
+		return
+	end
 	local info = C_LFGList.GetSearchResultInfo(resultID)
 	if not info then return end
 	entry:SetShown(EntryPassesFilter(info))
