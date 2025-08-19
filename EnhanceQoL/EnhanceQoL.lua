@@ -2905,6 +2905,7 @@ local function addSocialFrame(container)
 			text = L["IgnoreTooltipNote"],
 			type = "CheckBox",
 			callback = function(self, _, value) addon.db["ignoreTooltipNote"] = value end,
+			desc = L["IgnoreNoteDesc"],
 		})
 	end
 
