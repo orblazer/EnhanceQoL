@@ -5,6 +5,19 @@ local L = addon.L
 local AceGUI = addon.AceGUI
 local db
 local stream
+local tracked = {}
+local trackedDirty = true
+
+local function rebuildTracked()
+	if not db then return end
+	for k in pairs(tracked) do
+		tracked[k] = nil
+	end
+	for _, id in ipairs(db.ids) do
+		tracked[id] = true
+	end
+	trackedDirty = false
+end
 
 local updatePending = false
 local function RequestUpdateDebounced()
@@ -22,6 +35,7 @@ local function ensureDB()
 	db = addon.db.datapanel.currency
 	db.fontSize = db.fontSize or 14
 	db.ids = db.ids or {}
+	if trackedDirty then rebuildTracked() end
 end
 
 local aceWindowWidget -- AceGUI widget
@@ -43,35 +57,47 @@ local function renderList()
 		label:SetWidth(160)
 		row:AddChild(label)
 
-		local up = AceGUI:Create("Button")
-		up:SetText("↑")
-		up:SetWidth(30)
-		up:SetCallback("OnClick", function()
-			if idx > 1 then
+		if idx > 1 then
+			local up = AceGUI:Create("Icon")
+			up:SetImage("Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Up") -- TODO replace placeholder
+			up:SetImageSize(16, 16)
+			up:SetWidth(30)
+			up:SetCallback("OnClick", function()
 				db.ids[idx], db.ids[idx - 1] = db.ids[idx - 1], db.ids[idx]
 				renderList()
 				RequestUpdateDebounced()
-			end
-		end)
-		row:AddChild(up)
+			end)
+			row:AddChild(up)
+		else
+			local spacer = AceGUI:Create("Label")
+			spacer:SetWidth(30)
+			row:AddChild(spacer)
+		end
 
-		local down = AceGUI:Create("Button")
-		down:SetText("↓")
-		down:SetWidth(30)
-		down:SetCallback("OnClick", function()
-			if idx < #db.ids then
+		if idx < #db.ids then
+			local down = AceGUI:Create("Icon")
+			down:SetImage("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up") -- TODO replace placeholder
+			down:SetImageSize(16, 16)
+			down:SetWidth(30)
+			down:SetCallback("OnClick", function()
 				db.ids[idx], db.ids[idx + 1] = db.ids[idx + 1], db.ids[idx]
 				renderList()
 				RequestUpdateDebounced()
-			end
-		end)
-		row:AddChild(down)
+			end)
+			row:AddChild(down)
+		else
+			local spacer = AceGUI:Create("Label")
+			spacer:SetWidth(30)
+			row:AddChild(spacer)
+		end
 
-		local remove = AceGUI:Create("Button")
-		remove:SetText("X")
+		local remove = AceGUI:Create("Icon")
+		remove:SetImage("Interface\\Buttons\\UI-GroupLoot-Pass-Up") -- TODO replace placeholder
+		remove:SetImageSize(16, 16)
 		remove:SetWidth(30)
 		remove:SetCallback("OnClick", function()
 			table.remove(db.ids, idx)
+			rebuildTracked()
 			renderList()
 			RequestUpdateDebounced()
 		end)
@@ -130,6 +156,7 @@ local function createAceWindow()
 				end
 			end
 			table.insert(db.ids, id)
+			rebuildTracked()
 			addBox:SetText("")
 			renderList()
 			RequestUpdateDebounced()
@@ -179,7 +206,10 @@ local provider = {
 	update = checkCurrencies,
 	events = {
 		PLAYER_LOGIN = function() RequestUpdateDebounced() end,
-		CURRENCY_DISPLAY_UPDATE = function() RequestUpdateDebounced() end,
+		CURRENCY_DISPLAY_UPDATE = function(_, currencyType)
+			ensureDB()
+			if tracked[currencyType] then RequestUpdateDebounced() end
+		end,
 	},
 	OnClick = function(_, btn)
 		if btn == "RightButton" then createAceWindow() end
