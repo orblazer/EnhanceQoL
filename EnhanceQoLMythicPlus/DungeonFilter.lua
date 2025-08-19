@@ -17,23 +17,6 @@ local function eqolDbg(msg)
 	if addon.db and addon.db.debugDungeonFilter then DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00[EQOL:DF]|r " .. msg) end
 end
 
-local appliedLookup = {}
-
-local ACTIVE_STATUS = {
-	applied = true,
-	invited = true,
-	inviteaccepted = true,
-	pending = true,
-}
-
-local function UpdateAppliedCache()
-	wipe(appliedLookup)
-	for _, appID in ipairs(C_LFGList.GetApplications()) do
-		local resultID, status = C_LFGList.GetApplicationInfo(appID)
-		if resultID and ACTIVE_STATUS[status] then appliedLookup[resultID] = true end
-	end
-end
-
 local LUST_CLASSES = { SHAMAN = true, MAGE = true, HUNTER = true, EVOKER = true }
 local BR_CLASSES = { DRUID = true, WARLOCK = true, DEATHKNIGHT = true, PALADIN = true }
 local playerIsLust = LUST_CLASSES[addon.variables.unitClass]
@@ -53,6 +36,7 @@ local function EQOL_AddLFGEntries(owner, root, ctx)
 	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 	local panel = LFGListFrame.SearchPanel
 	if panel.categoryID ~= 2 then return end
+
 	root:CreateTitle("")
 
 	root:CreateTitle(addonName)
@@ -182,87 +166,64 @@ end
 local function FilterResults(panel)
 	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 	if not panel or panel.categoryID ~= 2 then return end
-	UpdateAppliedCache()
-	if not AnyFilterActive() then
-		-- make sure the panel uses the full unfiltered result list
-		local results = select(2, C_LFGList.GetSearchResults())
-		panel.results = results
-		panel.totalResults = #results
-		LFGListSearchPanel_UpdateResults(panel)
-	else
-		local selectedID = (type(LFGListSearchPanel_GetSelectedResult) == "function" and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
-		local results = select(2, C_LFGList.GetSearchResults())
-		local filtered = {}
-		for _, resultID in ipairs(results) do
-			if appliedLookup[resultID] or (selectedID and resultID == selectedID) then
-				table.insert(filtered, resultID)
-			else
-				local info = C_LFGList.GetSearchResultInfo(resultID)
-				if info and EntryPassesFilter(info) then table.insert(filtered, resultID) end
-			end
+
+	-- Use the results prepared by Blizzard for this panel/update cycle.
+	local baseResults = panel.results or select(2, C_LFGList.GetSearchResults())
+	if not baseResults or #baseResults == 0 then return end
+
+	-- If nothing to filter, keep Blizzard's list untouched to minimize taint risk.
+	if not AnyFilterActive() then return end
+
+	-- Preserve the currently selected entry, even if it wouldn't pass our filter.
+	local selectedID = (type(LFGListSearchPanel_GetSelectedResult) == "function" and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
+
+	local filtered = {}
+	for _, resultID in ipairs(baseResults) do
+		-- Always keep the selected entry and active applications.
+		local _, appStatus, pendingStatus = C_LFGList.GetApplicationInfo(resultID)
+		local isApplied = (appStatus and appStatus ~= "none") or pendingStatus
+
+		if (selectedID and resultID == selectedID) or isApplied then
+			table.insert(filtered, resultID)
+		else
+			local info = C_LFGList.GetSearchResultInfo(resultID)
+			if info and EntryPassesFilter(info) then table.insert(filtered, resultID) end
 		end
-		panel.results = filtered
-		panel.totalResults = #filtered
-		LFGListSearchPanel_UpdateResults(panel)
 	end
-	if panel.ScrollBox and panel.ScrollBox.ScrollBar then
-		panel.ScrollBox.ScrollBar:SetValue(0)
-		if panel.ScrollBox.ScrollToBegin then panel.ScrollBox:ScrollToBegin() end
-	end
-	if panel.ResultsText then
-		panel.ResultsText:SetFormattedText(LFG_LIST_RESULTS_FOUND, panel.totalResults)
-	elseif panel.resultsText then
-		panel.resultsText:SetFormattedText(LFG_LIST_RESULTS_FOUND, panel.totalResults)
-	end
+
+	panel.results = filtered
+	panel.totalResults = #filtered
+
+	LFGListSearchPanel_UpdateResults(panel)
 end
 
 RefreshVisibleEntries = function()
-	local panel = LFGListFrame.SearchPanel
-	if panel then FilterResults(panel) end
+	local panel = LFGListFrame and LFGListFrame.SearchPanel
+	if panel and type(LFGListSearchPanel_UpdateResultList) == "function" then LFGListSearchPanel_UpdateResultList(panel) end
 end
 
-local refreshScheduled = false
-local function ScheduleRefresh()
-	if refreshScheduled then return end
-	refreshScheduled = true
-	C_Timer.After(0.05, function()
-		refreshScheduled = false
-		RefreshVisibleEntries()
-	end)
-end
-
-local function EventHandler(_, event)
-	if event == "LFG_LIST_SEARCH_RESULTS_RECEIVED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" or event == "LFG_LIST_APPLICANT_LIST_UPDATED" then
-		UpdateAppliedCache()
-		ScheduleRefresh()
-	end
-end
-
-local filterFrame
 local hooked = false
 
 function addon.MythicPlus.functions.addDungeonFilter()
-	if filterFrame then return end
-	filterFrame = CreateFrame("Frame")
-	UpdateAppliedCache()
-	filterFrame:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED")
-	filterFrame:RegisterEvent("LFG_LIST_APPLICATION_STATUS_UPDATED")
-	filterFrame:RegisterEvent("LFG_LIST_APPLICANT_LIST_UPDATED")
-	filterFrame:SetScript("OnEvent", EventHandler)
-
 	if not hooked then
 		hooksecurefunc("LFGListSearchPanel_UpdateResultList", FilterResults)
 		hooked = true
+		if LFGList_ReportAdvertisement then
+			function LFGList_ReportAdvertisement(searchResultID, leaderName)
+				local info = ReportInfo:CreateReportInfoFromType(Enum.ReportType.GroupFinderPosting)
+				info:SetGroupFinderSearchResultID(searchResultID)
+				local sendReportWithoutDialog = false
+				ReportFrame:InitiateReport(info, leaderName, nil, nil, sendReportWithoutDialog)
+			end
+		end
 	end
+	-- Force one refresh so our filter runs once immediately.
 	RefreshVisibleEntries()
 end
 
 function addon.MythicPlus.functions.removeDungeonFilter()
-	if filterFrame then
-		filterFrame:UnregisterAllEvents()
-		filterFrame:SetScript("OnEvent", nil)
-		filterFrame = nil
-	end
+	addon.variables.requireReload = true
+	-- No-op: the feature is gated by addon.db["mythicPlusEnableDungeonFilter"]; the secure hook remains harmless.
 end
 
 LFGListFrame.SearchPanel.FilterButton.ResetButton:HookScript("OnClick", function()
