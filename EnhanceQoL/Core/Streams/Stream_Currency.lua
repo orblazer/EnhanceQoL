@@ -1,4 +1,4 @@
--- luacheck: globals EnhanceQoL GAMEMENU_OPTIONS C_CurrencyInfo C_Timer
+-- luacheck: globals EnhanceQoL GAMEMENU_OPTIONS C_CurrencyInfo C_Timer ITEM_QUALITY_COLORS HIGHLIGHT_FONT_COLOR_CODE RED_FONT_COLOR_CODE FONT_COLOR_CODE_CLOSE CURRENCY_SEASON_TOTAL_MAXIMUM CURRENCY_SEASON_TOTAL CURRENCY_TOTAL CURRENCY_TOTAL_CAP BreakUpLargeNumbers
 local addonName, addon = ...
 local L = addon.L
 
@@ -177,12 +177,36 @@ local function checkCurrencies(stream)
 	ensureDB()
 	local size = db.fontSize or 14
 	local parts = {}
+	local tips = {}
 	for _, id in ipairs(db.ids) do
 		local info = C_CurrencyInfo.GetCurrencyInfo(id)
 		if info then
 			if not iconCache[id] and info.iconFileID then iconCache[id] = info.iconFileID end
 			local icon = iconCache[id] or info.iconFileID
 			parts[#parts + 1] = ("|T%s:%d:%d:0:0|t %d"):format(icon or 0, size, size, info.quantity or 0)
+
+			local color = ITEM_QUALITY_COLORS[info.quality]
+			local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
+			tips[#tips + 1] = name
+			if info.description and info.description ~= "" then tips[#tips + 1] = info.description end
+			tips[#tips + 1] = ""
+
+			tips[#tips + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(info.quantity or 0)) .. FONT_COLOR_CODE_CLOSE
+			if info.useTotalEarnedForMaxQty then
+				local earnedRaw = info.trackedQuantity or info.totalEarned or 0
+				local earned = BreakUpLargeNumbers(earnedRaw)
+				if info.maxQuantity and info.maxQuantity > 0 then
+					local colorCode = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+					tips[#tips + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+				else
+					tips[#tips + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
+				end
+			elseif info.maxQuantity and info.maxQuantity > 0 then
+				local qty = info.quantity or 0
+				local colorCode = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+				tips[#tips + 1] = CURRENCY_TOTAL_CAP:format(colorCode, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+			end
+			tips[#tips + 1] = ""
 		end
 	end
 
@@ -196,7 +220,14 @@ local function checkCurrencies(stream)
 		stream.snapshot.text = newText
 		stream.snapshot.fontSize = size
 	end
-	if not stream.snapshot.tooltip then stream.snapshot.tooltip = L["Right-Click for options"] end
+	if #tips > 0 then
+		if tips[#tips] == "" then tips[#tips] = nil end
+		tips[#tips + 1] = ""
+		tips[#tips + 1] = L["Right-Click for options"]
+		stream.snapshot.tooltip = table.concat(tips, "\n")
+	elseif not stream.snapshot.tooltip then
+		stream.snapshot.tooltip = L["Right-Click for options"]
+	end
 end
 
 local provider = {
