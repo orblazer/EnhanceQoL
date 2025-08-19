@@ -2899,6 +2899,13 @@ local function addSocialFrame(container)
 				if addon.Ignore and addon.Ignore.UpdateAnchor then addon.Ignore:UpdateAnchor() end
 			end,
 		})
+		table.insert(data, {
+			parent = "",
+			var = "ignoreTooltipNote",
+			text = L["IgnoreTooltipNote"],
+			type = "CheckBox",
+			callback = function(self, _, value) addon.db["ignoreTooltipNote"] = value end,
+		})
 	end
 
 	table.sort(data, function(a, b)
@@ -3898,6 +3905,7 @@ local function initSocial()
 	addon.functions.InitDBValue("enableIgnore", false)
 	addon.functions.InitDBValue("ignoreAttachFriendsFrame", true)
 	addon.functions.InitDBValue("ignoreAnchorFriendsFrame", false)
+	addon.functions.InitDBValue("ignoreTooltipNote", false)
 	addon.functions.InitDBValue("ignoreFramePoint", "CENTER")
 	addon.functions.InitDBValue("ignoreFrameX", 0)
 	addon.functions.InitDBValue("ignoreFrameY", 0)

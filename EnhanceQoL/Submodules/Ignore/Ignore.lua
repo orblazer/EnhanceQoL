@@ -1081,3 +1081,22 @@ if Menu and Menu.ModifyMenu then
 	Menu.ModifyMenu("MENU_UNIT_RAID_PLAYER", EQOL_AddUnitIgnoreEntry)
 	Menu.ModifyMenu("MENU_UNIT_PARTY", EQOL_AddUnitIgnoreEntry)
 end
+
+if not Ignore.tooltipHookInstalled then
+	GameTooltip:HookScript("OnTooltipSetUnit", function(tooltip)
+		if tooltip:IsForbidden() or tooltip:IsProtected() then return end
+		if not addon.db or not addon.db.ignoreTooltipNote then return end
+		local _, unit = tooltip:GetUnit()
+		if not unit or not UnitIsPlayer(unit) then return end
+		local name, realm = UnitName(unit)
+		if not name then return end
+		realm = realm and realm ~= "" and realm or (GetRealmName()):gsub("%s", "")
+		local entry = Ignore:CheckIgnore(name .. "-" .. realm)
+		if entry and entry.note and entry.note ~= "" then C_Timer.After(0, function()
+			tooltip:AddLine(" ")
+			tooltip:AddDoubleLine(L["IgnoreNote"], entry.note)
+			tooltip:Show()
+		end) end
+	end)
+	Ignore.tooltipHookInstalled = true
+end

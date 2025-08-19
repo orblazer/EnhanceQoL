@@ -294,6 +294,7 @@ L["IgnoreAttachFriends"] = "Open with Friends list"
 L["IgnoreAttachFriendsDesc"] = "Automatically show or hide the enhanced ignore list when the Friends list opens or closes."
 L["IgnoreAnchorFriends"] = "Anchor to Friends list"
 L["IgnoreAnchorFriendsDesc"] = "Attach the enhanced ignore list to the Friends window."
+L["IgnoreTooltipNote"] = "Show ignore note in tooltip"
 L["IgnoreDesc"] =
 	'Blocks duel, pet-battle, trade, invite and whisper requests from ignored players. Automatically adds same-realm names to Blizzard’s ignore list when space is available.\nIn the Dungeon Finder ignored players are shown as "!!! <Name> !!!".\n\nOpen the list with /eil.'
 L["blockDuelRequests"] = "Block duel requests"
