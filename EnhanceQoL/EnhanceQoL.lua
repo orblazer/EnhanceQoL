@@ -1224,9 +1224,7 @@ local function addMinimapFrame(container)
 			desc = L["enableLandingPageMenuDesc"],
 			text = L["enableLandingPageMenu"],
 			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["enableLandingPageMenu"] = value
-			end,
+			callback = function(self, _, value) addon.db["enableLandingPageMenu"] = value end,
 		},
 		-- {
 		-- 	parent = "",
@@ -3695,9 +3693,14 @@ local function initMisc()
 	_G.CompactRaidFrameManager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
 	ExpansionLandingPageMinimapButton:HookScript("OnShow", function(self)
 		local id = addon.variables.landingPageReverse[self.title]
+		print(self.title, id)
 		if addon.db["enableSquareMinimap"] then
 			self:ClearAllPoints()
-			self:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMLEFT", -16, -16)
+			if id == 20 then
+				self:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMLEFT", -25, -25)
+			else
+				self:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMLEFT", -16, -16)
+			end
 		end
 		if addon.db["hiddenLandingPages"][id] then self:Hide() end
 	end)
@@ -3714,114 +3717,24 @@ local function initMisc()
 		return nil
 	end
 
-	local function OpenLandingPage()
-		if ExpansionLandingPageMinimapButton or ExpansionLandingPage then
-			if ExpansionLandingPage and ExpansionLandingPage:IsShown() then HideUIPanel(ExpansionLandingPage) end
-			if ExpansionLandingPageMinimapButton and ExpansionLandingPageMinimapButton.CanChangeAttribute and ExpansionLandingPageMinimapButton:CanChangeAttribute() then
-				ExpansionLandingPageMinimapButton:Click()
-				return true
-			end
-		end
-
-		if ShowGarrisonLandingPage then
-			local gtype = GetCurrentGarrType()
-			if gtype then
-				ShowGarrisonLandingPage(gtype)
-				return true
-			end
-		end
-		if GarrisonLandingPage_Toggle then
-			GarrisonLandingPage_Toggle()
-			return true
-		end
-		return false
-	end
-
-	local function OpenMissions()
-		if OpenLandingPage() then
-			C_Timer.After(0, function()
-				if ExpansionLandingPage and ExpansionLandingPage:IsShown() then
-					local list = ExpansionLandingPage and ExpansionLandingPage.List
-					local box = list and list.ScrollBox
-					if box and box.ForEachFrame then
-						box:ForEachFrame(function(btn)
-							local label = btn and btn.Title and btn.Title:GetText() or ""
-							if label and label:lower():find("mission") then
-								if btn.Button and btn.Button.Click then
-									btn.Button:Click()
-								elseif btn:GetScript("OnClick") then
-									btn:GetScript("OnClick")(btn)
-								end
-							end
-						end)
-					end
-				end
-			end)
-			return
-		end
-
-		C_Timer.After(0, function()
-			if GarrisonLandingPage and GarrisonLandingPage:IsShown() then
-				local function clickIfExists(frameName)
-					local f = _G[frameName]
-					if f and f.Click then
-						f:Click()
-						return true
-					end
-					return false
-				end
-				if not clickIfExists("GarrisonLandingPageTab2") then clickIfExists("GarrisonLandingPageReportTab") end
-			end
-		end)
-	end
-
-	local function BuildLegacyMenu()
-		local items = {
-			{ text = "Open Landing Page", notCheckable = true, func = OpenLandingPage },
-			{ text = "Open Mission Report", notCheckable = true, func = OpenMissions },
-		}
-		if ShowGarrisonLandingPage and Enum and Enum.GarrisonType then
-			tinsert(items, { text = "Open Garrison (WoD)", notCheckable = true, func = function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_6_0) end })
-			tinsert(items, { text = "Open Order Hall (Legion)", notCheckable = true, func = function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_7_0) end })
-		end
-		if CovenantSanctumFrame_LoadUI then
-			tinsert(items, {
-				text = "Open Covenant Sanctum",
-				notCheckable = true,
-				func = function()
-					CovenantSanctumFrame_LoadUI()
-					ShowUIPanel(CovenantSanctumFrame)
-				end,
-			})
-		end
-		return items
-	end
-
 	local function ShowLandingMenu(owner)
 		if MU and MU.CreateContextMenu then
 			MU.CreateContextMenu(owner, function(_, root)
-				root:CreateButton("Open Landing Page", OpenLandingPage)
-				root:CreateButton("Open Mission Report", OpenMissions)
 				if ShowGarrisonLandingPage and Enum and Enum.GarrisonType then
-					root:CreateButton("Open Garrison (WoD)", function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_6_0) end)
-					root:CreateButton("Open Order Hall (Legion)", function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_7_0) end)
+					root:CreateButton(GARRISON_TYPE_9_0_LANDING_PAGE_TITLE, function() ShowGarrisonLandingPage(Enum.GarrisonType.Type_9_0) end)
+					root:CreateButton(ORDER_HALL_LANDING_PAGE_TITLE, function() ShowGarrisonLandingPage(3) end)
+					root:CreateButton(GARRISON_LANDING_PAGE_TITLE, function() ShowGarrisonLandingPage(2) end)
+					root:CreateButton(ADVENTURE_MAP_TITLE, function() ShowGarrisonLandingPage(9) end)
+					
 				end
-				if CovenantSanctumFrame_LoadUI then root:CreateButton("Open Covenant Sanctum", function()
-					CovenantSanctumFrame_LoadUI()
-					ShowUIPanel(CovenantSanctumFrame)
-				end) end
 			end)
-		elseif EasyMenu then
-			EasyMenu(BuildLegacyMenu(), CreateFrame("Frame", nil, UIParent, "UIDropDownMenuTemplate"), "cursor", 0, 0, "MENU", true)
 		end
 	end
 
 	local function AttachRightClickMenu(button)
 		if not button or button._eqolMenuHooked then return end
 		button:HookScript("OnMouseUp", function(self, btn)
-			if btn == "RightButton" and addon.db["enableLandingPageMenu"] then
-				ShowLandingMenu(self)
-			end
+			if btn == "RightButton" and addon.db["enableLandingPageMenu"] then ShowLandingMenu(self) end
 		end)
 		button._eqolMenuHooked = true
 	end
