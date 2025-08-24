@@ -298,6 +298,10 @@ local function createGroupFrame(groupConfig)
 
 	function frame:HideOutline() dragOutline:Hide() end
 
+	local function restorePosition()
+		frame:ClearAllPoints()
+		frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", groupConfig.x or 0, groupConfig.y or 0)
+	end
 	dragHandle:SetScript("OnDragStart", function(self)
 		local parent = self:GetParent()
 		addon.CombatMeter.functions.showOutlinesAll()
@@ -308,10 +312,12 @@ local function createGroupFrame(groupConfig)
 		local parent = self:GetParent()
 		parent:StopMovingOrSizing()
 		addon.CombatMeter.functions.hideOutlinesAll()
-		local point, _, _, xOfs, yOfs = parent:GetPoint()
-		groupConfig.point = point
-		groupConfig.x = xOfs
-		groupConfig.y = yOfs
+		local left = parent:GetLeft() or 0
+		local top = parent:GetTop() or 0
+		groupConfig.x = left
+		groupConfig.y = top - UIParent:GetHeight()
+		groupConfig.point = "TOPLEFT"
+		restorePosition()
 	end)
 
 	local resetButton = CreateFrame("Button", nil, dragHandle)
@@ -414,10 +420,6 @@ local function createGroupFrame(groupConfig)
 	dragHandle.text:SetText(metricNames[groupConfig.type] or L["Combat Meter"])
 	frame.dragHandle = dragHandle
 
-	local function restorePosition()
-		frame:ClearAllPoints()
-		frame:SetPoint(groupConfig.point or "CENTER", UIParent, groupConfig.point or "CENTER", groupConfig.x or 0, groupConfig.y or 0)
-	end
 	restorePosition()
 
 	local function getBar(index)
