@@ -555,12 +555,21 @@ end
 
 local tooltipCache = {}
 
+local function fmtToPattern(fmt)
+	local pat = fmt:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
+	pat = pat:gsub("%%%%d", "%%d+") -- "%d" -> "%d+"
+	pat = pat:gsub("%%%%s", ".+") -- "%s" -> ".+"
+	return "^" .. pat .. "$"
+end
+
+local pvpItemTooltip = fmtToPattern(PVP_ITEM_LEVEL_TOOLTIP)
+
 local function getTooltipInfo(link)
 	local key = link
 	local cached = tooltipCache[key]
-	if cached then return cached[1] end
+	if cached then return cached[1], cached[2] end
 
-	local bType, bKey, upgradeKey, bAuc
+	local upgradeKey, isPVP
 	local data = C_TooltipInfo.GetHyperlink(link)
 	if data and data.lines then
 		for i, v in pairs(data.lines) do
@@ -570,12 +579,14 @@ local function getTooltipInfo(link)
 					local tier = text:gsub(".+:%s?", ""):gsub("%s?%d/%d", "")
 					if tier then upgradeKey = string.lower(tier) end
 				end
+			elseif v.type == 0 and v.leftText:match(pvpItemTooltip) then
+				isPVP = true
 			end
 		end
 	end
 
-	tooltipCache[key] = { upgradeKey }
-	return upgradeKey
+	tooltipCache[key] = { upgradeKey, isPVP }
+	return upgradeKey, isPVP
 end
 
 local function onInspect(arg1)
@@ -652,7 +663,10 @@ local function onInspect(arg1)
 							end
 							local neededSockets = addon.variables.shouldSocketed[key] or 0
 							if neededSockets then
-								if not getTooltipInfo(itemLink) then neededSockets = 0 end
+								local cSeason, isPvP = getTooltipInfo(itemLink)
+								if addon.variables.shouldSocketedChecks[key] then
+									if not addon.variables.shouldSocketedChecks[key].func(cSeason, isPvP) then neededSockets = 0 end
+								end
 							end
 							local displayCount = math.max(socketCount, neededSockets)
 							if element.gems and #element.gems > displayCount then
@@ -827,7 +841,10 @@ local function setIlvlText(element, slot)
 					end
 					local neededSockets = addon.variables.shouldSocketed[slot] or 0
 					if neededSockets then
-						if not getTooltipInfo(link) then neededSockets = 0 end
+						local cSeason, isPvP = getTooltipInfo(link)
+						if addon.variables.shouldSocketedChecks[slot] then
+							if not addon.variables.shouldSocketedChecks[slot].func(cSeason, isPvP) then neededSockets = 0 end
+						end
 					end
 					local displayCount = math.max(socketCount, neededSockets)
 					for i = 1, #element.gems do

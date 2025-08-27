@@ -575,8 +575,59 @@ addon.variables.shouldEnchantedChecks = {
 		end,
 	},
 }
-addon.variables.shouldSocketed = { [2] = 2, [11] = 2, [12] = 2 }
-addon.variables.shouldSocketedChecks = {}
+addon.variables.shouldSocketed = {
+	[1] = 1,
+	[2] = 2,
+	[6] = 1,
+	[9] = 1,
+	[11] = 2,
+	[12] = 2,
+}
+addon.variables.shouldSocketedChecks = {
+	-- Helm - can be bought for PvP with Honor (farmable)
+	[1] = {
+		func = function(cSeason, isPvP)
+			if not cSeason then return false end
+			if isPvP then return true end
+			return false
+		end,
+	},
+	[2] = {
+		func = function(cSeason, isPvP)
+			if not cSeason then return false end
+			-- item for PvE and PvP is purchaseble
+			return true
+		end,
+	},
+	[6] = {
+		func = function(cSeason, isPvP)
+			if not cSeason then return false end
+			if isPvP then return true end
+			return false
+		end,
+	},
+	[9] = {
+		func = function(cSeason, isPvP)
+			if not cSeason then return false end
+			if isPvP then return true end
+			return false
+		end,
+	},
+	[11] = {
+		func = function(cSeason, isPvP)
+			if not cSeason then return false end
+			-- item for PvE and PvP is purchaseble
+			return true
+		end,
+	},
+	[12] = {
+		func = function(cSeason, isPvP)
+			if not cSeason then return false end
+			-- item for PvE and PvP is purchaseble
+			return true
+		end,
+	},
+}
 
 addon.variables.landingPageType = {
 	[10] = { title = GARRISON_LANDING_PAGE_TITLE, checkbox = GARRISON_LOCATION_TOOLTIP },
