@@ -446,6 +446,7 @@ local function CheckItemGems(element, itemLink, emptySocketsCount, key, pdElemen
 		if gemName then
 			local icon = C_Item.GetItemIconByID(gemLink)
 			element.gems[i].icon:SetTexture(icon)
+			element.gems[i].icon:SetVertexColor(1, 1, 1)
 			element.gems[i]:SetScript("OnEnter", function(self)
 				if gemLink and addon.db["showGemsTooltipOnCharframe"] then
 					local anchor = "ANCHOR_CURSOR"
@@ -552,6 +553,42 @@ local function removeInspectElements()
 	collectgarbage("collect")
 end
 
+local tooltipCache = {}
+
+local function fmtToPattern(fmt)
+	local pat = fmt:gsub("([%%%^%$%(%)%.%[%]%*%+%-%?])", "%%%1")
+	pat = pat:gsub("%%%%d", "%%d+") -- "%d" -> "%d+"
+	pat = pat:gsub("%%%%s", ".+") -- "%s" -> ".+"
+	return "^" .. pat .. "$"
+end
+
+local pvpItemTooltip = fmtToPattern(PVP_ITEM_LEVEL_TOOLTIP)
+
+local function getTooltipInfo(link)
+	local key = link
+	local cached = tooltipCache[key]
+	if cached then return cached[1], cached[2] end
+
+	local upgradeKey, isPVP
+	local data = C_TooltipInfo.GetHyperlink(link)
+	if data and data.lines then
+		for i, v in pairs(data.lines) do
+			if v.type == 42 then
+				local text = v.rightText or v.leftText
+				if text then
+					local tier = text:gsub(".+:%s?", ""):gsub("%s?%d/%d", "")
+					if tier then upgradeKey = string.lower(tier) end
+				end
+			elseif v.type == 0 and v.leftText:match(pvpItemTooltip) then
+				isPVP = true
+			end
+		end
+	end
+
+	tooltipCache[key] = { upgradeKey, isPVP }
+	return upgradeKey, isPVP
+end
+
 local function onInspect(arg1)
 	if nil == InspectFrame then return end
 	local unit = InspectFrame.unit
@@ -619,64 +656,60 @@ local function onInspect(arg1)
 					eItem:ContinueOnItemLoad(function()
 						inspectDone[key] = true
 						if addon.db["showGemsOnCharframe"] then
-							local hasSockets = false
-							local emptySocketsCount = 0
 							local itemStats = C_Item.GetItemStats(itemLink)
+							local socketCount = 0
 							for statName, statValue in pairs(itemStats) do
-								if (statName:find("EMPTY_SOCKET") or statName:find("empty_socket")) and addon.variables.allowedSockets[statName] then
-									hasSockets = true
-									emptySocketsCount = emptySocketsCount + statValue
+								if (statName:find("EMPTY_SOCKET") or statName:find("empty_socket")) and addon.variables.allowedSockets[statName] then socketCount = socketCount + statValue end
+							end
+							local neededSockets = addon.variables.shouldSocketed[key] or 0
+							if neededSockets then
+								local cSeason, isPvP = getTooltipInfo(itemLink)
+								if addon.variables.shouldSocketedChecks[key] then
+									if not addon.variables.shouldSocketedChecks[key].func(cSeason, isPvP) then neededSockets = 0 end
 								end
 							end
-
-							if hasSockets then
-								if element.gems and #element.gems > emptySocketsCount then
-									for i = emptySocketsCount + 1, #element.gems do
-										element.gems[i]:UnregisterAllEvents()
-										element.gems[i]:SetScript("OnUpdate", nil)
-										element.gems[i]:Hide()
-									end
-								end
-								if not element.gems then element.gems = {} end
-								for i = 1, emptySocketsCount do
-									if not element.gems[i] then
-										element.gems[i] = CreateFrame("Frame", nil, pdElement)
-										element.gems[i]:SetSize(16, 16) -- Setze die Größe des Icons
-										if addon.variables.itemSlotSide[key] == 0 then
-											element.gems[i]:SetPoint("TOPLEFT", element, "TOPRIGHT", 5 + (i - 1) * 16, -1) -- Verschiebe jedes Icon um 20px
-										elseif addon.variables.itemSlotSide[key] == 1 then
-											element.gems[i]:SetPoint("TOPRIGHT", element, "TOPLEFT", -5 - (i - 1) * 16, -1)
-										else
-											element.gems[i]:SetPoint("BOTTOM", element, "TOPLEFT", -1, 5 + (i - 1) * 16)
-										end
-
-										element.gems[i]:SetFrameStrata("DIALOG")
-										element.gems[i]:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
-
-										element.gems[i].icon = element.gems[i]:CreateTexture(nil, "OVERLAY")
-										element.gems[i].icon:SetAllPoints(element.gems[i])
-									end
-									element.gems[i].icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic") -- Setze die erhaltene Textur
-
-									element.gems[i]:Show()
-								end
-								CheckItemGems(element, itemLink, emptySocketsCount, key, pdElement)
-							else
-								if element.gems then
-									for i = 1, #element.gems do
-										element.gems[i]:UnregisterAllEvents()
-										element.gems[i]:SetScript("OnUpdate", nil)
-										element.gems[i]:Hide()
-									end
-								end
-							end
-						else
-							if element.gems and #element.gems > 0 then
-								for i = 1, #element.gems do
+							local displayCount = math.max(socketCount, neededSockets)
+							if element.gems and #element.gems > displayCount then
+								for i = displayCount + 1, #element.gems do
 									element.gems[i]:UnregisterAllEvents()
 									element.gems[i]:SetScript("OnUpdate", nil)
 									element.gems[i]:Hide()
 								end
+							end
+							if not element.gems then element.gems = {} end
+							for i = 1, displayCount do
+								if not element.gems[i] then
+									element.gems[i] = CreateFrame("Frame", nil, pdElement)
+									element.gems[i]:SetSize(16, 16) -- Setze die Größe des Icons
+									if addon.variables.itemSlotSide[key] == 0 then
+										element.gems[i]:SetPoint("TOPLEFT", element, "TOPRIGHT", 5 + (i - 1) * 16, -1) -- Verschiebe jedes Icon um 20px
+									elseif addon.variables.itemSlotSide[key] == 1 then
+										element.gems[i]:SetPoint("TOPRIGHT", element, "TOPLEFT", -5 - (i - 1) * 16, -1)
+									else
+										element.gems[i]:SetPoint("BOTTOM", element, "TOPLEFT", -1, 5 + (i - 1) * 16)
+									end
+
+									element.gems[i]:SetFrameStrata("DIALOG")
+									element.gems[i]:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
+
+									element.gems[i].icon = element.gems[i]:CreateTexture(nil, "OVERLAY")
+									element.gems[i].icon:SetAllPoints(element.gems[i])
+								end
+								element.gems[i].icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic")
+								if i > socketCount then
+									element.gems[i].icon:SetVertexColor(1, 0, 0)
+									element.gems[i]:SetScript("OnEnter", nil)
+								else
+									element.gems[i].icon:SetVertexColor(1, 1, 1)
+								end
+								element.gems[i]:Show()
+							end
+							if socketCount > 0 then CheckItemGems(element, itemLink, socketCount, key, pdElement) end
+						elseif element.gems and #element.gems > 0 then
+							for i = 1, #element.gems do
+								element.gems[i]:UnregisterAllEvents()
+								element.gems[i]:SetScript("OnUpdate", nil)
+								element.gems[i]:Hide()
 							end
 						end
 
@@ -782,6 +815,7 @@ local function setIlvlText(element, slot)
 					element.gems[i]:Hide()
 					element.gems[i].icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic")
 					element.gems[i]:SetScript("OnEnter", nil)
+					element.gems[i].icon:SetVertexColor(1, 1, 1)
 				end
 			end
 		end
@@ -800,38 +834,39 @@ local function setIlvlText(element, slot)
 				local link = eItem:GetItemLink()
 				local _, itemID, enchantID = string.match(link, "item:(%d+):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*)")
 				if addon.db["showGemsOnCharframe"] then
-					local hasSockets = false
-					local emptySocketsCount = 0
 					local itemStats = C_Item.GetItemStats(link)
+					local socketCount = 0
 					for statName, statValue in pairs(itemStats) do
-						if (statName:find("EMPTY_SOCKET") or statName:find("empty_socket")) and addon.variables.allowedSockets[statName] then
-							hasSockets = true
-							emptySocketsCount = emptySocketsCount + statValue
+						if (statName:find("EMPTY_SOCKET") or statName:find("empty_socket")) and addon.variables.allowedSockets[statName] then socketCount = socketCount + statValue end
+					end
+					local neededSockets = addon.variables.shouldSocketed[slot] or 0
+					if neededSockets then
+						local cSeason, isPvP = getTooltipInfo(link)
+						if addon.variables.shouldSocketedChecks[slot] then
+							if not addon.variables.shouldSocketedChecks[slot].func(cSeason, isPvP) then neededSockets = 0 end
 						end
 					end
-
-					if hasSockets then
-						for i = 1, emptySocketsCount do
+					local displayCount = math.max(socketCount, neededSockets)
+					for i = 1, #element.gems do
+						if i <= displayCount then
 							element.gems[i]:Show()
-							local gemName, gemLink = C_Item.GetItemGem(link, i)
-							if gemName then
-								local icon = C_Item.GetItemIconByID(gemLink)
-								element.gems[i].icon:SetTexture(icon)
-								element.gems[i]:SetScript("OnEnter", function(self)
-									if gemLink and addon.db["showGemsTooltipOnCharframe"] then
-										local anchor = "ANCHOR_CURSOR"
-										if addon.db["TooltipAnchorType"] == 3 then anchor = "ANCHOR_CURSOR_LEFT" end
-										if addon.db["TooltipAnchorType"] == 4 then anchor = "ANCHOR_CURSOR_RIGHT" end
-										local xOffset = addon.db["TooltipAnchorOffsetX"] or 0
-										local yOffset = addon.db["TooltipAnchorOffsetY"] or 0
-										GameTooltip:SetOwner(self, anchor, xOffset, yOffset)
-										GameTooltip:SetHyperlink(gemLink)
-										GameTooltip:Show()
-									end
-								end)
-								emptySocketsCount = emptySocketsCount - 1
+							element.gems[i].icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic")
+							if i > socketCount then
+								element.gems[i].icon:SetVertexColor(1, 0, 0)
+								element.gems[i]:SetScript("OnEnter", nil)
+							else
+								element.gems[i].icon:SetVertexColor(1, 1, 1)
 							end
+						else
+							element.gems[i]:Hide()
+							element.gems[i]:SetScript("OnEnter", nil)
 						end
+					end
+					if socketCount > 0 then CheckItemGems(element, link, socketCount, slot) end
+				else
+					for i = 1, #element.gems do
+						element.gems[i]:Hide()
+						element.gems[i]:SetScript("OnEnter", nil)
 					end
 				end
 
@@ -5763,7 +5798,13 @@ local eventHandlers = {
 		if addon.db["showDurabilityOnCharframe"] then calculateDurability() end
 	end,
 	["PLAYER_EQUIPMENT_CHANGED"] = function(arg1)
-		if addon.variables.itemSlots[arg1] and PaperDollFrame:IsShown() then setIlvlText(addon.variables.itemSlots[arg1], arg1) end
+		if addon.variables.itemSlots[arg1] and PaperDollFrame:IsShown() then
+			if ItemInteractionFrame and ItemInteractionFrame:IsShown() then
+				C_Timer.After(0.4, function() setIlvlText(addon.variables.itemSlots[arg1], arg1) end)
+			else
+				setIlvlText(addon.variables.itemSlots[arg1], arg1)
+			end
+		end
 		if addon.db["showDurabilityOnCharframe"] then calculateDurability() end
 	end,
 	["PLAYER_INTERACTION_MANAGER_FRAME_SHOW"] = function(arg1)

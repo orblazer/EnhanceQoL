@@ -1,5 +1,21 @@
 # Changelog
 
+## [4.9.0] – 2025-08-27
+
+### ✨ Added
+
+- **Combat Meter:** Interrupts are now tracked with a dedicated metric and panel.
+- **Combat Meter:** Tooltips list which spells were interrupted.
+- **Character Frame:** Red highlight for socket-eligible items without a socket (incl. Helm, Wrist, Waist in PvP)
+
+### 🐛 Fixed
+
+- **New Combat Meter Panel:** Loads and anchors correctly.
+- Minor polish across the meter.
+- _Catalyst_ an item missed the red marking for missed enchants sometimes
+
+---
+
 ## [4.8.1] – 2025-08-25
 
 ### 🐛 Fixed

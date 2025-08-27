@@ -162,6 +162,7 @@ local function acquirePlayer(tbl, guid, name)
 		player.damage = 0
 		player.healing = 0
 		player.damageTaken = 0
+		player.interrupts = 0
 		-- Initialize friendly-fire trackers
 		player.friendlyFire = 0
 		player.spiritLinkDamage = 0
@@ -173,6 +174,7 @@ local function acquirePlayer(tbl, guid, name)
 	if name and player.name ~= name then player.name = name end
 	player.damageSpells = player.damageSpells or {}
 	player.healSpells = player.healSpells or {}
+	player.interruptSpells = player.interruptSpells or {}
 	return player
 end
 
@@ -184,9 +186,12 @@ local function releasePlayers(players)
 		if dmg then wipe(dmg) end
 		local heal = player.healSpells
 		if heal then wipe(heal) end
+		local interrupts = player.interruptSpells
+		if interrupts then wipe(interrupts) end
 		wipe(player)
 		player.damageSpells = dmg
 		player.healSpells = heal
+		player.interruptSpells = interrupts
 		pool[#pool + 1] = player
 		players[guid] = nil
 	end
@@ -510,15 +515,25 @@ local function handleEvent(self, event, unit)
 			fight.players[guid] = {
 				guid = guid,
 				name = data.name,
-				class = data.class,
-				damage = data.damage,
-				healing = data.healing,
-				damageTaken = data.damageTaken,
-				spiritLinkDamage = data.spiritLinkDamage or 0,
-				friendlyFire = data.friendlyFire or 0,
-				temperedDamage = data.temperedDamage or 0,
-			}
-		end
+                               class = data.class,
+                               damage = data.damage,
+                               healing = data.healing,
+                               damageTaken = data.damageTaken,
+                               spiritLinkDamage = data.spiritLinkDamage or 0,
+                               friendlyFire = data.friendlyFire or 0,
+                               temperedDamage = data.temperedDamage or 0,
+                               interrupts = data.interrupts or 0,
+                               interruptSpells = (function()
+                                       local source = data.interruptSpells
+                                       if not source or not next(source) then return nil end
+                                       local copy = {}
+                                       for spellId, s in pairs(source) do
+                                               copy[spellId] = { name = s.name, amount = s.amount, icon = s.icon }
+                                       end
+                                       return copy
+                               end)(),
+                       }
+               end
 		addon.db["combatMeterHistory"] = addon.db["combatMeterHistory"] or {}
 		local hist = addon.db["combatMeterHistory"]
 		-- hist[#hist + 1] = fight is required to keep trimming O(1) for inserts
@@ -569,6 +584,7 @@ local function handleEvent(self, event, unit)
 				or sub == "RANGE_MISSED"
 				or sub == "SPELL_MISSED"
 				or sub == "SPELL_PERIODIC_MISSED"
+				or sub == "SPELL_INTERRUPT"
 			)
 		then
 			return
@@ -655,6 +671,44 @@ local function handleEvent(self, event, unit)
 			end
 			return
 		end
+
+		if sub == "SPELL_INTERRUPT" then
+			if not inCombat then return end
+			if not sourceGUID then return end
+			local ownerGUID, ownerName, ownerFlags = resolveOwner(sourceGUID, sourceName, sourceFlags)
+			if not ownerFlags and cm.groupGUIDs and cm.groupGUIDs[ownerGUID] then ownerFlags = COMBATLOG_OBJECT_AFFILIATION_RAID end
+			if band(ownerFlags or 0, groupMask) == 0 then return end
+			local player = acquirePlayer(cm.players, ownerGUID, ownerName)
+			local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
+			player.interrupts = (player.interrupts or 0) + 1
+			overall.interrupts = (overall.interrupts or 0) + 1
+                        local extraSpellId, extraSpellName = a15, a16
+                        if extraSpellId and extraSpellName then
+                                local icon = iconCache[extraSpellId]
+                                if extraSpellId > 0 and not icon then
+                                        local si = C_Spell.GetSpellInfo(extraSpellId)
+                                        icon = si and si.iconID
+                                        iconCache[extraSpellId] = icon
+                                end
+                                local ps = player.interruptSpells[extraSpellId]
+                                if not ps then
+                                        ps = { name = extraSpellName, amount = 0, icon = icon }
+                                        player.interruptSpells[extraSpellId] = ps
+                                end
+                                ps.name = extraSpellName
+                                ps.amount = (ps.amount or 0) + 1
+                                ps.icon = ps.icon or icon
+                                local os = overall.interruptSpells[extraSpellId]
+                                if not os then
+                                        os = { name = extraSpellName, amount = 0, icon = icon }
+                                        overall.interruptSpells[extraSpellId] = os
+                                end
+                                os.name = extraSpellName
+                                os.amount = (os.amount or 0) + 1
+                                os.icon = os.icon or icon
+                        end
+                        return
+                end
 
 		if sub == "SWING_MISSED" or sub == "RANGE_MISSED" or sub == "SPELL_MISSED" or sub == "SPELL_PERIODIC_MISSED" then
 			if not sourceGUID then return end
@@ -842,16 +896,24 @@ local function loadHistory(index)
 	releasePlayers(cm.players)
 	cm.fightDuration = fight.duration or 0
 	for guid, p in pairs(fight.players) do
-		local player = acquirePlayer(cm.players, guid, p.name)
-		player.damage = p.damage or 0
-		player.healing = p.healing or 0
-		player.damageTaken = p.damageTaken or 0
-		player.class = p.class
-		player.spiritLinkDamage = p.spiritLinkDamage or 0
-		player.friendlyFire = p.friendlyFire or 0
-		player.temperedDamage = p.temperedDamage or 0
-		cm.historyUnits[guid] = p.name
-	end
+               local player = acquirePlayer(cm.players, guid, p.name)
+               player.damage = p.damage or 0
+               player.healing = p.healing or 0
+               player.damageTaken = p.damageTaken or 0
+               player.class = p.class
+               player.spiritLinkDamage = p.spiritLinkDamage or 0
+               player.friendlyFire = p.friendlyFire or 0
+               player.temperedDamage = p.temperedDamage or 0
+               player.interrupts = p.interrupts or 0
+               local spells = player.interruptSpells
+               if spells then wipe(spells) end
+               if p.interruptSpells then
+                       for spellId, s in pairs(p.interruptSpells) do
+                               spells[spellId] = { name = s.name, amount = s.amount, icon = s.icon }
+                       end
+               end
+               cm.historyUnits[guid] = p.name
+       end
 	if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
 end
 cm.functions.loadHistory = loadHistory
