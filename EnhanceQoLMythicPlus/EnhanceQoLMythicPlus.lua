@@ -114,6 +114,29 @@ local function setBRInfo(info)
 end
 
 hooksecurefunc(ScenarioObjectiveTracker.ChallengeModeBlock, "UpdateTime", function(self, elapsedTime)
+	-- Fallback safeguard for Current Pull getting stuck:
+	-- Throttled check while the timer updates to hard‑reset when truly OOC.
+	do
+		if addon.db["mythicPlusCurrentPull"] and addon.MPlusData and addon.MPlusData.active then
+			local now = GetTime()
+			addon.MPlusData._fallbackNext = addon.MPlusData._fallbackNext or 0
+			if now >= addon.MPlusData._fallbackNext then
+				addon.MPlusData._fallbackNext = now + 0.4 -- ~2.5 checks/sec
+				-- Only reset if player (and pet) are not in combat; keeps first hit instant.
+				if (not UnitAffectingCombat("player")) or UnitIsDeadOrGhost("player") then
+					if addon.MPlusData.pullForces ~= 0 then
+						if addon.MPlusData.inPullGUID then wipe(addon.MPlusData.inPullGUID) end
+						if addon.MPlusData.inPullByNPC then wipe(addon.MPlusData.inPullByNPC) end
+						addon.MPlusData.pullForces = 0
+						if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.UpdateCurrentPullAppearance then
+							addon.MythicPlus.functions.UpdateCurrentPullAppearance()
+						end
+					end
+				end
+			end
+		end
+	end
+
 	if addon.db["mythicPlusBRTrackerEnabled"] then
 		if not brButton or not brButton.cooldownFrame or not brButton.cooldownFrame.cooldownSet then
 			createBRFrame()
@@ -162,6 +185,17 @@ hooksecurefunc(ScenarioObjectiveTracker.ChallengeModeBlock, "UpdateTime", functi
 			self.ChestTimeText3 = nil
 		end
 	end
+	if addon.MPlusProgressBar then
+		if addon.MPlusProgressBar._oldValue ~= addon.MPlusData.pullForces then
+			local lb = addon.MPlusProgressBar.Bar.Label
+			if addon.MPlusData.pullForces == 0 then
+				lb:SetText(addon.MPlusProgressBar._actValue)
+			else
+				lb:SetText(addon.MPlusProgressBar._actValue .. " |cff00ff00+" .. addon.MPlusData.pullForces .. "%|r")
+			end
+			addon.MPlusProgressBar._oldValue = addon.MPlusData.pullForces
+		end
+	end
 end)
 
 local function GetScenarioPercent(criteriaIndex)
@@ -185,6 +219,7 @@ hooksecurefunc(ScenarioTrackerProgressBarMixin, "SetValue", function(self, perce
 		local sData = C_ScenarioInfo.GetScenarioStepInfo()
 		if nil == sData then return end
 
+		addon.MPlusProgressBar = self
 		local truePercent
 		if self.criteriaIndex then self.criteriaIndex = nil end
 		for criteriaIndex = 1, sData.numCriteria do
@@ -197,6 +232,21 @@ hooksecurefunc(ScenarioTrackerProgressBarMixin, "SetValue", function(self, perce
 			end
 		end
 	end
+	if not addon.MPlusProgressBar._actValue or addon.MPlusProgressBar._actValue ~= addon.MPlusProgressBar.Bar.Label:GetText() then
+		addon.MPlusProgressBar._actValue = addon.MPlusProgressBar.Bar.Label:GetText()
+	end
+	if addon.MPlusProgressBar then
+		if addon.MPlusProgressBar._oldValue ~= addon.MPlusData.pullForces then
+			local lb = addon.MPlusProgressBar.Bar.Label
+			if addon.MPlusData.pullForces == 0 then
+				lb:SetText(addon.MPlusProgressBar._actValue)
+			else
+				lb:SetText(addon.MPlusProgressBar._actValue .. " |cff00ff00+" .. addon.MPlusData.pullForces .. "%|r")
+			end
+			addon.MPlusProgressBar._oldValue = addon.MPlusData.pullForces
+		end
+	end
+
 end)
 
 local function createButtons()
@@ -511,9 +561,7 @@ local function addKeystoneFrame(container)
 				desc = L["mythicPlusCurrentPullDesc"],
 				func = function(self, _, value)
 					addon.db["mythicPlusCurrentPull"] = value
-					if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.ToggleCurrentPull then
-						addon.MythicPlus.functions.ToggleCurrentPull(value)
-					end
+					if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.ToggleCurrentPull then addon.MythicPlus.functions.ToggleCurrentPull(value) end
 				end,
 			},
 
@@ -551,9 +599,7 @@ local function addKeystoneFrame(container)
 		local sliderPullFont = addon.functions.createSliderAce("Current pull text size: " .. curSize, curSize, 8, 32, 1, function(self, _, value2)
 			addon.db["mythicPlusCurrentPullFontSize"] = value2
 			self:SetLabel("Current pull text size: " .. value2)
-			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.UpdateCurrentPullAppearance then
-				addon.MythicPlus.functions.UpdateCurrentPullAppearance()
-			end
+			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.UpdateCurrentPullAppearance then addon.MythicPlus.functions.UpdateCurrentPullAppearance() end
 		end)
 		sliderPullFont:SetFullWidth(false)
 		sliderPullFont:SetWidth(300)

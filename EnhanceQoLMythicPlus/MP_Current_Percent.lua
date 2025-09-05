@@ -135,63 +135,14 @@ local function RemoveGUIDFromPull(guid)
 	MPlus.inPullGUID[guid] = nil
 end
 
--- Prozent (optional)
-local function GetPullPercent()
-	if MPlus.maxForces and MPlus.maxForces > 0 then return 100 * (MPlus.pullForces / MPlus.maxForces) end
-	return 0
-end
-
--- === Lightweight UI label on Scenario tracker ===
-function EnsureUILabel()
-	if MPlus.uiFrame and MPlus.uiFrame.text then return end
-	local frame = CreateFrame("Frame", "EnhanceQoL_CurrentPullLabel", ScenarioObjectiveTracker.ContentsFrame)
-	frame:SetFrameStrata("TOOLTIP")
-	frame:SetSize(140, 20)
-
-	frame:SetPoint("TOPLEFT", ScenarioObjectiveTracker.ContentsFrame, "BOTTOMLEFT", 0, 10)
-
-	local fs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	fs:SetPoint("CENTER")
-	fs:SetText(L["CurrentPull"]:format("0"))
-
-	frame.text = fs
-	MPlus.uiFrame = frame
-end
-
+-- === Removed standalone UI label; keep stubs to safely hide any leftover frame ===
+function EnsureUILabel() end
 function UpdateUILabel()
-	if not MDT or not MPlus.active or not (addon and addon.db and addon.db["mythicPlusCurrentPull"]) then
-		if MPlus.uiFrame then MPlus.uiFrame:Hide() end
-		return
+	if MPlus.uiFrame then
+		MPlus.uiFrame:Hide()
+		MPlus.uiFrame = nil
 	end
-	-- Throttle UI updates (max ~10/s)
-	local now = GetTime()
-	if now < (MPlus.uiThrottle or 0) then return end
-	MPlus.uiThrottle = now + 0.1
-	EnsureUILabel()
-	if not MPlus.uiFrame then return end
-
-	-- apply font/position settings
-	local fs = addon.db["mythicPlusCurrentPullFontSize"] or 14
-	if addon.variables and addon.variables.defaultFont then
-		MPlus.uiFrame.text:SetFont(addon.variables.defaultFont, fs, "OUTLINE")
-	else
-		MPlus.uiFrame.text:SetFont(GameFontNormal:GetFont(), fs, "OUTLINE")
-	end
-
-	if MPlus.maxForces and MPlus.maxForces > 0 then
-		local text = L["CurrentPull"]:format(MPlus.pullForces)
-		if text ~= MPlus._lastUILabel then
-			MPlus.uiFrame.text:SetText(text)
-			MPlus._lastUILabel = text
-		end
-		MPlus.uiFrame:Show()
-	else
-		local text = L["CurrentPull"]:format("0")
-		if text ~= MPlus._lastUILabel then
-			MPlus.uiFrame.text:SetText(text)
-			MPlus._lastUILabel = text
-		end
-	end
+	if _G["EnhanceQoL_CurrentPullLabel"] then _G["EnhanceQoL_CurrentPullLabel"]:Hide() end
 end
 
 -- === Events ===
@@ -202,6 +153,20 @@ local band = bit.band
 local MASK_HOSTILE = COMBATLOG_OBJECT_REACTION_HOSTILE
 local MASK_NPC = COMBATLOG_OBJECT_TYPE_NPC
 local function isHostileNPC(flags) return band(flags or 0, MASK_HOSTILE) ~= 0 and band(flags or 0, MASK_NPC) ~= 0 end
+
+-- Track whether the player (or pet) is involved in a CLEU event
+local MASK_MINE = COMBATLOG_OBJECT_AFFILIATION_MINE
+local function isMineInvolved(srcFlags, dstFlags)
+	return band(srcFlags or 0, MASK_MINE) ~= 0 or band(dstFlags or 0, MASK_MINE) ~= 0
+end
+
+-- While out of combat, accept only clear combat actions to avoid OOC noise
+local allowedSubOOC = {
+	SWING_DAMAGE = true,
+	RANGE_DAMAGE = true,
+	SPELL_DAMAGE = true,
+	SPELL_PERIODIC_DAMAGE = true,
+}
 
 local allowedSub = {
 	SWING_DAMAGE = true,
@@ -221,9 +186,13 @@ local function SetCombatLogActive(active)
     if active then
         f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         f:RegisterEvent("PLAYER_REGEN_ENABLED")
+        f:RegisterEvent("PLAYER_DEAD")
+        f:RegisterEvent("PLAYER_UNGHOST")
     else
         f:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         f:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        f:UnregisterEvent("PLAYER_DEAD")
+        f:UnregisterEvent("PLAYER_UNGHOST")
     end
 end
 
@@ -313,17 +282,26 @@ f:SetScript("OnEvent", function(_, ev, arg1)
 	end
 
     if ev == "COMBAT_LOG_EVENT_UNFILTERED" then
-		if not MDT or not MPlus.active then return end
-		-- Late MDT init guard: try again with backoff if weights not ready
-		if not MPlus._weightsReady then
-			local now = GetTime()
-			if now >= (MPlus._nextWeightsAttemptTime or 0) then
-				BuildWeightsFromMDT()
-				MPlus._nextWeightsAttemptTime = now + 0.75
-			end
-		end
-		local _, sub, _, srcGUID, _, srcFlags, _, dstGUID, _, dstFlags = CombatLogGetCurrentEventInfo()
-		if not allowedSub[sub] then return end
+        if not MDT or not MPlus.active then return end
+        -- Late MDT init guard: try again with backoff if weights not ready
+        if not MPlus._weightsReady then
+            local now = GetTime()
+            if now >= (MPlus._nextWeightsAttemptTime or 0) then
+                BuildWeightsFromMDT()
+                MPlus._nextWeightsAttemptTime = now + 0.75
+            end
+        end
+        local _, sub, _, srcGUID, _, srcFlags, _, dstGUID, _, dstFlags = CombatLogGetCurrentEventInfo()
+        if not allowedSub[sub] then return end
+
+        -- Prevent updates while dead or OOC due to party combat.
+        -- Consider the player "engaged" only when alive and in combat.
+        local engaged = UnitAffectingCombat("player") and not UnitIsDeadOrGhost("player")
+        if not engaged then
+            -- Only accept clear, personal damage events out of combat.
+            if not isMineInvolved(srcFlags, dstFlags) then return end
+            if not allowedSubOOC[sub] then return end
+        end
 
 		-- Source
 		if srcGUID and not MPlus.inPullGUID[srcGUID] and isHostileNPC(srcFlags) then
@@ -342,6 +320,20 @@ f:SetScript("OnEvent", function(_, ev, arg1)
         if not MDT or not MPlus.active then return end
         -- Reset current pull when leaving combat (player side)
         ResetPull()
+        return
+    end
+
+    if ev == "PLAYER_DEAD" then
+        if not MDT or not MPlus.active then return end
+        -- Hard reset on death to avoid stuck/continuing updates while dead
+        ResetPull()
+        return
+    end
+
+    if ev == "PLAYER_UNGHOST" then
+        if not MDT or not MPlus.active then return end
+        -- Keep UI consistent at 0 after releasing
+        UpdateUILabel()
         return
     end
 end)
