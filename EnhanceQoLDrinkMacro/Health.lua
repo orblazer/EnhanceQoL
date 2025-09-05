@@ -42,25 +42,14 @@ local function GetPotionHeal(totalHealth)
 	return heal
 end
 
-local function GetStoneHeal(totalHealth)
-	local heal = totalHealth * 0.25
-	return heal
-end
+local function GetStoneHeal(totalHealth) return (totalHealth or 0) * 0.25 end
 
 -- Health items master list. Each entry has:
 -- key, id, requiredLevel, heal (relative ranking), type: "stone"|"potion"|"other"
 addon.Health.healthList = {
 	-- Healthstones (Warlock)
-	{ key = "Healthstone", id = 5512, requiredLevel = 5, healFunc = function(maxHP) return GetStoneHeal(maxHP or 0) end, type = "stone" },
-	{
-		key = "DemonicHealthstone",
-		id = 224464,
-		requiredLevel = 5,
-		healFunc = function(maxHP) return GetStoneHeal(maxHP or 0) end,
-		type = "stone",
-		requiredClass = "WARLOCK",
-		requiredTalentSpell = 386689,
-	},
+	{ key = "Healthstone", id = 5512, requiredLevel = 5, healFunc = function(maxHP) return GetStoneHeal(maxHP) end, type = "stone" },
+	{ key = "DemonicHealthstone", id = 224464, requiredLevel = 5, healFunc = function(maxHP) return GetStoneHeal(maxHP) end, type = "stone" },
 
 	-- The War Within: Invigorating Healing Potion (Qualities 1-3)
 	{ key = "InvigoratingHealingPotion1", id = 244835, requiredLevel = 71, heal = 850000, type = "potion" },

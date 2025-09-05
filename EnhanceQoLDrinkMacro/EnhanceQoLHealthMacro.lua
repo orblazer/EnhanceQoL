@@ -28,7 +28,23 @@ addon.functions.InitDBValue("healthReorderByCooldown", true)
 
 local function createMacroIfMissing()
 	if not addon.db.healthMacroEnabled then return end
-	if GetMacroInfo(healthMacroName) == nil then CreateMacro(healthMacroName, "INV_Misc_QuestionMark") end
+	if GetMacroInfo(healthMacroName) == nil then
+		local macroId = CreateMacro(healthMacroName, "INV_Misc_QuestionMark")
+		if not macroId then
+			print(L["healthMacroLimitReached"] or "Health Macro: Macro limit reached. Please free a slot.")
+			return
+		end
+		-- Prefill with a sensible default
+		local demonicCount = C_Item.GetItemCount(224464, false, false) or 0
+		local normalCount = C_Item.GetItemCount(5512, false, false) or 0
+		local body = "#showtooltip"
+		if demonicCount > 0 then
+			body = "#showtooltip\n/use item:224464"
+		elseif normalCount > 0 then
+			body = "#showtooltip\n/use item:5512"
+		end
+		EditMacro(healthMacroName, healthMacroName, nil, body)
+	end
 end
 
 local function buildMacroString(item)
@@ -36,10 +52,19 @@ local function buildMacroString(item)
 	return "#showtooltip\n/use " .. item
 end
 
-local lastItemPlaced
 local lastMacroKey
 
-local function isOffCooldown(itemID)
+local function numericId(v)
+	if not v or not v.getId then return nil end
+	local s = v.getId()
+	if not s then return nil end
+	return tonumber(string.match(s, "%d+"))
+end
+
+local function isOffCooldown(item)
+	if not item then return false end
+	local itemID = numericId(item)
+	if not itemID then return true end
 	local start, duration, enable = GetItemCooldown(itemID)
 	if not start or start == 0 then return true end
 	if duration == 0 then return true end
@@ -86,42 +111,45 @@ local function buildMacro()
 
 	local first, second
 
-    if useBoth then
-        -- decide order based on availability, cooldown, then healing amount unless explicitly preferring stone
-        local stoneReady = stone and isOffCooldown(stone.id)
-        local potionReady = potion and isOffCooldown(potion.id)
+	if useBoth then
+		-- fallback: if one is missing, try other (avoid duplicates)
+		if not stone and addon.db.healthAllowOther then stone = other end
+		if not potion and addon.db.healthAllowOther then
+			local sid = numericId(stone)
+			local oid = numericId(other)
+			if not sid or not oid or sid ~= oid then potion = other end
+		end
 
-        -- fallback: if one is missing, try other
-        if not stone and addon.db.healthAllowOther then stone = other end
-        if not potion and addon.db.healthAllowOther then potion = other end
-
-        if stone and potion then
-            -- 1) cooldown-based reorder if enabled and readiness differs
-            if addon.db.healthReorderByCooldown and (stoneReady ~= potionReady) then
-                if stoneReady then
-                    first, second = stone, potion
-                else
-                    first, second = potion, stone
-                end
-            else
-                -- 2) explicit preference
-                if preferStone then
-                    first, second = stone, potion
-                else
-                    -- 3) highest healing first (default behavior)
-                    local hS = stone.heal or 0
-                    local hP = potion.heal or 0
-                    if hS >= hP then
-                        first, second = stone, potion
-                    else
-                        first, second = potion, stone
-                    end
-                end
-            end
-        else
-            -- only one available
-            first = stone or potion or other
-        end
+		-- decide order based on availability, cooldown, then healing amount unless explicitly preferring stone
+		if stone and potion then
+			local stoneReady = isOffCooldown(stone)
+			local potionReady = isOffCooldown(potion)
+			-- 1) cooldown-based reorder if enabled and readiness differs
+			if addon.db.healthReorderByCooldown and (stoneReady ~= potionReady) then
+				if stoneReady then
+					first, second = stone, potion
+				else
+					first, second = potion, stone
+				end
+			else
+				-- 2) explicit preference
+				if preferStone then
+					first, second = stone, potion
+				else
+					-- 3) highest healing first (default behavior)
+					local hS = stone.heal or 0
+					local hP = potion.heal or 0
+					if hS >= hP then
+						first, second = stone, potion
+					else
+						first, second = potion, stone
+					end
+				end
+			end
+		else
+			-- only one available; avoid duplicate 'other'
+			first = stone or potion or other
+		end
 	else
 		-- pick the single best by heal value among available
 		local candidates = {}
@@ -137,12 +165,17 @@ local function buildMacro()
 	local macroBody
 	local key
 	if first and second then
-		-- castsequence; if stone is part of sequence, prefer demonic variant via cache
+		-- castsequence (always using item: ids); ensure not identical
 		local function toUse(v) return v and v.getId() or nil end
 		local a = toUse(first)
 		local b = toUse(second)
-		macroBody = string.format("#showtooltip\n/castsequence reset=%s %s, %s", resetType, a, b)
-		key = string.format("seq:%s|%s|%s", a, b, resetType)
+		if a and b and a == b then
+			macroBody = buildMacroString(a)
+			key = string.format("single:%s", a)
+		else
+			macroBody = string.format("#showtooltip\n/castsequence reset=%s %s, %s", resetType, a or "", b or "")
+			key = string.format("seq:%s|%s|%s", a or "", b or "", resetType)
+		end
 	elseif first then
 		-- single use: use the actual item found
 		macroBody = buildMacroString(first.getId())
@@ -153,7 +186,8 @@ local function buildMacro()
 	end
 
 	if key ~= lastMacroKey then
-		EditMacro(healthMacroName, healthMacroName, nil, macroBody)
+		if not GetMacroInfo(healthMacroName) then createMacroIfMissing() end
+		if GetMacroInfo(healthMacroName) then EditMacro(healthMacroName, healthMacroName, nil, macroBody) end
 		lastMacroKey = key
 	end
 end
@@ -176,6 +210,7 @@ frame:RegisterEvent("SPELLS_CHANGED")
 frame:RegisterEvent("PLAYER_TALENT_UPDATE")
 frame:RegisterEvent("UNIT_MAXHEALTH")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+frame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 
 local pendingUpdate = false
 frame:SetScript("OnEvent", function(_, event, arg1)
@@ -190,7 +225,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "BAG_UPDATE_DELAYED" then
 		if not pendingUpdate then
 			pendingUpdate = true
-			C_Timer.After(0.1, function()
+			C_Timer.After(0.15, function()
 				addon.Health.functions.updateHealthMacro(false)
 				pendingUpdate = false
 			end)
@@ -207,7 +242,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
 			addon.Health.functions.updateAllowedHealth()
 			addon.Health.functions.updateHealthMacro(false)
 		end
-	elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+	elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "BAG_UPDATE_COOLDOWN" then
 		addon.Health.functions.updateAllowedHealth()
 		addon.Health.functions.updateHealthMacro(false)
 	end
@@ -215,38 +250,38 @@ end)
 
 -- UI section for Health Macro (mounted under Drink Macro)
 function addon.Health.functions.addHealthFrame(container)
-    local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-    container:AddChild(wrapper)
+	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+	container:AddChild(wrapper)
 
-    local group = addon.functions.createContainer("InlineGroup", "List")
-    wrapper:AddChild(group)
+	local group = addon.functions.createContainer("InlineGroup", "List")
+	wrapper:AddChild(group)
 
-    local cb = addon.functions.createCheckboxAce(L["Enable Health Macro"], addon.db["healthMacroEnabled"], function(_, _, value)
-        addon.db["healthMacroEnabled"] = value
-        addon.Health.functions.updateHealthMacro(false)
-        container:ReleaseChildren()
-        addon.Health.functions.addHealthFrame(container)
-    end)
-    group:AddChild(cb)
+	local cb = addon.functions.createCheckboxAce(L["Enable Health Macro"], addon.db["healthMacroEnabled"], function(_, _, value)
+		addon.db["healthMacroEnabled"] = value
+		addon.Health.functions.updateHealthMacro(false)
+		container:ReleaseChildren()
+		addon.Health.functions.addHealthFrame(container)
+	end)
+	group:AddChild(cb)
 
-    -- If disabled, render nothing else
-    if not addon.db["healthMacroEnabled"] then return end
+	-- If disabled, render nothing else
+	if not addon.db["healthMacroEnabled"] then return end
 
-    local cbBoth = addon.functions.createCheckboxAce(L["Use Healthstone and Potion"], addon.db["healthUseBoth"], function(_, _, value)
-        addon.db["healthUseBoth"] = value
-        addon.Health.functions.updateHealthMacro(false)
-        container:ReleaseChildren()
-        addon.Health.functions.addHealthFrame(container)
-    end)
-    group:AddChild(cbBoth)
+	local cbBoth = addon.functions.createCheckboxAce(L["Use Healthstone and Potion"], addon.db["healthUseBoth"], function(_, _, value)
+		addon.db["healthUseBoth"] = value
+		addon.Health.functions.updateHealthMacro(false)
+		container:ReleaseChildren()
+		addon.Health.functions.addHealthFrame(container)
+	end)
+	group:AddChild(cbBoth)
 
-    if addon.db["healthUseBoth"] then
-        local cbPrefer = addon.functions.createCheckboxAce(L["Prefer Healthstone first"], addon.db["healthPreferStoneFirst"], function(_, _, value)
-            addon.db["healthPreferStoneFirst"] = value
-            addon.Health.functions.updateHealthMacro(false)
-        end)
-        group:AddChild(cbPrefer)
-    end
+	if addon.db["healthUseBoth"] then
+		local cbPrefer = addon.functions.createCheckboxAce(L["Prefer Healthstone first"], addon.db["healthPreferStoneFirst"], function(_, _, value)
+			addon.db["healthPreferStoneFirst"] = value
+			addon.Health.functions.updateHealthMacro(false)
+		end)
+		group:AddChild(cbPrefer)
+	end
 
 	local cbOther = addon.functions.createCheckboxAce(L["Allow other healing items"], addon.db["healthAllowOther"], function(_, _, value)
 		addon.db["healthAllowOther"] = value
@@ -270,11 +305,21 @@ function addon.Health.functions.addHealthFrame(container)
 	dropReset:SetValue(addon.db["healthReset"])
 	group:AddChild(dropReset)
 
-    local label = addon.functions.createLabelAce(healthMacroName .. " - place on your bar (updates outside combat)", nil, nil, 11)
-    group:AddChild(label)
+	group:AddChild(addon.functions.createSpacerAce())
+	local label = addon.functions.createLabelAce(healthMacroName .. " - place on your bar (updates outside combat)", nil, nil, 12)
+	label:SetFullWidth(true)
+	group:AddChild(label)
 
-    group:AddChild(addon.functions.createSpacerAce())
-    local gold = { r = 1, g = 0.843, b = 0 }
-    local hint = addon.functions.createLabelAce(L["healthMacroBestFirst"], gold, nil, 11)
-    group:AddChild(hint)
+	group:AddChild(addon.functions.createSpacerAce())
+	local gold = { r = 1, g = 0.843, b = 0 }
+	local hint = addon.functions.createLabelAce(L["healthMacroBestFirst"], gold, nil, 14)
+	hint:SetFullWidth(true)
+	group:AddChild(hint)
+
+	if addon.variables.unitClass == "WARLOCK" then
+		group:AddChild(addon.functions.createSpacerAce())
+		local tip = addon.functions.createLabelAce(L["healthMacroTipReset"], nil, nil, 12)
+		tip:SetFullWidth(true)
+		group:AddChild(tip)
+	end
 end
