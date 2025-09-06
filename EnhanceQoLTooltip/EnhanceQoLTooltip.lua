@@ -123,7 +123,7 @@ fInspect:SetScript("OnEvent", function(_, ev, guid)
         local _, name = GetSpecializationInfoByID(specID)
         specName = name
     end
-    local score
+    local score = 0
     if C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
         local s = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
         score = s and s.currentSeasonScore or score
