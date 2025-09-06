@@ -167,81 +167,36 @@ end)
 local function GetScenarioPercent(criteriaIndex)
 	local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
 	if criteriaInfo and criteriaInfo.isWeightedProgress then
-		if not criteriaInfo.totalQuantity or criteriaInfo.totalQuantity <= 0 then return nil end
-		local percent = (criteriaInfo.quantity / criteriaInfo.totalQuantity) * 100
-		percent = math.floor(percent * 100 + 0.5) / 100
-		return percent
+		local sValue = criteriaInfo.quantity
+		if criteriaInfo.quantityString then
+			sValue = tonumber(string.sub(criteriaInfo.quantityString, 1, string.len(criteriaInfo.quantityString) - 1)) / criteriaInfo.totalQuantity * 100
+			sValue = math.floor(sValue * 100 + 0.5) / 100
+		end
+		return sValue
 	end
 	return nil
 end
 
--- Shared writer for the progress bar label
-addon.MythicPlus = addon.MythicPlus or {}
-addon.MythicPlus.functions = addon.MythicPlus.functions or {}
-function addon.MythicPlus.functions.WriteProgressLabel(bar)
-	if not bar or not bar.Bar or not bar.Bar.Label then return end
-	-- Fallback: if base text is not yet known (SetValue not fired), compute it on-demand
-	if not bar._baseText then
-		if not IsInInstance() then return end
-		local _, _, diff = GetInstanceInfo()
-		if diff ~= 8 then return end
-		local sData = C_ScenarioInfo.GetScenarioStepInfo()
-		if not sData then return end
-		local truePercent
-		for criteriaIndex = 1, sData.numCriteria do
-			if not truePercent then truePercent = GetScenarioPercent(criteriaIndex) end
-		end
-		if not truePercent then return end
-		bar._baseText = string.format("%.2f%%", truePercent)
-	end
-	local pull = (addon.MPlusData and addon.MPlusData.pullForces) or 0
-	local suffix = ""
-	if addon.db and addon.db["mythicPlusCurrentPull"] and pull and pull > 0 then
-		local pullText = string.format("%.2f", pull)
-		suffix = " |cff00ff00+" .. pullText .. "%|r"
-	end
-	local newText = bar._baseText .. suffix
-	if bar._lastShown ~= newText then
-		bar.Bar.Label:SetText(newText)
-		bar._lastShown = newText
-		bar._lastShownPull = pull
-	end
-end
-
--- Force a refresh without recomputing base percent (used after resets)
-function addon.MythicPlus.functions.RefreshProgressLabel()
-	if not addon.MPlusProgressBar then return end
-	addon.MythicPlus.functions.WriteProgressLabel(addon.MPlusProgressBar)
-end
-
 hooksecurefunc(ScenarioTrackerProgressBarMixin, "SetValue", function(self, percentage)
-	-- Only handle in Mythic Keystone runs and visible bars
-	if not IsInInstance() or not self:IsVisible() then return end
-	local _, _, diff = GetInstanceInfo()
-	if diff ~= 8 then return end
-
-	addon.MPlusProgressBar = self
-
-	-- Compute base percent text without reading existing label
-	local baseText
 	if addon.db["mythicPlusTruePercent"] then
+		if not IsInInstance() or not self:IsVisible() then return end
+		local _, _, diff = GetInstanceInfo()
+		if diff ~= 8 then return end -- only in mythic challenge mode
 		local sData = C_ScenarioInfo.GetScenarioStepInfo()
-		if not sData then return end
-		local truePercent
-		for criteriaIndex = 1, sData.numCriteria do
-			if not truePercent then truePercent = GetScenarioPercent(criteriaIndex) end
-		end
-		if truePercent then baseText = string.format("%.2f%%", truePercent) end
-	else
-		local p = tonumber(percentage) or 0
-		if p <= 1 then p = p * 100 end
-		p = math.floor(p * 100 + 0.5) / 100 -- round to 2 decimals
-		baseText = string.format("%.2f%%", p)
-	end
+		if nil == sData then return end
 
-	if not baseText then return end
-	self._baseText = baseText
-	addon.MythicPlus.functions.WriteProgressLabel(self)
+		local truePercent
+		if self.criteriaIndex then self.criteriaIndex = nil end
+		for criteriaIndex = 1, sData.numCriteria do
+			if nil == truePercent then
+				truePercent = GetScenarioPercent(criteriaIndex)
+				if truePercent then
+					self.Bar.Label:SetFormattedText(truePercent .. "%%")
+					self.percentage = percentage
+				end
+			end
+		end
+	end
 end)
 
 local function createButtons()
@@ -551,16 +506,6 @@ local function addKeystoneFrame(container)
 				var = "mythicPlusChestTimer",
 			},
 			{
-				text = L["mythicPlusCurrentPull"],
-				var = "mythicPlusCurrentPull",
-				desc = L["mythicPlusCurrentPullDesc"],
-				func = function(self, _, value)
-					addon.db["mythicPlusCurrentPull"] = value
-					if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.ToggleCurrentPull then addon.MythicPlus.functions.ToggleCurrentPull(value) end
-				end,
-			},
-
-			{
 				text = L["groupfinderShowPartyKeystone"],
 				var = "groupfinderShowPartyKeystone",
 				func = function(self, _, value)
@@ -589,17 +534,6 @@ local function addKeystoneFrame(container)
 		groupEnabled:AddChild(dropPullTimerType)
 		groupEnabled:AddChild(addon.functions.createSpacerAce())
 
-		-- Current Pull: font size slider (visible regardless; applied when feature is enabled)
-		local curSize = addon.db["mythicPlusCurrentPullFontSize"] or 14
-		local sliderPullFont = addon.functions.createSliderAce("Current pull text size: " .. curSize, curSize, 8, 32, 1, function(self, _, value2)
-			addon.db["mythicPlusCurrentPullFontSize"] = value2
-			self:SetLabel("Current pull text size: " .. value2)
-			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.UpdateCurrentPullAppearance then addon.MythicPlus.functions.UpdateCurrentPullAppearance() end
-		end)
-		sliderPullFont:SetFullWidth(false)
-		sliderPullFont:SetWidth(300)
-		groupEnabled:AddChild(sliderPullFont)
-
 		local longSlider = addon.functions.createSliderAce(L["sliderLongTime"] .. ": " .. addon.db["pullTimerLongTime"] .. "s", addon.db["pullTimerLongTime"], 0, 60, 1, function(self, _, value2)
 			addon.db["pullTimerLongTime"] = value2
 			self:SetLabel(L["sliderLongTime"] .. ": " .. value2 .. "s")
@@ -618,7 +552,6 @@ local function addKeystoneFrame(container)
 		shortSlider:SetWidth(300)
 		groupEnabled:AddChild(shortSlider)
 	end
-	scroll:DoLayout()
 end
 
 local function addPotionTrackerFrame(container)

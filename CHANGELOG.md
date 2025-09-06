@@ -11,7 +11,6 @@
 - **Tooltip · Mythic+ rating:** Optional modifier requirement (Shift/Alt/Ctrl) before showing the rating.
 - **Mouse:** Independent “only show in combat” toggles for Ring and Trail.
 - **Mouse:** Optional class‑color tint for Ring and Trail (disables the color picker while active).
-- **Mythic+:** Option to show the current pull count
 - **Drink Macro · Health Macro:** New macro that always picks the best available Healthstone/potion, with options to use both in a castsequence, reorder by cooldown outside combat, and support for Demonic Healthstone.
 
 ### 🔄 Changed
