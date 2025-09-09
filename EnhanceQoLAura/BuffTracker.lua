@@ -1761,6 +1761,8 @@ local function exportCategory(catId, encodeMode)
 	local cat = addon.db["buffTrackerCategories"][catId]
 	if not cat then return end
 	local data = {
+		-- guard: identify payload source to prevent cross-imports
+		kind = "EQOL_BUFF_CATEGORY",
 		category = cat,
 		order = addon.db["buffTrackerOrder"][catId] or {},
 		sounds = addon.db["buffTrackerSounds"][catId] or {},
@@ -1789,8 +1791,12 @@ local function importCategory(encoded)
 	if not decompressed then return end
 	local ok, data = serializer:Deserialize(decompressed)
 	if not ok or type(data) ~= "table" then return end
+
+	-- strict guard: only accept BuffTracker payloads
+	if data.kind ~= "EQOL_BUFF_CATEGORY" then return end
 	local cat = data.category or data.cat or data
 	if type(cat) ~= "table" then return end
+	if type(cat.buffs) ~= "table" then return end
 	sanitiseCategory(cat)
 	local newId = getNextCategoryId()
 	addon.db["buffTrackerCategories"][newId] = cat
@@ -1838,8 +1844,11 @@ local function previewImportCategory(encoded)
 	if not decompressed then return end
 	local ok, data = serializer:Deserialize(decompressed)
 	if not ok or type(data) ~= "table" then return end
+	-- strict guard: only accept BuffTracker payloads
+	if data.kind ~= "EQOL_BUFF_CATEGORY" then return end
 	local cat = data.category or data.cat or data
 	if type(cat) ~= "table" then return end
+	if type(cat.buffs) ~= "table" then return end
 	local count = 0
 	for _ in pairs(cat.buffs or {}) do
 		count = count + 1
