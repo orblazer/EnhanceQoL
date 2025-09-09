@@ -18,6 +18,8 @@ local GetNetStats = GetNetStats
 local lastPingUpdate = 0
 local pingHome, pingWorld = nil, nil
 local emaFPS -- exponential moving average for FPS
+-- Change detection cache (declare early so callbacks see locals, not globals)
+local lastFps, lastHome, lastWorld, lastMode
 
 -- Color helpers (hex without leading #)
 local function fpsColorHex(v)
@@ -161,8 +163,7 @@ local function smoothFPS(current, interval, window)
     return emaFPS
 end
 
--- Change detection to avoid unnecessary string work
-local lastFps, lastHome, lastWorld, lastMode
+-- (declared above)
 
 local function updateLatency(s)
     s = s or stream
