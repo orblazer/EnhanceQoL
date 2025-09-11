@@ -7,6 +7,10 @@
 - **Chat Frame:** Option to hide the messages of "learned" and "unlearned" spells on respec
 - **Instance Difficulty:** Change the location, color and size of the dungeon difficulty text
 
+### 🐛 Fixed
+
+- **Spell Flyout on Mouseover:** Action bar on mouseover hide had a problem with _Spell Flyout Menus_
+
 ---
 
 ## [4.14.0] – 2025-09-10

@@ -370,10 +370,49 @@ local function UpdateUnitFrameMouseover(barName, cbData)
 end
 
 local hookedButtons = {}
+
+-- Keep action bars visible while interacting with SpellFlyout
+local EQOL_LastMouseoverBar
+local EQOL_LastMouseoverVar
+
+local function EQOL_ShouldKeepVisibleByFlyout()
+    return _G.SpellFlyout and _G.SpellFlyout:IsShown() and MouseIsOver(_G.SpellFlyout)
+end
+
+local function EQOL_HideBarIfNotHovered(bar, variable)
+    if not addon.db or not addon.db[variable] then return end
+    C_Timer.After(0, function()
+        -- Only hide if neither the bar nor the spell flyout is under the mouse
+        if not MouseIsOver(bar) and not EQOL_ShouldKeepVisibleByFlyout() then bar:SetAlpha(0) end
+    end)
+end
+
+local function EQOL_HookSpellFlyout()
+    local flyout = _G.SpellFlyout
+    if not flyout or flyout.EQOL_MouseoverHooked then return end
+
+    flyout:HookScript("OnEnter", function()
+        if EQOL_LastMouseoverBar and addon.db and addon.db[EQOL_LastMouseoverVar] then EQOL_LastMouseoverBar:SetAlpha(1) end
+    end)
+
+    flyout:HookScript("OnLeave", function()
+        if EQOL_LastMouseoverBar and addon.db and addon.db[EQOL_LastMouseoverVar] then
+            EQOL_HideBarIfNotHovered(EQOL_LastMouseoverBar, EQOL_LastMouseoverVar)
+        end
+    end)
+
+    flyout:HookScript("OnHide", function()
+        if EQOL_LastMouseoverBar and addon.db and addon.db[EQOL_LastMouseoverVar] then
+            EQOL_HideBarIfNotHovered(EQOL_LastMouseoverBar, EQOL_LastMouseoverVar)
+        end
+    end)
+
+    flyout.EQOL_MouseoverHooked = true
+end
 -- Action Bars
 local function UpdateActionBarMouseover(barName, enable, variable)
-	local bar = _G[barName]
-	if not bar then return end
+    local bar = _G[barName]
+    if not bar then return end
 
 	local btnPrefix
 	if barName == "MainMenuBar" then
@@ -392,40 +431,56 @@ local function UpdateActionBarMouseover(barName, enable, variable)
 		btnPrefix = barName .. "Button"
 	end
 
-	if enable then
-		bar:SetAlpha(0)
-		-- bar:EnableMouse(true)
-		bar:SetScript("OnEnter", function(self) bar:SetAlpha(1) end)
-		bar:SetScript("OnLeave", function(self) bar:SetAlpha(0) end)
-		for i = 1, 12 do
-			local button = _G[btnPrefix .. i]
-			if button and not hookedButtons[button] then
-				if button.OnEnter then
-					button:HookScript("OnEnter", function(self)
-						if addon.db[variable] then bar:SetAlpha(1) end
-					end)
-					hookedButtons[button] = true
-				else
-					-- button:EnableMouse(true)
-					button:SetScript("OnEnter", function(self) bar:SetAlpha(1) end)
-				end
-				if button.OnLeave then
-					button:HookScript("OnLeave", function(self)
-						if addon.db[variable] then bar:SetAlpha(0) end
-					end)
-				else
-					button:EnableMouse(true)
-					button:SetScript("OnLeave", function(self)
-						bar:SetAlpha(0)
-						GameTooltip:Hide()
-					end)
-				end
-				if not hookedButtons[button] then GameTooltipActionButton(button) end
-			end
-		end
-	else
-		bar:SetAlpha(1)
-		-- bar:EnableMouse(true)
+    if enable then
+        bar:SetAlpha(0)
+        -- bar:EnableMouse(true)
+        bar:SetScript("OnEnter", function(self)
+            bar:SetAlpha(1)
+            EQOL_LastMouseoverBar = bar
+            EQOL_LastMouseoverVar = variable
+        end)
+        bar:SetScript("OnLeave", function(self)
+            EQOL_HideBarIfNotHovered(bar, variable)
+        end)
+        for i = 1, 12 do
+            local button = _G[btnPrefix .. i]
+            if button and not hookedButtons[button] then
+                if button.OnEnter then
+                    button:HookScript("OnEnter", function(self)
+                        if addon.db[variable] then
+                            bar:SetAlpha(1)
+                            EQOL_LastMouseoverBar = bar
+                            EQOL_LastMouseoverVar = variable
+                        end
+                    end)
+                    hookedButtons[button] = true
+                else
+                    -- button:EnableMouse(true)
+                    button:SetScript("OnEnter", function(self)
+                        bar:SetAlpha(1)
+                        EQOL_LastMouseoverBar = bar
+                        EQOL_LastMouseoverVar = variable
+                    end)
+                end
+                if button.OnLeave then
+                    button:HookScript("OnLeave", function(self)
+                        if addon.db[variable] then EQOL_HideBarIfNotHovered(bar, variable) end
+                    end)
+                else
+                    button:EnableMouse(true)
+                    button:SetScript("OnLeave", function(self)
+                        EQOL_HideBarIfNotHovered(bar, variable)
+                        GameTooltip:Hide()
+                    end)
+                end
+                if not hookedButtons[button] then GameTooltipActionButton(button) end
+            end
+        end
+        -- Ensure flyout hooks are in place (once)
+        C_Timer.After(0, EQOL_HookSpellFlyout)
+    else
+        bar:SetAlpha(1)
+        -- bar:EnableMouse(true)
 		bar:SetScript("OnEnter", nil)
 		bar:SetScript("OnLeave", nil)
 		for i = 1, 12 do
