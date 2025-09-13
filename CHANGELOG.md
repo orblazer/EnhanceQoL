@@ -1,5 +1,15 @@
 # Changelog
 
+## [4.16.0] – 2025-09-13
+
+### ✨ Added
+
+- **Drink Macro:** Option to use Mana-Potions in combat
+  - *±80 mana potions* known
+  - 10 missing mana drinks of 11.2.5 were added
+
+---
+
 ## [4.15.1] – 2025-09-13
 
 ### 🐛 Fixed

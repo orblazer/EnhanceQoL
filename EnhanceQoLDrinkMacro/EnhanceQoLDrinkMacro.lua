@@ -5,6 +5,7 @@ local drinkMacroName = "EnhanceQoLDrinkMacro"
 local UnitAffectingCombat = UnitAffectingCombat
 local InCombatLockdown = InCombatLockdown
 local UnitPowerMax = UnitPowerMax
+local UnitLevel = UnitLevel
 local GetMacroInfo = GetMacroInfo
 local EditMacro = EditMacro
 local CreateMacro = CreateMacro
@@ -26,18 +27,41 @@ local function createMacroIfMissing()
 	if GetMacroInfo(drinkMacroName) == nil then CreateMacro(drinkMacroName, "INV_Misc_QuestionMark") end
 end
 
-local function buildMacroString(item)
+-- Find first available mana potion from user-defined list (preserves user order)
+local function findBestManaPotion()
+	if not addon.db or not addon.db.useManaPotionInCombat then return nil end
+	local list = (addon.Drinks and addon.Drinks.manaPotions) or {}
+	local playerLevel = UnitLevel("player")
+	for i = 1, #list do
+		local e = list[i]
+		if e and e.id and (e.requiredLevel or 1) <= playerLevel then
+			if (C_Item.GetItemCount(e.id, false, false) or 0) > 0 then return "item:" .. e.id end
+		end
+	end
+	return nil
+end
+
+local function buildMacroString(drinkItem, manaPotionItem)
 	local resetType = "combat"
 	local recuperateString = ""
 
-	if addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks and addon.Recuperate and addon.Recuperate.name and addon.Recuperate.known and item ~= addon.Recuperate.name then
+	if addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks and addon.Recuperate and addon.Recuperate.name and addon.Recuperate.known then
 		recuperateString = "\n/cast " .. addon.Recuperate.name
 	end
 
-	if item == nil then
-		return "#showtooltip" .. recuperateString
+	local parts = { "#showtooltip" }
+
+	-- Use mana potion during combat, if enabled and found
+	if manaPotionItem then table.insert(parts, string.format("/use [combat] %s", manaPotionItem)) end
+
+	if drinkItem == nil then
+		if recuperateString ~= "" then table.insert(parts, recuperateString) end
+		return table.concat(parts, "\n")
 	else
-		return "#showtooltip \n/castsequence reset=" .. resetType .. " " .. item .. recuperateString
+		-- Keep legacy behavior: castsequence for drinks, optional recuperate
+		table.insert(parts, string.format("/castsequence reset=%s %s", resetType, drinkItem))
+		if recuperateString ~= "" then table.insert(parts, recuperateString) end
+		return table.concat(parts, "\n")
 	end
 end
 
@@ -47,23 +71,29 @@ local function unitHasMana()
 end
 
 local lastItemPlaced
+local lastManaPotionPlaced
 local lastAllowRecuperate
 local lastUseRecuperate
 local function addDrinks()
-	if not addon.Drinks.filteredDrinks or #addon.Drinks.filteredDrinks == 0 then return end
+	-- Determine best available drink (may be nil) and optional mana potion for combat
 	local foundItem = nil
-	for _, value in ipairs(addon.Drinks.filteredDrinks) do
+	for _, value in ipairs(addon.Drinks.filteredDrinks or {}) do
 		if value.getCount() > 0 then
 			foundItem = value.getId()
 			break
 			-- We only need the highest manadrink
 		end
 	end
-	if foundItem ~= lastItemPlaced or addon.db.allowRecuperate ~= lastAllowRecuperate or addon.db.useRecuperateWithDrinks ~= lastUseRecuperate then
+
+	local manaItem = nil
+	if addon.db.useManaPotionInCombat and unitHasMana() then manaItem = findBestManaPotion() end
+
+	if foundItem ~= lastItemPlaced or manaItem ~= lastManaPotionPlaced or addon.db.allowRecuperate ~= lastAllowRecuperate or addon.db.useRecuperateWithDrinks ~= lastUseRecuperate then
 		-- Avoid protected EditMacro during combat lockdown
 		if InCombatLockdown and InCombatLockdown() then return end
-		EditMacro(drinkMacroName, drinkMacroName, nil, buildMacroString(foundItem))
+		EditMacro(drinkMacroName, drinkMacroName, nil, buildMacroString(foundItem, manaItem))
 		lastItemPlaced = foundItem
+		lastManaPotionPlaced = manaItem
 		lastAllowRecuperate = addon.db.allowRecuperate
 		lastUseRecuperate = addon.db.useRecuperateWithDrinks
 	end
@@ -88,6 +118,7 @@ addon.functions.InitDBValue("ignoreBuffFood", true)
 addon.functions.InitDBValue("ignoreGemsEarthen", true)
 addon.functions.InitDBValue("allowRecuperate", true)
 addon.functions.InitDBValue("useRecuperateWithDrinks", false)
+addon.functions.InitDBValue("useManaPotionInCombat", false)
 addon.functions.updateAllowedDrinks()
 
 local frameLoad = CreateFrame("Frame")
@@ -159,6 +190,17 @@ local function addDrinkFrame(container)
 			func = function(self, _, value)
 				addon.db["allowRecuperate"] = value
 				addon.functions.updateAllowedDrinks()
+				addon.functions.updateAvailableDrinks(false)
+				container:ReleaseChildren()
+				addDrinkFrame(container)
+			end,
+		},
+		{
+			text = L["useManaPotionInCombat"],
+			var = "useManaPotionInCombat",
+			desc = L["useManaPotionInCombatDesc"],
+			func = function(self, _, value)
+				addon.db["useManaPotionInCombat"] = value
 				addon.functions.updateAvailableDrinks(false)
 				container:ReleaseChildren()
 				addDrinkFrame(container)
@@ -237,6 +279,8 @@ local function addDrinkFrame(container)
 			groupCore:AddChild(addon.functions.createSpacerAce())
 		end
 	end
+
+	-- Mana Potion list is curated in Drinks.lua; no additional UI needed
 
 	local sliderManaMinimum = addon.functions.createSliderAce(
 		L["Minimum mana restore for food"] .. ": " .. addon.db["minManaFoodValue"] .. "%",
