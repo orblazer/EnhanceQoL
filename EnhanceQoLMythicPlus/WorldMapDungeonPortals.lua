@@ -128,23 +128,24 @@ end
 local panel -- content frame
 local scrollBox
 local function EnsurePanel(parent)
-	if panel and panel:GetParent() ~= parent then panel:SetParent(parent) end
-	if panel then return panel end
+    local targetParent = QuestMapFrame or parent
+    if panel and panel:GetParent() ~= targetParent then panel:SetParent(targetParent) end
+    if panel then return panel end
 
-    panel = CreateFrame("Frame", "EQOLWorldMapDungeonPortalsPanel", parent, "BackdropTemplate")
+    panel = CreateFrame("Frame", "EQOLWorldMapDungeonPortalsPanel", targetParent, "BackdropTemplate")
     panel:ClearAllPoints()
 
 	local function anchorPanel()
-		local host = panel:GetParent() or parent
-		local ca = QuestMapFrame and QuestMapFrame.ContentsAnchor
-		panel:ClearAllPoints()
-		if ca and ca.GetWidth and ca:GetWidth() > 0 and ca:GetHeight() > 0 then
-			panel:SetPoint("TOPLEFT", ca, "TOPLEFT", 0, -29)
-			panel:SetPoint("BOTTOMRIGHT", ca, "BOTTOMRIGHT", -22, 0)
-		else
-			panel:SetAllPoints(host)
-		end
-	end
+        local host = panel:GetParent() or targetParent
+        local ca = QuestMapFrame and QuestMapFrame.ContentsAnchor
+        panel:ClearAllPoints()
+        if ca and ca.GetWidth and ca:GetWidth() > 0 and ca:GetHeight() > 0 then
+            panel:SetPoint("TOPLEFT", ca, "TOPLEFT", 0, 0)
+            panel:SetPoint("BOTTOMRIGHT", ca, "BOTTOMRIGHT", 0, 0)
+        else
+            panel:SetAllPoints(host)
+        end
+    end
 
     anchorPanel()
 	-- In case layout isn't ready on first tick, re-anchor shortly after
@@ -162,44 +163,33 @@ local function EnsurePanel(parent)
     panel:EnableMouseWheel(true)
     panel:Hide()
 
-    -- Background similar to Map Legend (fallbacks to black if atlas not found)
-    if not panel.Background then
-        local bg = panel:CreateTexture(nil, "BACKGROUND")
-        if bg.SetAtlas and bg:SetAtlas("QuestLog-main-background", true) then
-            -- Atlas applied
-        else
-            bg:SetColorTexture(0, 0, 0, 0.65)
-        end
-        bg:SetPoint("TOPLEFT")
-        bg:SetPoint("BOTTOMRIGHT")
-        panel.Background = bg
+    -- QuestLog-like border frame
+    if not panel.BorderFrame then
+        local bf = CreateFrame("Frame", nil, panel, "QuestLogBorderFrameTemplate")
+        bf:SetAllPoints(panel)
+        panel.BorderFrame = bf
     end
 
-    -- Subtle border fallback for clarity
-    if not panel._eqolBackdrop then
-        panel:SetBackdrop({
-            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-            tile = true,
-            tileSize = 16,
-            edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        panel:SetBackdropColor(0, 0, 0, 0.55)
-        panel._eqolBackdrop = true
-    end
-
-    local title = panel:CreateFontString(nil, "OVERLAY", "Game15Font_Shadow")
-    title:SetPoint("TOP", 0, -8)
+    local title = panel:CreateFontString(nil, "ARTWORK", "Game15Font_Shadow")
+    title:SetPoint("BOTTOM", panel.BorderFrame, "TOP", -1, 3)
     title:SetText(L["DungeonCompendium"] or "Dungeon Portals")
     panel.Title = title
 
 	-- Scroll area
-    local s = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    s:SetPoint("TOPLEFT", 8, -36)
-    s:SetPoint("BOTTOMRIGHT", -28, 10)
+    local s = CreateFrame("ScrollFrame", "EQOLWorldMapDungeonPortalsScrollFrame", panel, "ScrollFrameTemplate")
+    s:SetPoint("TOPLEFT")
+    s:SetPoint("BOTTOMRIGHT")
 
-    -- Ensure scrollbar is visible and nicely placed (like Map Legend)
+    -- Background inside the scrollframe similar to MapLegend
+    if not s.Background then
+        local bg = s:CreateTexture(nil, "BACKGROUND")
+        if bg.SetAtlas then bg:SetAtlas("QuestLog-main-background", true) end
+        bg:SetPoint("TOPLEFT")
+        bg:SetPoint("BOTTOMRIGHT")
+        s.Background = bg
+    end
+
+    -- Align scrollbar like MapLegend: x=+8, topY=+2, bottomY=-4
     if s.ScrollBar and not s._eqolBarAnchored then
         s.ScrollBar:ClearAllPoints()
         s.ScrollBar:SetPoint("TOPLEFT", s, "TOPRIGHT", 8, 2)
@@ -207,7 +197,7 @@ local function EnsurePanel(parent)
         s._eqolBarAnchored = true
     end
 
-    local content = CreateFrame("Frame", nil, s)
+    local content = CreateFrame("Frame", "EQOLWorldMapDungeonPortalsScrollChild", s)
     content:SetSize(1, 1)
     s:SetScrollChild(content)
 
@@ -331,8 +321,8 @@ local function PopulatePanel()
 		return
 	end
 
-	local y = -2
-	local xStart = 10
+    local y = -25 -- topPadding like MapLegend
+    local xStart = 12 -- leftPadding like MapLegend
 	local x = xStart
 	local scrollW = panel.Scroll:GetWidth()
 	if not scrollW or scrollW <= 1 then
@@ -384,7 +374,8 @@ local function PopulatePanel()
 		nextRow()
 	end
 
-	scrollBox:SetHeight(math.abs(y) + 44)
+    scrollBox:SetHeight(math.abs(y) + 44)
+    if panel.Scroll and panel.Scroll.UpdateScrollChildRect then panel.Scroll:UpdateScrollChildRect() end
 end
 
 -- Tab creation -------------------------------------------------------------
@@ -471,11 +462,8 @@ function f:TryInit()
 	if initialized then return end
 	if not QuestMapFrame then return end
 
-	local parent = QuestMapFrame
-	-- The legend/content area lives on the QuestMapFrame; reuse it as bounds
-	local hostPanel = parent.DetailsFrame or parent
-
-	EnsurePanel(hostPanel)
+    local parent = QuestMapFrame
+    EnsurePanel(parent)
 
 	-- Re-anchor our panel whenever the map resizes or the content anchor becomes valid
 	if not parent._eqolSizeHook then
@@ -483,15 +471,15 @@ function f:TryInit()
 			if panel and panel:GetParent() then
 				panel:ClearAllPoints()
 				local ca = QuestMapFrame and QuestMapFrame.ContentsAnchor
-				if ca and ca.GetWidth and ca:GetWidth() > 0 and ca:GetHeight() > 0 then
-					panel:SetPoint("TOPLEFT", ca, "TOPLEFT", 0, -29)
-					panel:SetPoint("BOTTOMRIGHT", ca, "BOTTOMRIGHT", -22, 0)
-				else
-					panel:SetAllPoints(panel:GetParent())
-				end
-				f:RefreshPanel()
-			end
-		end)
+                if ca and ca.GetWidth and ca:GetWidth() > 0 and ca:GetHeight() > 0 then
+                    panel:SetPoint("TOPLEFT", ca, "TOPLEFT", 0, 0)
+                    panel:SetPoint("BOTTOMRIGHT", ca, "BOTTOMRIGHT", 0, 0)
+                else
+                    panel:SetAllPoints(panel:GetParent())
+                end
+                f:RefreshPanel()
+            end
+        end)
 		parent._eqolSizeHook = true
 	end
 	if QuestMapFrame.ContentsAnchor and not QuestMapFrame.ContentsAnchor._eqolSizeHook then
@@ -499,15 +487,15 @@ function f:TryInit()
 			if panel and panel:GetParent() then
 				panel:ClearAllPoints()
 				local ca = QuestMapFrame and QuestMapFrame.ContentsAnchor
-				if ca and ca.GetWidth and ca:GetWidth() > 0 and ca:GetHeight() > 0 then
-					panel:SetPoint("TOPLEFT", ca, "TOPLEFT", 0, -29)
-					panel:SetPoint("BOTTOMRIGHT", ca, "BOTTOMRIGHT", -22, 0)
-				else
-					panel:SetAllPoints(panel:GetParent())
-				end
-				f:RefreshPanel()
-			end
-		end)
+                if ca and ca.GetWidth and ca:GetWidth() > 0 and ca:GetHeight() > 0 then
+                    panel:SetPoint("TOPLEFT", ca, "TOPLEFT", 0, 0)
+                    panel:SetPoint("BOTTOMRIGHT", ca, "BOTTOMRIGHT", 0, 0)
+                else
+                    panel:SetAllPoints(panel:GetParent())
+                end
+                f:RefreshPanel()
+            end
+        end)
 		QuestMapFrame.ContentsAnchor._eqolSizeHook = true
 	end
 
