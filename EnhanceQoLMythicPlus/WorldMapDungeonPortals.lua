@@ -166,39 +166,7 @@ local function EnsurePanel(parent)
     panel:EnableMouseWheel(true)
     panel:Hide()
 
-    -- QuestLog-like border frame
-    if not panel.BorderFrame then
-        local bf = CreateFrame("Frame", nil, panel, "QuestLogBorderFrameTemplate")
-        -- Anchor the border slightly outside the scrollframe to reveal artwork like MapLegend
-        bf:ClearAllPoints()
-        if panel.Scroll then
-            bf:SetPoint("TOPLEFT", panel.Scroll, "TOPLEFT", -3, 13)
-            bf:SetPoint("BOTTOMRIGHT", panel.Scroll, "BOTTOMRIGHT", 3, 0)
-        else
-            bf:SetAllPoints(panel)
-        end
-        -- Keep border art above background & content
-        bf:SetFrameStrata(panel:GetFrameStrata())
-        bf:SetFrameLevel((panel:GetFrameLevel() or 2) + 3)
-        panel.BorderFrame = bf
-    else
-        panel.BorderFrame:ClearAllPoints()
-        if panel.Scroll then
-            panel.BorderFrame:SetPoint("TOPLEFT", panel.Scroll, "TOPLEFT", -3, 13)
-            panel.BorderFrame:SetPoint("BOTTOMRIGHT", panel.Scroll, "BOTTOMRIGHT", 3, 0)
-        else
-            panel.BorderFrame:SetAllPoints(panel)
-        end
-        panel.BorderFrame:SetFrameStrata(panel:GetFrameStrata())
-        panel.BorderFrame:SetFrameLevel((panel:GetFrameLevel() or 2) + 3)
-    end
-
-    local title = panel:CreateFontString(nil, "OVERLAY", "Game15Font_Shadow")
-    -- Match MapLegend XML: BOTTOM of text to TOP of BorderFrame, x=-1, y=3
-    title:ClearAllPoints()
-    title:SetPoint("BOTTOM", panel.BorderFrame, "TOP", -1, 3)
-    title:SetText(L["DungeonCompendium"] or "Dungeon Portals")
-    panel.Title = title
+    -- Border & Title are positioned after Scroll creation
 
 	-- Scroll area
     local s = CreateFrame("ScrollFrame", "EQOLWorldMapDungeonPortalsScrollFrame", panel, "ScrollFrameTemplate")
@@ -213,13 +181,13 @@ local function EnsurePanel(parent)
         if bg.SetAtlas then bg:SetAtlas("QuestLog-main-background", true) end
         -- Inset background to reveal border artwork (similar to MapLegend)
         bg:ClearAllPoints()
-        bg:SetPoint("TOPLEFT", s, "TOPLEFT")
-        bg:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT")
+        bg:SetPoint("TOPLEFT", s, "TOPLEFT", 3, -1)
+        bg:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT", -3, 0)
         s.Background = bg
     else
         s.Background:ClearAllPoints()
-        s.Background:SetPoint("TOPLEFT", s, "TOPLEFT")
-        s.Background:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT")
+        s.Background:SetPoint("TOPLEFT", s, "TOPLEFT", 3, -13)
+        s.Background:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT", -3, 0)
     end
 
     -- Align scrollbar like MapLegend: x=+8, topY=+2, bottomY=-4
@@ -241,6 +209,36 @@ local function EnsurePanel(parent)
     local baseLevel = panel:GetFrameLevel() or 1
     s:SetFrameLevel(baseLevel + 1)
     content:SetFrameLevel(baseLevel + 2)
+
+    -- Now that Scroll exists, create/anchor the border precisely around it
+    if not panel.BorderFrame then
+        local bf = CreateFrame("Frame", nil, panel, "QuestLogBorderFrameTemplate")
+        bf:ClearAllPoints()
+        bf:SetPoint("TOPLEFT", s, "TOPLEFT", -3, 7)
+        bf:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT", 3, -6)
+        bf:SetFrameStrata(panel:GetFrameStrata())
+        bf:SetFrameLevel((panel:GetFrameLevel() or 2) + 3)
+        panel.BorderFrame = bf
+    else
+        local bf = panel.BorderFrame
+        bf:ClearAllPoints()
+        bf:SetPoint("TOPLEFT", s, "TOPLEFT", -3, 13)
+        bf:SetPoint("BOTTOMRIGHT", s, "BOTTOMRIGHT", 3, 0)
+        bf:SetFrameStrata(panel:GetFrameStrata())
+        bf:SetFrameLevel((panel:GetFrameLevel() or 2) + 3)
+    end
+
+    -- Create or re-anchor the title relative to the border top
+    if not panel.Title then
+        local title = panel:CreateFontString(nil, "OVERLAY", "Game15Font_Shadow")
+        title:SetPoint("BOTTOM", panel.BorderFrame, "TOP", -1, 3)
+        title:SetText(L["DungeonCompendium"] or "Dungeon Portals")
+        panel.Title = title
+    else
+        panel.Title:ClearAllPoints()
+        panel.Title:SetPoint("BOTTOM", panel.BorderFrame, "TOP", -1, 3)
+        panel.Title:SetText(L["DungeonCompendium"] or "Dungeon Portals")
+    end
 
 	scrollBox = content
 	-- Integrate with QuestLog display system
