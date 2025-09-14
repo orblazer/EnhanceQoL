@@ -800,16 +800,21 @@ function addon.MythicPlus.functions.setRandomHearthstone()
 	local randomIndex = math.random(1, #availableHearthstones)
 
 	local hs = availableHearthstones[randomIndex]
-	addon.MythicPlus.variables.portalCompendium[9999].spells = {
-		[RANDOM_HS_ID] = {
-			text = "HS",
-			isItem = hs.isItem or false,
-			itemID = hs.id,
-			isToy = hs.isToy or false,
-			toyID = hs.id,
-			isHearthstone = true,
-			icon = hs.icon,
-		},
+	-- Ensure we do not overwrite other HOME entries (e.g., class/race teleports)
+	local homeSection = addon.MythicPlus.variables.portalCompendium[9999]
+	if not homeSection then
+		addon.MythicPlus.variables.portalCompendium[9999] = { headline = HOME, spells = {} }
+		homeSection = addon.MythicPlus.variables.portalCompendium[9999]
+	end
+	homeSection.spells = homeSection.spells or {}
+	homeSection.spells[RANDOM_HS_ID] = {
+		text = "HS",
+		isItem = hs.isItem or false,
+		itemID = hs.id,
+		isToy = hs.isToy or false,
+		toyID = hs.id,
+		isHearthstone = true,
+		icon = hs.icon,
 	}
 end
 

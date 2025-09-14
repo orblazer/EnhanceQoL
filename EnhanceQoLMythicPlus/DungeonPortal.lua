@@ -501,6 +501,7 @@ function addon.MythicPlus.functions.BuildTeleportCompendiumSections()
 
     local favorites = addon.db.teleportFavorites or {}
     local baseComp = addon.MythicPlus.variables.portalCompendium or {}
+    local FAVORITES_SECTION_KEY = 10000 -- keep separate from HOME (9999)
 
     -- Split out favourites into a separate section, no expansion-level hide anymore
     local working = {}
@@ -516,12 +517,30 @@ function addon.MythicPlus.functions.BuildTeleportCompendiumSections()
         end
         working[k] = { headline = section.headline, spells = newSpells }
     end
-    if next(favSpells) then working[9999] = { headline = FAVORITES, spells = favSpells } end
+    if next(favSpells) then working[FAVORITES_SECTION_KEY] = { headline = FAVORITES, spells = favSpells } end
+
+    -- Merge class/race teleports (section [10]) into HOME (section [9999])
+    do
+        local home = working[9999]
+        if not home then
+            home = { headline = HOME, spells = {} }
+            working[9999] = home
+        end
+        home.spells = home.spells or {}
+        local classSec = working[10]
+        if classSec and classSec.spells then
+            for spellID, data in pairs(classSec.spells) do
+                if not home.spells[spellID] then home.spells[spellID] = data end
+            end
+            -- hide CLASS section from display, teleports live only in HOME
+            working[10] = nil
+        end
+    end
 
 	-- Sort sections high->low to mimic UI order
 	local sectionOrder = {}
-	for k in pairs(working) do table.insert(sectionOrder, k) end
-	table.sort(sectionOrder, function(a, b) return a > b end)
+    for k in pairs(working) do table.insert(sectionOrder, k) end
+    table.sort(sectionOrder, function(a, b) return a > b end)
 
 	local out = {}
 	for _, k in ipairs(sectionOrder) do
