@@ -482,7 +482,7 @@ local function PopulatePanel()
 
 	-- Layout metrics similar to MapLegendScrollFrame
 	local leftPadding = 12
-	local topPadding = 25
+	local topPadding = 10
 	local categorySpacing = 10
 	local buttonSpacingY = 5
 	local stride = 2 -- 2 columns
@@ -505,6 +505,7 @@ local function PopulatePanel()
 		local titleFS = category:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		titleFS:SetPoint("TOPLEFT", 0, 0)
 		titleFS:SetText(section.title or "")
+		titleFS:SetFont(addon.variables.defaultFont, 13, "OUTLINE") -- Setzt die Schriftart, -größe und -stil (OUTLINE)
 
 		-- build buttons for this category
 		local buttons = {}
