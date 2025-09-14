@@ -42,6 +42,8 @@
 - **Teleport Compendium UI:** Modern world-map integration with a native-feeling UI
   _(seamless; looks and behaves like a Blizzard panel)_
 
+- **Item level upgrades:** Option to show a small arrow on items, that are better than your currently equipped items
+
 ---
 
 ## [4.16.0] – 2025-09-13

@@ -2369,6 +2369,20 @@ local function addBagFrame(container)
 		},
 		{
 			parent = BAGSLOT,
+			var = "showUpgradeArrowOnBagItems",
+			text = L["showUpgradeArrowOnBagItems"],
+			type = "CheckBox",
+			callback = function(self, _, value)
+				addon.db["showUpgradeArrowOnBagItems"] = value
+				for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
+					if frame:IsShown() then addon.functions.updateBags(frame) end
+				end
+				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
+				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
+			end,
+		},
+		{
+			parent = BAGSLOT,
 			var = "fadeBagQualityIcons",
 			text = L["fadeBagQualityIcons"],
 			type = "CheckBox",
@@ -3629,6 +3643,10 @@ local function updateMerchantButtonInfo()
 			local itemLink = GetMerchantItemLink(itemIndex)
 
 			if itemButton then
+				-- Clear any stale overlays from recycled buttons
+				if itemButton.ItemUpgradeArrow then itemButton.ItemUpgradeArrow:Hide() end
+				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
+				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
 				if itemLink and itemLink:find("item:") then
 					local eItem = Item:CreateFromItemLink(itemLink)
 					eItem:ContinueOnItemLoad(function()
@@ -3665,10 +3683,82 @@ local function updateMerchantButtonInfo()
 							end
 
 							local color = eItem:GetItemQualityColor()
-							itemButton.ItemLevelText:SetText(eItem:GetCurrentItemLevel())
+							local candidateIlvl = eItem:GetCurrentItemLevel()
+							itemButton.ItemLevelText:SetText(candidateIlvl)
 							itemButton.ItemLevelText:SetTextColor(color.r, color.g, color.b, 1)
 							itemButton.ItemLevelText:Show()
 							local bType
+
+							-- Upgrade arrow for Merchant items
+							if addon.db["showUpgradeArrowOnBagItems"] then
+								local function getEquipSlotsFor(equipLoc)
+									if equipLoc == "INVTYPE_FINGER" then
+										return { 11, 12 }
+									elseif equipLoc == "INVTYPE_TRINKET" then
+										return { 13, 14 }
+									elseif equipLoc == "INVTYPE_HEAD" then
+										return { 1 }
+									elseif equipLoc == "INVTYPE_NECK" then
+										return { 2 }
+									elseif equipLoc == "INVTYPE_SHOULDER" then
+										return { 3 }
+									elseif equipLoc == "INVTYPE_CLOAK" then
+										return { 15 }
+									elseif equipLoc == "INVTYPE_CHEST" or equipLoc == "INVTYPE_ROBE" then
+										return { 5 }
+									elseif equipLoc == "INVTYPE_WRIST" then
+										return { 9 }
+									elseif equipLoc == "INVTYPE_HAND" then
+										return { 10 }
+									elseif equipLoc == "INVTYPE_WAIST" then
+										return { 6 }
+									elseif equipLoc == "INVTYPE_LEGS" then
+										return { 7 }
+									elseif equipLoc == "INVTYPE_FEET" then
+										return { 8 }
+									elseif equipLoc == "INVTYPE_WEAPONMAINHAND" or equipLoc == "INVTYPE_2HWEAPON" or equipLoc == "INVTYPE_RANGED" or equipLoc == "INVTYPE_RANGEDRIGHT" then
+										return { 16 }
+									elseif equipLoc == "INVTYPE_WEAPONOFFHAND" or equipLoc == "INVTYPE_HOLDABLE" or equipLoc == "INVTYPE_SHIELD" then
+										return { 17 }
+									elseif equipLoc == "INVTYPE_WEAPON" then
+										return { 16, 17 }
+									end
+									return nil
+								end
+
+								local invSlot = select(4, C_Item.GetItemInfoInstant(itemLink))
+								local slots = getEquipSlotsFor(invSlot)
+								local baseline
+								if slots and #slots > 0 then
+									for _, s in ipairs(slots) do
+										local eqLink = GetInventoryItemLink("player", s)
+										local eqIlvl = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
+										if baseline == nil then baseline = eqIlvl else baseline = math.min(baseline, eqIlvl) end
+									end
+								end
+								local isUpgrade = baseline ~= nil and candidateIlvl and candidateIlvl > baseline
+								if isUpgrade then
+								if not itemButton.ItemUpgradeIcon then
+									itemButton.ItemUpgradeIcon = itemButton:CreateTexture(nil, "OVERLAY")
+									itemButton.ItemUpgradeIcon:SetSize(14, 14)
+								end
+								itemButton.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
+								itemButton.ItemUpgradeIcon:ClearAllPoints()
+									local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+									if pos == "TOPRIGHT" then
+									itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
+									elseif pos == "TOPLEFT" then
+									itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+									elseif pos == "BOTTOMLEFT" then
+									itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+									else
+									itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
+									end
+								itemButton.ItemUpgradeIcon:Show()
+								elseif itemButton.ItemUpgradeIcon then
+									itemButton.ItemUpgradeIcon:Hide()
+								end
+							end
 
 							if addon.db["showBindOnBagItems"] then
 								local data = C_TooltipInfo.GetMerchantItem(itemIndex)
@@ -3808,6 +3898,7 @@ local function updateBuybackButtonInfo()
 				end)
 			else
 				if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
+				if itemButton.ItemUpgradeArrow then itemButton.ItemUpgradeArrow:Hide() end
 				if itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
 			end
 		end
@@ -3818,6 +3909,9 @@ local function updateFlyoutButtonInfo(button)
 	if not button then return end
 
 	if addon.db["showIlvlOnCharframe"] then
+		-- Reset stale overlays on recycled flyout buttons
+	if button.ItemUpgradeArrow then button.ItemUpgradeArrow:Hide() end
+	if button.ItemUpgradeIcon then button.ItemUpgradeIcon:Hide() end
 		local location = button.location
 		if not location then return end
 
@@ -3862,6 +3956,77 @@ local function updateFlyoutButtonInfo(button)
 					button.ItemLevelText:SetTextColor(quality.r, quality.g, quality.b, 1)
 					button.ItemLevelText:Show()
 
+					-- Upgrade arrow for Flyout items
+					if addon.db["showUpgradeArrowOnBagItems"] and itemLink then
+						local function getEquipSlotsFor(equipLoc)
+							if equipLoc == "INVTYPE_FINGER" then
+								return { 11, 12 }
+							elseif equipLoc == "INVTYPE_TRINKET" then
+								return { 13, 14 }
+							elseif equipLoc == "INVTYPE_HEAD" then
+								return { 1 }
+							elseif equipLoc == "INVTYPE_NECK" then
+								return { 2 }
+							elseif equipLoc == "INVTYPE_SHOULDER" then
+								return { 3 }
+							elseif equipLoc == "INVTYPE_CLOAK" then
+								return { 15 }
+							elseif equipLoc == "INVTYPE_CHEST" or equipLoc == "INVTYPE_ROBE" then
+								return { 5 }
+							elseif equipLoc == "INVTYPE_WRIST" then
+								return { 9 }
+							elseif equipLoc == "INVTYPE_HAND" then
+								return { 10 }
+							elseif equipLoc == "INVTYPE_WAIST" then
+								return { 6 }
+							elseif equipLoc == "INVTYPE_LEGS" then
+								return { 7 }
+							elseif equipLoc == "INVTYPE_FEET" then
+								return { 8 }
+							elseif equipLoc == "INVTYPE_WEAPONMAINHAND" or equipLoc == "INVTYPE_2HWEAPON" or equipLoc == "INVTYPE_RANGED" or equipLoc == "INVTYPE_RANGEDRIGHT" then
+								return { 16 }
+							elseif equipLoc == "INVTYPE_WEAPONOFFHAND" or equipLoc == "INVTYPE_HOLDABLE" or equipLoc == "INVTYPE_SHIELD" then
+								return { 17 }
+							elseif equipLoc == "INVTYPE_WEAPON" then
+								return { 16, 17 }
+							end
+							return nil
+						end
+
+						local invSlot = select(4, C_Item.GetItemInfoInstant(itemLink))
+						local slots = getEquipSlotsFor(invSlot)
+						local baseline
+						if slots and #slots > 0 then
+							for _, s in ipairs(slots) do
+								local eqLink = GetInventoryItemLink("player", s)
+								local eqIlvl = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
+								if baseline == nil then baseline = eqIlvl else baseline = math.min(baseline, eqIlvl) end
+							end
+						end
+						local isUpgrade = baseline ~= nil and itemLevel and itemLevel > baseline
+						if isUpgrade then
+							if not button.ItemUpgradeIcon then
+								button.ItemUpgradeIcon = button:CreateTexture(nil, "OVERLAY")
+								button.ItemUpgradeIcon:SetSize(14, 14)
+							end
+							button.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
+							button.ItemUpgradeIcon:ClearAllPoints()
+							local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+							if pos == "TOPRIGHT" then
+								button.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
+							elseif pos == "TOPLEFT" then
+								button.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
+							elseif pos == "BOTTOMLEFT" then
+								button.ItemUpgradeIcon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+							else
+								button.ItemUpgradeIcon:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
+							end
+							button.ItemUpgradeIcon:Show()
+						elseif button.ItemUpgradeIcon then
+							button.ItemUpgradeIcon:Hide()
+						end
+					end
+
 					local bType
 					if bag and slot then
 						if addon.db["showBindOnBagItems"] then
@@ -3902,12 +4067,16 @@ local function updateFlyoutButtonInfo(button)
 					end
 				end)
 			end
-		elseif button.ItemLevelText then
-			if button.ItemBoundType then button.ItemBoundType:Hide() end
-			button.ItemLevelText:Hide()
-		end
+			elseif button.ItemLevelText then
+				if button.ItemBoundType then button.ItemBoundType:Hide() end
+			if button.ItemUpgradeArrow then button.ItemUpgradeArrow:Hide() end
+			if button.ItemUpgradeIcon then button.ItemUpgradeIcon:Hide() end
+				button.ItemLevelText:Hide()
+			end
 	elseif button.ItemLevelText then
 		if button.ItemBoundType then button.ItemBoundType:Hide() end
+	if button.ItemUpgradeArrow then button.ItemUpgradeArrow:Hide() end
+	if button.ItemUpgradeIcon then button.ItemUpgradeIcon:Hide() end
 		button.ItemLevelText:Hide()
 	end
 end
@@ -5214,6 +5383,7 @@ local function initCharacter()
 	addon.functions.InitDBValue("showBagFilterMenu", false)
 	addon.functions.InitDBValue("bagFilterDockFrame", true)
 	addon.functions.InitDBValue("showBindOnBagItems", false)
+	addon.functions.InitDBValue("showUpgradeArrowOnBagItems", false)
 	addon.functions.InitDBValue("bagIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("charIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("fadeBagQualityIcons", false)
