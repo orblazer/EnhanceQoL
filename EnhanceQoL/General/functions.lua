@@ -572,17 +572,17 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 							itemButton.ItemUpgradeIcon:SetSize(14, 14)
 						end
 						itemButton.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-						itemButton.ItemUpgradeIcon:ClearAllPoints()
-						local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-						if pos == "TOPRIGHT" then
-							itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-						elseif pos == "TOPLEFT" then
-							itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-						elseif pos == "BOTTOMLEFT" then
-							itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-						else -- BOTTOMRIGHT
-							itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-						end
+                    itemButton.ItemUpgradeIcon:ClearAllPoints()
+                    local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
+                    if posUp == "TOPRIGHT" then
+                        itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
+                    elseif posUp == "TOPLEFT" then
+                        itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+                    elseif posUp == "BOTTOMLEFT" then
+                        itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+                    else -- BOTTOMRIGHT
+                        itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
+                    end
 						itemButton.ItemUpgradeIcon:Show()
 					else
 						if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end

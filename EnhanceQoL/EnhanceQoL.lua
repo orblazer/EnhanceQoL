@@ -2379,6 +2379,9 @@ local function addBagFrame(container)
 				end
 				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
 				if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
+				-- Rebuild UI to show/hide the upgrade icon position dropdown
+				container:ReleaseChildren()
+				addBagFrame(container)
 			end,
 		},
 		{
@@ -2435,6 +2438,25 @@ local function addBagFrame(container)
 	dropIlvlPos:SetValue(addon.db["bagIlvlPosition"])
 	dropIlvlPos:SetRelativeWidth(0.4)
 	groupCore:AddChild(dropIlvlPos)
+
+	if addon.db["showUpgradeArrowOnBagItems"] then
+		local dropUpPos = addon.functions.createDropdownAce(L["bagUpgradeIconPosition"], list, order, function(self, _, value)
+			addon.db["bagUpgradeIconPosition"] = value
+			for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
+				if frame and frame:IsShown() then addon.functions.updateBags(frame) end
+			end
+			if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
+			if _G.BankPanel and _G.BankPanel:IsShown() then addon.functions.updateBags(_G.BankPanel) end
+			if MerchantFrame and MerchantFrame:IsShown() then
+				if MerchantFrame_UpdateMerchantInfo then MerchantFrame_UpdateMerchantInfo() end
+				if MerchantFrame_UpdateBuybackInfo then MerchantFrame_UpdateBuybackInfo() end
+			end
+			if EquipmentFlyoutFrame and EquipmentFlyoutFrame:IsShown() and EquipmentFlyout_UpdateItems then EquipmentFlyout_UpdateItems() end
+		end)
+		dropUpPos:SetValue(addon.db["bagUpgradeIconPosition"])
+		dropUpPos:SetRelativeWidth(0.4)
+		groupCore:AddChild(dropUpPos)
+	end
 
 	if addon.db["enableMoneyTracker"] then
 		local groupMoney = addon.functions.createContainer("InlineGroup", "List")
@@ -3743,17 +3765,17 @@ local function updateMerchantButtonInfo()
 									itemButton.ItemUpgradeIcon:SetSize(14, 14)
 								end
 								itemButton.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-								itemButton.ItemUpgradeIcon:ClearAllPoints()
-									local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-									if pos == "TOPRIGHT" then
-									itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-									elseif pos == "TOPLEFT" then
-									itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-									elseif pos == "BOTTOMLEFT" then
-									itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-									else
-									itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-									end
+                            itemButton.ItemUpgradeIcon:ClearAllPoints()
+                            local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
+                            if posUp == "TOPRIGHT" then
+                                itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
+                            elseif posUp == "TOPLEFT" then
+                                itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+                            elseif posUp == "BOTTOMLEFT" then
+                                itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+                            else
+                                itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
+                            end
 								itemButton.ItemUpgradeIcon:Show()
 								elseif itemButton.ItemUpgradeIcon then
 									itemButton.ItemUpgradeIcon:Hide()
@@ -4026,17 +4048,17 @@ local function updateFlyoutButtonInfo(button)
 								button.ItemUpgradeIcon:SetSize(14, 14)
 							end
 							button.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-							button.ItemUpgradeIcon:ClearAllPoints()
-							local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-							if pos == "TOPRIGHT" then
-								button.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
-							elseif pos == "TOPLEFT" then
-								button.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-							elseif pos == "BOTTOMLEFT" then
-								button.ItemUpgradeIcon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-							else
-								button.ItemUpgradeIcon:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
-							end
+                            button.ItemUpgradeIcon:ClearAllPoints()
+                            local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
+                            if posUp == "TOPRIGHT" then
+                                button.ItemUpgradeIcon:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
+                            elseif posUp == "TOPLEFT" then
+                                button.ItemUpgradeIcon:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+                            elseif posUp == "BOTTOMLEFT" then
+                                button.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
+                            else
+                                button.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
+                            end
 							button.ItemUpgradeIcon:Show()
 						elseif button.ItemUpgradeIcon then
 							button.ItemUpgradeIcon:Hide()
@@ -5401,6 +5423,7 @@ local function initCharacter()
 	addon.functions.InitDBValue("showBindOnBagItems", false)
 	addon.functions.InitDBValue("showUpgradeArrowOnBagItems", false)
 	addon.functions.InitDBValue("bagIlvlPosition", "TOPRIGHT")
+	addon.functions.InitDBValue("bagUpgradeIconPosition", "BOTTOMRIGHT")
 	addon.functions.InitDBValue("charIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("fadeBagQualityIcons", false)
 	addon.functions.InitDBValue("showInfoOnInspectFrame", false)

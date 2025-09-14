@@ -777,6 +777,7 @@ local function addTeleportFrame(container)
 			var = "teleportsWorldMapUseModern",
 			func = function(self, _, value)
 				addon.db["teleportsWorldMapUseModern"] = value
+				if value == false then addon.variables.requireReload = true end
 				container:ReleaseChildren()
 				addTeleportFrame(container)
 				-- World map panel will initialize itself on next map open or immediately if visible
