@@ -242,24 +242,25 @@ local function CreateSecureSpellButton(parent, entry)
         end
     else
         b:SetAttribute("type1", "spell")
-        b:SetAttribute("spell", entry.spellID)
-        b:SetAttribute("unit", "player") -- ensure self-cast where relevant
+        b:SetAttribute("spell1", entry.spellID)
+        b:SetAttribute("unit", "player")
+        b:SetAttribute("checkselfcast", true)
     end
 
-    -- Favorite toggle (Right click) — also register Down to support ActionButtonUseKeyDown
+    -- Favorite toggle after secure click resolves
     b:RegisterForClicks("AnyDown", "AnyUp")
-    b:SetScript("OnClick", function(self, btn)
-		if btn == "RightButton" then
-			local favs = addon.db.teleportFavorites or {}
-			if favs[self.entry.spellID] then
-				favs[self.entry.spellID] = nil
-			else
-				favs[self.entry.spellID] = true
-			end
-			addon.db.teleportFavorites = favs
-			f:RefreshPanel() -- rebuild list to reflect favorite
-		end
-	end)
+    b:SetScript("PostClick", function(self, btn)
+        if btn == "RightButton" then
+            local favs = addon.db.teleportFavorites or {}
+            if favs[self.entry.spellID] then
+                favs[self.entry.spellID] = nil
+            else
+                favs[self.entry.spellID] = true
+            end
+            addon.db.teleportFavorites = favs
+            f:RefreshPanel()
+        end
+    end)
 
 	b:SetScript("OnEnter", function(self)
 		if not addon.db["portalShowTooltip"] then return end
@@ -358,13 +359,14 @@ local function CreateLegendRowButton(parent, entry, width, height)
         end
     else
         b:SetAttribute("type1", "spell")
-        b:SetAttribute("spell", entry.spellID)
-        b:SetAttribute("unit", "player") -- ensure self-cast where relevant
+        b:SetAttribute("spell1", entry.spellID)
+        b:SetAttribute("unit", "player")
+        b:SetAttribute("checkselfcast", true)
     end
 
-    -- Right click: toggle favorite (register both down/up to respect ActionButtonUseKeyDown)
+    -- Right click: toggle favorite after secure click resolves
     b:RegisterForClicks("AnyDown", "AnyUp")
-    b:SetScript("OnClick", function(self, btn)
+    b:SetScript("PostClick", function(self, btn)
         if btn == "RightButton" then
             local favs = addon.db.teleportFavorites or {}
             if favs[self.entry.spellID] then
