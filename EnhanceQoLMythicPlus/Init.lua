@@ -613,7 +613,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[80256] = { text = "HS", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
 			[59317] = { text = "HS", isToy = true, toyID = 58487, isHearthstone = true, icon = 133743, map = 125 },
 
-			[54406] = { text = "HS", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415 },
+			[54406] = { text = "HS", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415, equipSlot = 11 },
 
 			[89597] = { text = "HS", isItem = true, itemID = 63379, isHearthstone = true, icon = 456571, faction = FACTION_HORDE, equipSlot = 19 },
 			[89598] = { text = "HS", isItem = true, itemID = 63378, isHearthstone = true, icon = 456564, faction = FACTION_ALLIANCE, equipSlot = 19 },
@@ -683,8 +683,8 @@ addon.MythicPlus.variables.portalCompendium = {
 			[49844] = { text = "HS", isItem = true, itemID = 37863, isHearthstone = true, icon = 133015 }, -- Grim Guzzler
 			[71436] = { text = "HS", isItem = true, itemID = 50287, isHearthstone = true, icon = 133015, equipSlot = 8 }, -- Boots of the Bay
 
-			[139437] = { text = "BP", isItem = true, itemID = 95051, isHearthstone = true, icon = 133345, faction = FACTION_ALLIANCE },
-			[139432] = { text = "BA", isItem = true, itemID = 95050, isHearthstone = true, icon = 133345, faction = FACTION_HORDE },
+			[139437] = { text = "BP", isItem = true, itemID = 95051, isHearthstone = true, icon = 133345, faction = FACTION_ALLIANCE, equipSlot = 11 },
+			[139432] = { text = "BA", isItem = true, itemID = 95050, isHearthstone = true, icon = 133345, faction = FACTION_HORDE, equipSlot = 11 },
 		},
 	},
 	[10] = {
