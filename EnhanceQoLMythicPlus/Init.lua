@@ -620,10 +620,10 @@ addon.MythicPlus.variables.portalCompendium = {
 			[424142] = { text = "TOTT", cId = { [456] = true } },
 			[410080] = { text = "VP", cId = { [438] = true } },
 			-- Tol Barad (Cata)
-			[88344] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_ALLIANCE },
-			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE },
-			[88346] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE },
-			[88342] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE },
+			[88342] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_ALLIANCE },
+			[88346] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE },
+			[88344] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE },
+			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE },
 
 			[80256] = { text = "DH", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
 			[59317] = { text = "VC", isToy = true, toyID = 43824, isHearthstone = true, icon = 133743, map = 125 },
