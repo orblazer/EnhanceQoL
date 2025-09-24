@@ -513,8 +513,8 @@ addon.MythicPlus.variables.portalCompendium = {
 			[432257] = { text = "ASC", isRaid = true, locID = 2133, x = 0.4846, y = 0.1208, zoneID = 2166 },
 			[386379] = { text = "ENGI", isToy = true, toyID = 198156, isEngineering = true, zoneID = 1978 },
 			-- Valdrakken (Dragonflight)
-			[395277] = { text = "Vald", isClassTP = "MAGE", locID = 2112, x = 0.5432, y = 0.4788 },
-			[395289] = { text = "Vald", isMagePortal = true, locID = 2112, x = 0.5432, y = 0.4788 },
+			[395277] = { text = "Vald", isClassTP = "MAGE", locID = 2112, x = 0.5432, y = 0.4788, zoneID = 2112 },
+			[395289] = { text = "Vald", isMagePortal = true, locID = 2112, x = 0.5432, y = 0.4788, zoneID = 2112 },
 		},
 	},
 	[100] = {
@@ -605,7 +605,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[393764] = { text = "HOV", cId = { [200] = true }, locID = 634, x = 0.7254, y = 0.7047, zoneID = 704 },
 			[410078] = { text = "NL", cId = { [206] = true }, locID = 650, x = 0.4942, y = 0.6832, zoneID = 731 },
 			[373262] = { text = "KARA", cId = { [227] = true, [234] = true }, locID = 42, x = 0.4705, y = 0.7485, zoneID = 350 },
-			[250796] = { text = "ENGI", isToy = true, toyID = 151652, isEngineering = true },
+			[250796] = { text = "ENGI", isToy = true, toyID = 151652, isEngineering = true, zoneID = 905 },
 			[222695] = { text = "DALA", isToy = true, toyID = 140192, isHearthstone = true, icon = 1444943, locID = 627, x = 0.6042, y = 0.4440, zoneID = 627 },
 			-- Dalaran (Broken Isles, Legion)
 			[224869] = { text = "DalB", isClassTP = "MAGE", locID = 627, x = 0.6042, y = 0.4440, zoneID = 627 },
@@ -613,7 +613,18 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[227334] = { text = "FMW", isItem = true, itemID = 141605, isHearthstone = true, icon = 132161 },
 			[82674] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 64457, isHearthstone = true, icon = 458240 },
-			[223444] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isToy = true, toyID = 140324, isHearthstone = true, icon = 237445, map = 680, locID = 680, x = 0.3732, y = 0.4405 },
+			[223444] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isToy = true,
+				toyID = 140324,
+				isHearthstone = true,
+				icon = 237445,
+				map = 680,
+				locID = 680,
+				x = 0.3732,
+				y = 0.4405,
+				zoneID = 680,
+			},
 
 			[200061] = { text = "ENGI", isItem = true, itemID = { 144341, 132523 }, isEngineering = true, icon = 1405815, isReaves = true, zoneID = 619 },
 			[231054] = {
@@ -633,48 +644,46 @@ addon.MythicPlus.variables.portalCompendium = {
 	[70] = {
 		headline = EXPANSION_NAME5,
 		spells = {
-			[159897] = { text = "AUCH", cId = { [164] = true }, locID = 535, x = 0.4619, y = 0.7395 },
-			[159895] = { text = "BSM", cId = { [163] = true }, locID = 525, x = 0.4978, y = 0.2464 },
-			[159901] = { text = "EB", cId = { [168] = true }, locID = 543, x = 0.5946, y = 0.4555 },
-			[159900] = { text = "GD", cId = { [166] = true }, locID = 543, x = 0.5504, y = 0.3174 },
-			[159896] = { text = "ID", cId = { [169] = true }, locID = 543, x = 0.4536, y = 0.1345 },
-			[159899] = { text = "SBG", cId = { [165] = true }, locID = 539, x = 0.3185, y = 0.4257 },
-			[159898] = { text = "SR", cId = { [161] = true }, locID = 542, x = 0.3555, y = 0.3360 },
-			[159902] = { text = "UBRS", cId = { [167] = true }, locID = 36, x = 0.2013, y = 0.2600 },
-			[163830] = { text = "ENGI", isToy = true, toyID = 112059, isEngineering = true },
-			[171253] = { text = "GARR", isToy = true, toyID = 110560, isHearthstone = true },
-			[189838] = { text = "GARR", isItem = true, itemID = 128353, icon = 134234, isHearthstone = true },
+			[159897] = { text = "AUCH", cId = { [164] = true }, locID = 535, x = 0.4619, y = 0.7395, zoneID = 593 },
+			[159895] = { text = "BSM", cId = { [163] = true }, locID = 525, x = 0.4978, y = 0.2464, zoneID = 573 },
+			[159901] = { text = "EB", cId = { [168] = true }, locID = 543, x = 0.5946, y = 0.4555, zoneID = 620 },
+			[159900] = { text = "GD", cId = { [166] = true }, locID = 543, x = 0.5504, y = 0.3174, zoneID = 606 },
+			[159896] = { text = "ID", cId = { [169] = true }, locID = 543, x = 0.4536, y = 0.1345, zoneID = 595 },
+			[159899] = { text = "SBG", cId = { [165] = true }, locID = 539, x = 0.3185, y = 0.4257, zoneID = 574 },
+			[159898] = { text = "SR", cId = { [161] = true }, locID = 542, x = 0.3555, y = 0.3360, zoneID = 601 },
+			[159902] = { text = "UBRS", cId = { [167] = true }, locID = 36, x = 0.2013, y = 0.2600, zoneID = 617 },
+			[163830] = { text = "ENGI", isToy = true, toyID = 112059, isEngineering = true, zoneID = 572 },
+			[171253] = { text = GARRISON_LOCATION_TOOLTIP, isToy = true, toyID = 110560, isHearthstone = true },
+			[189838] = { text = GARRISON_LOCATION_TOOLTIP, isItem = true, itemID = 128353, icon = 134234, isHearthstone = true },
 
-			[49359] = { text = "THER", isClassTP = "MAGE", faction = FACTION_ALLIANCE, locID = 70, x = 0.6628, y = 0.4828 },
-			[49360] = { text = "THER", isMagePortal = true, faction = FACTION_ALLIANCE, locID = 70, x = 0.6628, y = 0.4828 },
-			[49358] = { text = "STON", isClassTP = "MAGE", faction = FACTION_HORDE, locID = 51, x = 0.4703, y = 0.5505 },
-			[49361] = { text = "STON", isMagePortal = true, faction = FACTION_HORDE, locID = 51, x = 0.4703, y = 0.5505 },
+			[49359] = { text = "THER", isClassTP = "MAGE", faction = FACTION_ALLIANCE, locID = 70, x = 0.6628, y = 0.4828, zoneID = 70 },
+			[49360] = { text = "THER", isMagePortal = true, faction = FACTION_ALLIANCE, locID = 70, x = 0.6628, y = 0.4828, zoneID = 70 },
+			[49358] = { text = "STON", isClassTP = "MAGE", faction = FACTION_HORDE, locID = 51, x = 0.4703, y = 0.5505, zoneID = 51 },
+			[49361] = { text = "STON", isMagePortal = true, faction = FACTION_HORDE, locID = 51, x = 0.4703, y = 0.5505, zoneID = 51 },
 
-			[176248] = { text = "STORM", isClassTP = "MAGE", faction = FACTION_ALLIANCE, locID = 622, x = 0.4715, y = 0.4759 },
-			[176246] = { text = "STORM", isMagePortal = true, faction = FACTION_ALLIANCE, locID = 622, x = 0.4715, y = 0.4759 },
-			[176242] = { text = "WARS", isClassTP = "MAGE", faction = FACTION_HORDE, locID = 624, x = 0.5217, y = 0.4921 },
-			[176244] = { text = "WARS", isMagePortal = true, faction = FACTION_HORDE, locID = 624, x = 0.5217, y = 0.4921 },
+			[176248] = { text = "STORM", isClassTP = "MAGE", faction = FACTION_ALLIANCE, locID = 622, x = 0.4715, y = 0.4759, zoneID = 622 },
+			[176246] = { text = "STORM", isMagePortal = true, faction = FACTION_ALLIANCE, locID = 622, x = 0.4715, y = 0.4759, zoneID = 622 },
+			[176242] = { text = "WARS", isClassTP = "MAGE", faction = FACTION_HORDE, locID = 624, x = 0.5217, y = 0.4921, zoneID = 624 },
+			[176244] = { text = "WARS", isMagePortal = true, faction = FACTION_HORDE, locID = 624, x = 0.5217, y = 0.4921, zoneID = 624 },
 		},
 	},
 	[60] = {
 		headline = EXPANSION_NAME4,
 		spells = {
-			[131225] = { text = "GSS", cId = { [57] = true } },
-			[131222] = { text = "MP", cId = { [60] = true } },
-			[131232] = { text = "SCHO", cId = { [76] = true } },
-			[131231] = { text = "SH", cId = { [77] = true } },
-			[131229] = { text = "SM", cId = { [78] = true } },
-			[131228] = { text = "SN", cId = { [59] = true } },
-			[131206] = { text = "SPM", cId = { [58] = true } },
-			[131205] = { text = "SB", cId = { [56] = true } },
-			[131204] = { text = "TJS", cId = { [2] = true } },
-			[87215] = { text = "ENGI", isToy = true, toyID = 87215, isEngineering = true }, -- spellID ist noch falsch
-			[120145] = { text = "DALA", isClassTP = "MAGE" },
-			[120146] = { text = "DALA", isMagePortal = true },
-			[132621] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_ALLIANCE },
-			[132620] = { text = "VALE", isMagePortal = true, faction = FACTION_ALLIANCE },
-			[132627] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_HORDE },
-			[132625] = { text = "VALE", isMagePortal = true, faction = FACTION_HORDE },
+			[131225] = { text = "GSS", cId = { [57] = true }, x = 0.1547, y = 0.7234, zoneID = 437, locID = 1530 },
+			[131222] = { text = "MP", cId = { [60] = true }, x = 0.8051, y = 0.3289, zoneID = 453, locID = 390 },
+			[131232] = { text = "SCHO", cId = { [76] = true }, x = 0.6975, y = 0.7352, zoneID = 476, locID = 22 },
+			[131231] = { text = "SH", cId = { [77] = true }, x = 0.8529, y = 0.3246, zoneID = 431, locID = 18 },
+			[131229] = { text = "SM", cId = { [78] = true }, x = 0.8476, y = 0.3035, zoneID = 435, locID = 18 },
+			[131228] = { text = "SN", cId = { [59] = true }, x = 0.3460, y = 0.8149, zoneID = 458, locID = 388 },
+			[131206] = { text = "SPM", cId = { [58] = true }, x = 0.3663, y = 0.4734, zoneID = 443, locID = 379 },
+			[131205] = { text = "SB", cId = { [56] = true }, x = 0.3603, y = 0.6911, zoneID = 440, locID = 376 },
+			[131204] = { text = "TJS", cId = { [2] = true }, x = 0.5612, y = 0.5781, zoneID = 429, locID = 371 },
+			[126755] = { text = "ENGI", isToy = true, toyID = 87215, isEngineering = true, zoneID = 424 },
+			[132621] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_ALLIANCE, x = 0.8637, y = 0.6319, zoneID = 1530, locID = 1530 },
+			[132620] = { text = "VALE", isMagePortal = true, faction = FACTION_ALLIANCE, x = 0.8637, y = 0.6319, zoneID = 1530, locID = 1530 },
+			[132627] = { text = "VALE", isClassTP = "MAGE", faction = FACTION_HORDE, x = 0.6186, y = 0.2213, zoneID = 1530, locID = 1530 },
+			[132625] = { text = "VALE", isMagePortal = true, faction = FACTION_HORDE, x = 0.6186, y = 0.2213, zoneID = 1530, locID = 1530 },
 
 			-- Alliance beacon
 			[140295] = {
@@ -685,6 +694,10 @@ addon.MythicPlus.variables.portalCompendium = {
 				icon = 801132,
 				map = { [504] = true, [508] = true },
 				faction = FACTION_ALLIANCE,
+				x = 0.6437,
+				y = 0.7449,
+				zoneID = 504,
+				locID = 504,
 			},
 			-- Horde beacon
 			[140300] = {
@@ -695,55 +708,93 @@ addon.MythicPlus.variables.portalCompendium = {
 				icon = 838819,
 				map = { [504] = true, [508] = true },
 				faction = FACTION_HORDE,
+				x = 0.3352,
+				y = 0.3324,
+				zoneID = 504,
+				locID = 504,
 			},
 
-			[145430] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 103678, isHearthstone = true, icon = 643915, equipSlot = 13 },
+			[145430] = {
+				text = "HS",
+				isItem = true,
+				itemID = 103678,
+				isHearthstone = true,
+				icon = 643915,
+				equipSlot = 13,
+				x = 0.4285,
+				y = 0.5477,
+				zoneID = 554,
+				locID = 554,
+			},
 		},
 	},
 	[50] = {
 		headline = EXPANSION_NAME3,
 		spells = {
-			[445424] = { text = "GB", cId = { [507] = true } },
-			[424142] = { text = "TOTT", cId = { [456] = true } },
-			[410080] = { text = "VP", cId = { [438] = true } },
+			[445424] = { text = "GB", cId = { [507] = true }, x = 0.1917, y = 0.5416, zoneID = 293, locID = 241 },
+			[424142] = { text = "TOTT", cId = { [456] = true }, x = 0.4799, y = 0.4035, zoneID = 323, locID = 203 },
+			[410080] = { text = "VP", cId = { [438] = true }, x = 0.7656, y = 0.8428, zoneID = 325, locID = 1527 },
 			-- Tol Barad (Cata)
-			[88342] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_ALLIANCE },
-			[88346] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE },
-			[88344] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE },
-			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE },
+			[88342] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_ALLIANCE, x = 0.7357, y = 0.6079, zoneID = 245, locID = 245 },
+			[88346] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE, x = 0.7357, y = 0.6079, zoneID = 245, locID = 245 },
+			[88344] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE, x = 0.5480, y = 0.7819, zoneID = 245, locID = 245 },
+			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE, x = 0.5480, y = 0.7819, zoneID = 245, locID = 245 },
 
-			[80256] = { text = "DH", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
-			[59317] = { text = "VC", isToy = true, toyID = 43824, isHearthstone = true, icon = 133743, map = 125 },
+			[80256] = { text = "DH", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898, x = 0.4978, y = 0.5523, zoneID = 207, locID = 207 },
+			[59317] = { text = "VC", isToy = true, toyID = 43824, isHearthstone = true, icon = 133743, map = 125, x = 0.2372, y = 0.4670, zoneID = 125, locID = 125 },
 
-			[54406] = { text = "DALA", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415, equipSlot = 11 },
-
-			[89597] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 63379, isHearthstone = true, icon = 456571, faction = FACTION_ALLIANCE, equipSlot = 19 },
-			[89598] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 63378, isHearthstone = true, icon = 456564, faction = FACTION_HORDE, equipSlot = 19 },
+			[89597] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isItem = true,
+				itemID = 63379,
+				isHearthstone = true,
+				icon = 456571,
+				faction = FACTION_ALLIANCE,
+				equipSlot = 19,
+				x = 0.7357,
+				y = 0.6079,
+				zoneID = 245,
+				locID = 245,
+			},
+			[89598] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isItem = true,
+				itemID = 63378,
+				isHearthstone = true,
+				icon = 456564,
+				faction = FACTION_HORDE,
+				equipSlot = 19,
+				x = 0.5480,
+				y = 0.7819,
+				zoneID = 245,
+				locID = 245,
+			},
 		},
 	},
 	[40] = {
 		headline = EXPANSION_NAME2,
 		spells = {
-			[67833] = { text = "ENGI", isToy = true, toyID = 48933, isEngineering = true },
-			[73324] = { text = "DALA", isItem = true, itemID = 52251, isHearthstone = true, icon = 133308 },
+			[67833] = { text = "ENGI", isToy = true, toyID = 48933, isEngineering = true, zoneID = 113 },
+			[73324] = { text = "DALA", isItem = true, itemID = 52251, isHearthstone = true, icon = 133308, x = 0.2372, y = 0.4670, zoneID = 125, locID = 125 },
+			[54406] = { text = "DALA", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415, equipSlot = 11, x = 0.2372, y = 0.4670, zoneID = 125, locID = 125 },
 			-- Dalaran (Northrend, WotLK)
-			[53140] = { text = "DalN", isClassTP = "MAGE" },
-			[53142] = { text = "DalN", isMagePortal = true },
+			[53140] = { text = "DalN", isClassTP = "MAGE", x = 0.2372, y = 0.4670, zoneID = 125, locID = 125 },
+			[53142] = { text = "DalN", isMagePortal = true, x = 0.2372, y = 0.4670, zoneID = 125, locID = 125 },
 
-			[66238] = { text = "ATG", isItem = true, itemID = 46874, isHearthstone = true, icon = 135026, equipSlot = 19 },
+			[66238] = { text = "ATG", isItem = true, itemID = 46874, isHearthstone = true, icon = 135026, equipSlot = 19, x = 0.7166, y = 0.2152, zoneID = 118, locID = 118 },
 		},
 	},
 	[30] = {
 		headline = EXPANSION_NAME1,
 		spells = {
 			-- Shattrath (TBC)
-			[245173] = { text = "BT", isToy = true, toyID = 151016, isHearthstone = true },
-			[33690] = { text = "Shat", isClassTP = "MAGE" },
-			[33691] = { text = "Shat", isMagePortal = true },
-			[32271] = { text = "Exod", isClassTP = "MAGE", faction = FACTION_ALLIANCE }, -- Teleport: Exodar
-			[32266] = { text = "Exod", isMagePortal = true, faction = FACTION_ALLIANCE }, -- Portal: Exodar
-			[32272] = { text = "SMC", isClassTP = "MAGE", faction = FACTION_HORDE }, -- Teleport: Silvermoon
-			[32267] = { text = "SMC", isMagePortal = true, faction = FACTION_HORDE }, -- Portal: Silvermoon
+			[245173] = { text = "BT", isToy = true, toyID = 151016, isHearthstone = true, x = 0.7106, y = 0.4609, zoneID = 340, locID = 104 },
+			[33690] = { text = "Shat", isClassTP = "MAGE", x = 0.5528, y = 0.3909, zoneID = 111, locID = 111 },
+			[33691] = { text = "Shat", isMagePortal = true, x = 0.5528, y = 0.3909, zoneID = 111, locID = 111 },
+			[32271] = { text = "Exod", isClassTP = "MAGE", faction = FACTION_ALLIANCE, x = 0.4787, y = 0.5900, zoneID = 103, locID = 103 }, -- Teleport: Exodar
+			[32266] = { text = "Exod", isMagePortal = true, faction = FACTION_ALLIANCE, x = 0.4787, y = 0.5900, zoneID = 103, locID = 103 }, -- Portal: Exodar
+			[32272] = { text = "SMC", isClassTP = "MAGE", faction = FACTION_HORDE, x = 0.7214, y = 0.5997, zoneID = 110, locID = 110 }, -- Teleport: Silvermoon
+			[32267] = { text = "SMC", isMagePortal = true, faction = FACTION_HORDE, x = 0.7214, y = 0.5997, zoneID = 110, locID = 110 }, -- Portal: Silvermoon
 
 			[36941] = { text = "ENGI", isToy = true, toyID = 30544, isEngineering = true, isGnomish = true },
 			[36890] = { text = "ENGI", isToy = true, toyID = 30542, isEngineering = true, isGoblin = true },
@@ -797,13 +848,16 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[139437] = { text = "BP", isItem = true, itemID = 95051, isHearthstone = true, icon = 133345, faction = FACTION_ALLIANCE, equipSlot = 11 },
 			[139432] = { text = "BA", isItem = true, itemID = 95050, isHearthstone = true, icon = 133345, faction = FACTION_HORDE, equipSlot = 11 },
+
+			[120145] = { text = "DALA", isClassTP = "MAGE", x = 0.3065, y = 0.3622, zoneID = 627, locID = 25 },
+			[120146] = { text = "DALA", isMagePortal = true, x = 0.3065, y = 0.3622, zoneID = 627, locID = 25 },
 		},
 	},
 	[10] = {
 		headline = CLASS,
 		spells = {
-			[193759] = { text = "CLASS", isClassTP = "MAGE" },
-			[193753] = { text = "CLASS", isClassTP = "DRUID", x = 0.5492, y = 0.6276, zoneID = 715 },
+			[193759] = { text = "CLASS", isClassTP = "MAGE", x = 0.5731, y = 0.8669, zoneID = 734, locID = 734 },
+			[193753] = { text = "CLASS", isClassTP = "DRUID", x = 0.5492, y = 0.6276, zoneID = 715, locID = 715 },
 			[50977] = { text = "CLASS", isClassTP = "DEATHKNIGHT" },
 			[556] = { text = "CLASS", isClassTP = "SHAMAN" },
 			[126892] = { text = "CLASS", isClassTP = "MONK" },
