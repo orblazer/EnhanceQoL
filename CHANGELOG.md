@@ -28,6 +28,9 @@
 - **Minimap hiding:** Option to hide some icons on the minimap
 - **Minimap border:** Option to add a border around the minimap (only in square mode)
 
+- **Bossframe Health:** Choose to show Health current, percent or both all the time
+  - Only works when you don't use the CVar for statusText = 1 (not always show the numbers on all Unit Frames)
+
 ### 🔄 Changed
 
 - **Declutter:** Removed some old and obsolete options, changed the position and category of some options and made it more "übersichtlich?"

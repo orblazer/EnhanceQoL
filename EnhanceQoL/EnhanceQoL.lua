@@ -1837,6 +1837,32 @@ local function addUnitFrame(container)
 		groupCore:AddChild(cbElement)
 	end
 
+	-- Boss Frames: health text mode dropdown
+	local groupBoss = addon.functions.createContainer("InlineGroup", "List")
+	groupBoss:SetTitle(L["Boss Frames"] or "Boss Frames")
+	wrapper:AddChild(groupBoss)
+
+	local bossDD = AceGUI:Create("Dropdown")
+	bossDD:SetLabel(L["BossHealthText"] or "Boss health text")
+	local bossList = {
+		OFF = VIDEO_OPTIONS_DISABLED,
+		PERCENT = STATUS_TEXT_PERCENT,
+		ABS = STATUS_TEXT_VALUE,
+		BOTH = STATUS_TEXT_BOTH,
+	}
+	local bossOrder = { "OFF", "PERCENT", "ABS", "BOTH" }
+	bossDD:SetList(bossList, bossOrder)
+	bossDD:SetValue(addon.db and addon.db["bossHealthMode"] or "OFF")
+	bossDD:SetCallback("OnValueChanged", function(_, _, key)
+		addon.db["bossHealthMode"] = key or "OFF"
+		if addon.BossFrames and addon.BossFrames.SetMode then addon.BossFrames:SetMode(addon.db["bossHealthMode"]) end
+	end)
+	groupBoss:AddChild(bossDD)
+
+	local bossNote = addon.functions.createLabelAce("|cffffd700" .. (L["BossHealthCVarNote"] or "This setting has no effect if 'statusText' CVar is enabled.") .. "|r", nil, nil, 10)
+	bossNote:SetFullWidth(true)
+	groupBoss:AddChild(bossNote)
+
 	local groupCoreUF = addon.functions.createContainer("InlineGroup", "List")
 	wrapper:AddChild(groupCoreUF)
 
@@ -1910,7 +1936,7 @@ local function addUnitFrame(container)
 	-- Cast bars multiselect dropdown
 	local groupCast = addon.functions.createContainer("InlineGroup", "List")
 	groupCast:SetTitle(L["CastBars"] or "Cast Bars")
-	groupCoreUF:AddChild(groupCast)
+	wrapper:AddChild(groupCast)
 
 	local dd = AceGUI:Create("Dropdown")
 	dd:SetLabel(L["castBarsToHide"] or "Cast bars to hide")
@@ -4620,6 +4646,7 @@ local function initUnitFrame()
 	addon.functions.InitDBValue("unitFrameScaleEnabled", false)
 	addon.functions.InitDBValue("unitFrameScale", addon.variables.unitFrameScale)
 	addon.functions.InitDBValue("hiddenCastBars", addon.db["hiddenCastBars"] or {})
+	addon.functions.InitDBValue("bossHealthMode", addon.db["bossHealthMode"] or "OFF")
 	if addon.db["hideHitIndicatorPlayer"] then PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.HitIndicator:Hide() end
 
 	if PetHitIndicator then hooksecurefunc(PetHitIndicator, "Show", function(self)
@@ -4749,6 +4776,8 @@ local function initUnitFrame()
 	if addon.db["hideRaidFrameBuffs"] then addon.functions.updateRaidFrameBuffs() end
 	if addon.db["unitFrameTruncateNames"] then addon.functions.updateUnitFrameNames() end
 	if addon.db["unitFrameScaleEnabled"] then addon.functions.updatePartyFrameScale() end
+	-- Initialize Boss Frames module mode
+	if addon.BossFrames and addon.BossFrames.SetMode then addon.BossFrames:SetMode(addon.db["bossHealthMode"]) end
 	addon.functions.ApplyCastBarVisibility()
 
 	for _, cbData in ipairs(addon.variables.unitFrameNames) do

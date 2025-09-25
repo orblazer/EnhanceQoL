@@ -54,3 +54,4 @@ Submodules\Ignore\Ignore.lua
 Submodules\Ignore\Ignore.xml
 Submodules\InstanceDifficulty.lua
 Submodules\Merchant.lua
+Submodules\BossFrames.lua

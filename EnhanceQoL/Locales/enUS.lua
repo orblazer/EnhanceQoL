@@ -222,6 +222,9 @@ L["unitFrameMaxNameLength"] = "Maximum name length"
 L["unitFrameScaleEnable"] = "Enable frame scale adjustment"
 L["unitFrameScale"] = "Frame scale"
 L["UnitFrameUFExplain"] = "Applies to RAID and Party Frames"
+L["Boss Frames"] = "Boss Frames"
+L["BossHealthText"] = "Boss health text"
+L["BossHealthCVarNote"] = "Note: Has no effect if the 'statusText' CVar is enabled (Blizzard always shows health)."
 
 L["ActionbarHideExplain"] = 'Set the action bar to hidden and show on mouseover. This works only when your Action Bar is set to "%s" and "%s" in %s'
 L["fullButtonRangeColoring"] = "Full button range coloring"
