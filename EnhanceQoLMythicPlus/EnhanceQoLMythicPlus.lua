@@ -1291,12 +1291,14 @@ local mpChildren = {
     { value = "rating", text = DUNGEON_SCORE },
     { value = "talents", text = L["TalentReminder"] },
     { value = "objectivetracker", text = HUD_EDIT_MODE_OBJECTIVE_TRACKER_LABEL },
-    { value = "groupfilter", text = L["groupFilter"] },
 }
 
 for _, child in ipairs(mpChildren) do
     addon.functions.addToTree("general\001combat\001dungeon", child, true)
 end
+
+-- Place Group Filter under Party
+addon.functions.addToTree("general\001combat\001party", { value = "groupfilter", text = L["groupFilter"] }, true)
 
 function addon.MythicPlus.functions.treeCallback(container, group)
 	container:ReleaseChildren() -- Entfernt vorherige Inhalte
@@ -1308,7 +1310,12 @@ function addon.MythicPlus.functions.treeCallback(container, group)
         group = group:sub(pos)
     else
         local dpos = group:find("dungeon\001", 1, true)
-        if dpos then group = "mythicplus\001" .. group:sub(dpos + #("dungeon\001")) end
+        if dpos then
+            group = "mythicplus\001" .. group:sub(dpos + #("dungeon\001"))
+        else
+            local ppos = group:find("party\001groupfilter", 1, true)
+            if ppos then group = "mythicplus\001groupfilter" end
+        end
     end
 
 	if group == "mythicplus\001keystone" then

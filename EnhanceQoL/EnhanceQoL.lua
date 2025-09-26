@@ -6299,6 +6299,8 @@ local function CreateUI()
 		elseif string.sub(group, 1, string.len("general\001combat\001dungeon\001")) == "general\001combat\001dungeon\001" then
 			-- Forward dungeon subpages (e.g., keystone, automark) to Mythic+ UI
 			addon.MythicPlus.functions.treeCallback(container, group)
+		elseif group == "general\001combat\001party\001groupfilter" then
+			addon.MythicPlus.functions.treeCallback(container, group)
 		-- Map & Navigation
 			elseif group == "general\001nav" then
 				addCategoryIntro(container, "MapNavigation", "MapNavigationIntro")
