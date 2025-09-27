@@ -2056,13 +2056,18 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 	spellEdit:SetRelativeWidth(0.6)
 	core:AddChild(spellEdit)
 
+	-- Action buttons in a 2-column flow (50% width each)
+	local actionsRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	core:AddChild(actionsRow)
+
 	local trinket1Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(1), 150, function()
 		addon.Aura.functions.addTrinketBuff(catId, 13)
 		refreshTree(catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(trinket1Btn)
+	trinket1Btn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(trinket1Btn)
 
 	local trinket2Btn = addon.functions.createButtonAce(L["TrackTrinketSlot"]:format(2), 150, function()
 		addon.Aura.functions.addTrinketBuff(catId, 14)
@@ -2070,7 +2075,8 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(trinket2Btn)
+	trinket2Btn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(trinket2Btn)
 
 	local mhEnchantBtn = addon.functions.createButtonAce(L["TrackMainhandEnchant"], 150, function()
 		addon.Aura.functions.addWeaponEnchantBuff(catId, 16)
@@ -2078,7 +2084,8 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(mhEnchantBtn)
+	mhEnchantBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(mhEnchantBtn)
 
 	local ohEnchantBtn = addon.functions.createButtonAce(L["TrackOffhandEnchant"], 150, function()
 		addon.Aura.functions.addWeaponEnchantBuff(catId, 17)
@@ -2086,7 +2093,8 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		container:ReleaseChildren()
 		addon.Aura.functions.buildCategoryOptions(container, catId)
 	end)
-	core:AddChild(ohEnchantBtn)
+	ohEnchantBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(ohEnchantBtn)
 
 	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
 		local data = exportCategory(catId)
@@ -2111,10 +2119,12 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		end
 		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
 	end)
-	core:AddChild(exportBtn)
+	exportBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(exportBtn)
 
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
-	core:AddChild(shareBtn)
+	shareBtn:SetRelativeWidth(0.5)
+	actionsRow:AddChild(shareBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db["buffTrackerCategories"][catId].name or ""
@@ -2159,6 +2169,7 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		end
 		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
 	end)
+	-- Delete stays on its own row below
 	core:AddChild(delBtn)
 
 	return core

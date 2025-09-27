@@ -529,9 +529,8 @@ end
 local function buildCategoryOptions(container, catId)
 	addon.db.cooldownNotifySelectedCategory = catId
 	local cat = addon.db.cooldownNotifyCategories[catId]
-	local group = addon.functions.createContainer("InlineGroup", "List")
+	local group = addon.functions.createContainer("SimpleGroup", "List")
 	container:AddChild(group)
-	group:SetFullHeight(true)
 
 	local enableCB = addon.functions.createCheckboxAce(L["EnableCooldownNotify"]:format(cat.name), addon.db.cooldownNotifyEnabled[catId], function(_, _, val)
 		addon.db.cooldownNotifyEnabled[catId] = val
@@ -758,9 +757,7 @@ local function buildSpellOptions(container, catId, spellId)
 	local cat = addon.db.cooldownNotifyCategories[catId]
 	if not (cat and cat.spells and cat.spells[spellId]) then return end
 
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	wrapper:SetFullWidth(true)
-	wrapper:SetFullHeight(true)
+	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
 	container:AddChild(wrapper)
 
 	local name
@@ -909,7 +906,7 @@ function CN.functions.addCooldownNotifyOptions(container)
 		catId = tonumber(catId)
 		widget:ReleaseChildren()
 
-		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		local scroll = addon.functions.createContainer("ScrollFrame", "List")
 		scroll:SetFullWidth(true)
 		scroll:SetFullHeight(true)
 		widget:AddChild(scroll)

@@ -606,10 +606,13 @@ local function handleDragDrop(src, dst)
 	refreshTree(selectedCategory)
 end
 
-local function buildCategoryOptions(container, catId)
+local function buildCategoryOptions(scroll, catId)
 	local db = addon.db.castTrackerCategories[catId]
 	if not db then return end
 	db.spells = db.spells or {}
+
+	local container = addon.functions.createContainer("InlineGroup", "List")
+	scroll:AddChild(container)
 
 	local enableCB = addon.functions.createCheckboxAce(_G.ENABLE, addon.db.castTrackerEnabled[catId], function(self, _, val)
 		addon.db.castTrackerEnabled[catId] = val
@@ -889,7 +892,7 @@ local function buildCategoryOptions(container, catId)
 		StaticPopup_Show("EQOL_DELETE_CAST_CATEGORY", catName)
 	end)
 	container:AddChild(delBtn)
-	container:DoLayout()
+	scroll:DoLayout()
 end
 
 local function buildSpellOptions(container, catId, spellId)
@@ -897,9 +900,11 @@ local function buildSpellOptions(container, catId, spellId)
 	local spell = cat and cat.spells[spellId]
 	if not cat or not spell then return end
 
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	wrapper:SetFullWidth(true)
-	container:AddChild(wrapper)
+	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	container:AddChild(groupCore)
+
+	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
+	groupCore:AddChild(wrapper)
 
 	local info = C_Spell.GetSpellInfo(spellId)
 	local name = info and info.name or tostring(spellId)
@@ -1431,6 +1436,7 @@ function CastTracker.functions.addCastTrackerOptions(container)
 	treeGroup = AceGUI:Create("EQOL_DragTreeGroup")
 	treeGroup:SetFullHeight(true)
 	treeGroup:SetFullWidth(true)
+	treeGroup:SetLayout("Fill")
 	treeGroup:SetTreeWidth(200, true)
 	treeGroup:SetTree(getCategoryTree())
 	treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
@@ -1503,9 +1509,8 @@ function CastTracker.functions.addCastTrackerOptions(container)
 		selectedCategory = catId
 		addon.db.castTrackerSelectedCategory = catId
 		widget:ReleaseChildren()
-		widget:SetFullHeight(true)
 
-		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		local scroll = addon.functions.createContainer("ScrollFrame", "List")
 		scroll:SetFullWidth(true)
 		scroll:SetFullHeight(true)
 		widget:AddChild(scroll)
