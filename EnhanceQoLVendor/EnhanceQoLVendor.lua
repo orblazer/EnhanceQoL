@@ -554,6 +554,22 @@ local function addGeneralFrame(container)
 		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], func, desc)
 		groupMark:AddChild(cbElement)
 	end
+
+	-- Integrate Craft Shopper directly into Selling root
+	local groupCS = addon.functions.createContainer("InlineGroup", "List")
+	groupCS:SetTitle(L["vendorCraftShopperTitle"])
+	wrapper:AddChild(groupCS)
+
+	local cbCS = addon.functions.createCheckboxAce(L["vendorCraftShopperEnable"], addon.db["vendorCraftShopperEnable"], function(_, _, checked)
+		addon.db["vendorCraftShopperEnable"] = checked
+		if checked then
+			addon.Vendor.CraftShopper.EnableCraftShopper()
+		else
+			addon.Vendor.CraftShopper.DisableCraftShopper()
+		end
+	end, L["vendorCraftShopperEnableDesc"])
+	groupCS:AddChild(cbCS)
+
 	scroll:DoLayout()
 end
 
@@ -561,13 +577,10 @@ end
 -- addon.variables.statusTable.groups["items\001economy"] = true
 -- addon.variables.statusTable.groups["items\001economy\001selling"] = true
 
--- Add a dedicated Craft Shopper node under Vendors & Economy
-addon.functions.addToTree("items\001economy", { value = "craftshopper", text = L["vendorCraftShopperTitle"] })
-
--- Create the Selling node under Vendors & Economy
+-- Create the Selling node under Vendors & Economy (includes Craft Shopper)
 addon.functions.addToTree("items\001economy", {
     value = "selling",
-    text = L["SellingAutoSell"] or "Selling (Auto-Sell)",
+    text = L["SellingAndShopping"] or "Selling & Shopping",
 }, true)
 
 -- Add Vendor pages under Selling
@@ -579,23 +592,7 @@ addon.functions.addToTree(sellingPath, { value = "epic", text = ITEM_QUALITY_COL
 addon.functions.addToTree(sellingPath, { value = "include", text = L["Include"] }, true)
 addon.functions.addToTree(sellingPath, { value = "exclude", text = L["Exclude"] }, true)
 
-local function addCraftShopperConfig(container)
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
-
-	local group = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(group)
-
-	local cb = addon.functions.createCheckboxAce(L["vendorCraftShopperEnable"], addon.db["vendorCraftShopperEnable"], function(_, _, checked)
-		addon.db["vendorCraftShopperEnable"] = checked
-		if checked then
-			addon.Vendor.CraftShopper.EnableCraftShopper()
-		else
-			addon.Vendor.CraftShopper.DisableCraftShopper()
-		end
-	end, L["vendorCraftShopperEnableDesc"])
-	group:AddChild(cb)
-end
+-- Craft Shopper is integrated into the Selling root; no standalone panel needed
 
 function addon.Vendor.functions.treeCallback(container, group)
 	lastEbox = nil
@@ -610,10 +607,8 @@ function addon.Vendor.functions.treeCallback(container, group)
 	-- Prüfen, welche Gruppe ausgewählt wurde
 	if group == "vendor" then
 		addGeneralFrame(container)
-    elseif group == "items\001economy\001craftshopper" or group == "vendor\001craftshopper" then
-        addCraftShopperConfig(container)
-	elseif group == "vendor\001common" then
-		addVendorFrame(container, 1)
+    elseif group == "vendor\001common" then
+        addVendorFrame(container, 1)
 	elseif group == "vendor\001uncommon" then
 		addVendorFrame(container, 2)
 	elseif group == "vendor\001rare" then
