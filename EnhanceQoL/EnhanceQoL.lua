@@ -2959,34 +2959,74 @@ local function addCharacterFrame(container)
 
 	local AceGUI = addon.AceGUI
 	local optionsList = {
-		ilvl = L["Item level"] or "Item level",
-		gems = L["Gem slots"] or "Gem slots",
-		enchants = L["Enchants"] or "Enchants",
+		ilvl = STAT_AVERAGE_ITEM_LEVEL or "Item Level",
+		gems = AUCTION_CATEGORY_GEMS or "Gems",
+		enchants = ENCHANTS or "Enchants",
 		gemtip = L["Gem slot tooltip"] or "Gem slot tooltip",
+		durability = DURABILITY or "Durability",
+		catalyst = "Catalyst Charges",
 	}
 
 	local ddChar = AceGUI:Create("Dropdown")
-	ddChar:SetLabel(L["Character Frame info"] or "Character Frame info")
+	ddChar:SetLabel(L["Show on Character Frame"] or "Show on Character Frame")
 	ddChar:SetMultiselect(true)
 	ddChar:SetFullWidth(true)
 	ddChar:SetList(optionsList)
 	for k in pairs(optionsList) do
-		local t = addon.db.charDisplayOptions or {}
-		ddChar:SetItemValue(k, t[k] == true)
+		if k == "durability" then
+			ddChar:SetItemValue(k, addon.db and addon.db["showDurabilityOnCharframe"] == true)
+		elseif k == "catalyst" then
+			ddChar:SetItemValue(k, addon.db and addon.db["showCatalystChargesOnCharframe"] == true)
+		else
+			local t = addon.db.charDisplayOptions or {}
+			ddChar:SetItemValue(k, t[k] == true)
+		end
 	end
 	ddChar:SetCallback("OnValueChanged", function(_, _, key, val)
 		_ensureDisplayDB()
-		addon.db.charDisplayOptions[key] = val and true or false
-		setCharFrame()
+		local b = val and true or false
+		if key == "durability" then
+			addon.db["showDurabilityOnCharframe"] = b
+			calculateDurability()
+			if addon.general and addon.general.durabilityIconFrame then
+				if b then
+					addon.general.durabilityIconFrame:Show()
+				else
+					addon.general.durabilityIconFrame:Hide()
+				end
+			end
+			addon.db.charDisplayOptions.durability = b
+		elseif key == "catalyst" then
+			addon.db["showCatalystChargesOnCharframe"] = b
+			if addon.general and addon.general.iconFrame then
+				if b and addon.variables and addon.variables.catalystID then
+					local c = C_CurrencyInfo.GetCurrencyInfo(addon.variables.catalystID)
+					if c then addon.general.iconFrame.count:SetText(c.quantity) end
+					addon.general.iconFrame:Show()
+				else
+					addon.general.iconFrame:Hide()
+				end
+			end
+			addon.db.charDisplayOptions.catalyst = b
+		else
+			addon.db.charDisplayOptions[key] = b
+			setCharFrame()
+		end
 	end)
 	ddGroup:AddChild(ddChar)
 
 	local ddInsp = AceGUI:Create("Dropdown")
-	ddInsp:SetLabel(L["Inspect Frame info"] or "Inspect Frame info")
+	ddInsp:SetLabel(L["Show on Inspect Frame"] or "Show on Inspect Frame")
 	ddInsp:SetMultiselect(true)
 	ddInsp:SetFullWidth(true)
-	ddInsp:SetList(optionsList)
-	for k in pairs(optionsList) do
+	local inspOptionsList = {
+		ilvl = STAT_AVERAGE_ITEM_LEVEL or "Item Level",
+		gems = AUCTION_CATEGORY_GEMS or "Gems",
+		enchants = ENCHANTS or "Enchants",
+		gemtip = L["Gem slot tooltip"] or "Gem slot tooltip",
+	}
+	ddInsp:SetList(inspOptionsList)
+	for k in pairs(inspOptionsList) do
 		local t = addon.db.inspectDisplayOptions or {}
 		ddInsp:SetItemValue(k, t[k] == true)
 	end
@@ -3005,36 +3045,11 @@ local function addCharacterFrame(container)
 	groupInfo:SetTitle(INFO)
 	wrapper:AddChild(groupInfo)
 
-	local cbDur = addon.functions.createCheckboxAce(L["showDurabilityOnCharframe"], addon.db["showDurabilityOnCharframe"], function(_, _, value)
-		addon.db["showDurabilityOnCharframe"] = value
-		calculateDurability()
-		if value then
-			if addon.general and addon.general.durabilityIconFrame then addon.general.durabilityIconFrame:Show() end
-		else
-			if addon.general and addon.general.durabilityIconFrame then addon.general.durabilityIconFrame:Hide() end
-		end
-	end)
-	groupInfo:AddChild(cbDur)
-
 	local cbCloak = addon.functions.createCheckboxAce(L["showCloakUpgradeButton"], addon.db["showCloakUpgradeButton"], function(_, _, value)
 		addon.db["showCloakUpgradeButton"] = value
 		if addon.functions.updateCloakUpgradeButton then addon.functions.updateCloakUpgradeButton() end
 	end)
 	groupInfo:AddChild(cbCloak)
-
-	local cbCatalyst = addon.functions.createCheckboxAce(L["showCatalystChargesOnCharframe"], addon.db["showCatalystChargesOnCharframe"], function(_, _, value)
-		addon.db["showCatalystChargesOnCharframe"] = value
-		if addon.general and addon.general.iconFrame then
-			if value and addon.variables.catalystID then
-				local c = C_CurrencyInfo.GetCurrencyInfo(addon.variables.catalystID)
-				if c then addon.general.iconFrame.count:SetText(c.quantity) end
-				addon.general.iconFrame:Show()
-			else
-				addon.general.iconFrame:Hide()
-			end
-		end
-	end)
-	groupInfo:AddChild(cbCatalyst)
 
 	local cbInstant = addon.functions.createCheckboxAce(L["instantCatalystEnabled"], addon.db["instantCatalystEnabled"], function(_, _, value)
 		addon.db["instantCatalystEnabled"] = value
