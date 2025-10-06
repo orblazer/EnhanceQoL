@@ -14,6 +14,15 @@ L["Right-Click for options"] = "Right-click for options"
 L["Lock DataPanel position (hold Shift to move)"] = "Lock DataPanel position (hold Shift to move)"
 L["Hide border"] = "Hide border"
 
+-- Character/Inspect options
+L["Character & Inspect Info"] = "Character & Inspect Info"
+L["Character Frame info"] = "Character Frame info"
+L["Inspect Frame info"] = "Inspect Frame info"
+L["Item level"] = "Item level"
+L["Gem slots"] = "Gem slots"
+L["Enchants"] = "Enchants"
+L["Gem slot tooltip"] = "Gem slot tooltip"
+
 -- Category titles
 L["ItemsInventory"] = "Items & Inventory"
 L["ContainerActions"] = "Container Actions"
