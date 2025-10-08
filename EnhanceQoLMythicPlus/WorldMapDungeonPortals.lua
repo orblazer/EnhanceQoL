@@ -171,7 +171,7 @@ local function EnsurePanel(parent)
 	if panel then return panel end
 
 	panel = CreateFrame("Frame", "EQOLWorldMapDungeonPortalsPanel", targetParent, "BackdropTemplate")
-	panel:ClearAllPoints()
+	if not InCombatLockdown() then panel:Hide() end
 
 	local function anchorPanel()
 		local host = panel:GetParent() or targetParent
@@ -242,14 +242,14 @@ local function EnsurePanel(parent)
 	panel.Scroll = s
 
 	-- Combat click blocker overlay (prevents any interaction while in combat)
-    if not panel.Blocker then
-        local blocker = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-        blocker:SetAllPoints(s)
-        blocker:EnableMouse(false)
-        blocker:EnableMouseWheel(false)
-        blocker:SetAlpha(0)
-        panel.Blocker = blocker
-    end
+	if not panel.Blocker then
+		local blocker = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+		blocker:SetAllPoints(s)
+		blocker:EnableMouse(false)
+		blocker:EnableMouseWheel(false)
+		blocker:SetAlpha(0)
+		panel.Blocker = blocker
+	end
 
 	-- Ensure our interactive content renders above any sibling art
 	local baseLevel = panel:GetFrameLevel() or 1
@@ -257,14 +257,14 @@ local function EnsurePanel(parent)
 	content:SetFrameLevel(baseLevel + 2)
 
 	-- Respect combat lockdown: prevent scrolling interactions during combat
-    if InCombatLockdown and InCombatLockdown() then
-        SetCombatScrolling(false)
-        if panel.Blocker then
-            panel.Blocker:SetAlpha(1)
-            panel.Blocker:EnableMouse(true)
-            panel.Blocker:EnableMouseWheel(true)
-        end
-    end
+	if InCombatLockdown and InCombatLockdown() then
+		SetCombatScrolling(false)
+		if panel.Blocker then
+			panel.Blocker:SetAlpha(1)
+			panel.Blocker:EnableMouse(true)
+			panel.Blocker:EnableMouseWheel(true)
+		end
+	end
 
 	-- Now that Scroll exists, create/anchor the border precisely around it
 	if not panel.BorderFrame then
@@ -745,7 +745,7 @@ local function EnsureTab(parent, anchorTo)
 	tabButton.displayMode = DISPLAY_MODE
 
 	-- Hide template's atlas-driven icon and add our persistent custom icon
-    if tabButton.Icon then tabButton.Icon:SetAlpha(0) end
+	if tabButton.Icon then tabButton.Icon:SetAlpha(0) end
 	local customIcon = tabButton:CreateTexture(nil, "ARTWORK")
 	customIcon:SetPoint("CENTER", -2, 0)
 	customIcon:SetSize(20, 20)
@@ -764,16 +764,16 @@ local function EnsureTab(parent, anchorTo)
 	end
 
 	-- Guard against Blizzard re-showing the template icon
-    if tabButton.Icon and not tabButton.Icon._eqolHook then
-        hooksecurefunc(tabButton.Icon, "Show", function(icon) icon:SetAlpha(0) end)
-        hooksecurefunc(tabButton.Icon, "SetAtlas", function(icon) icon:SetAlpha(0) end)
-        tabButton.Icon._eqolHook = true
-    end
+	if tabButton.Icon and not tabButton.Icon._eqolHook then
+		hooksecurefunc(tabButton.Icon, "Show", function(icon) icon:SetAlpha(0) end)
+		hooksecurefunc(tabButton.Icon, "SetAtlas", function(icon) icon:SetAlpha(0) end)
+		tabButton.Icon._eqolHook = true
+	end
 
 	-- make sure we're not selected by default
-    if tabButton.SetChecked then tabButton:SetChecked(false) end
-    if tabButton.SelectedTexture then tabButton.SelectedTexture:SetAlpha(0) end
-    SafeSetVisible(tabButton, true)
+	if tabButton.SetChecked then tabButton:SetChecked(false) end
+	if tabButton.SelectedTexture then tabButton.SelectedTexture:SetAlpha(0) end
+	SafeSetVisible(tabButton, true)
 
 	-- Keep custom icon clear on state changes
 	if not tabButton._eqolStateHooks then
@@ -790,11 +790,11 @@ local function EnsureTab(parent, anchorTo)
 		tabButton._eqolStateHooks = true
 	end
 
-    -- Initialize checked state and icon based on QuestMapFrame displayMode
-    local isActive = QuestMapFrame and QuestMapFrame.displayMode == DISPLAY_MODE
-    if tabButton.SetChecked then tabButton:SetChecked(isActive) end
-    -- Keep panel alpha in sync with current mode without Show/Hide
-    if panel then SafeSetVisible(panel, isActive and true or false) end
+	-- Initialize checked state and icon based on QuestMapFrame displayMode
+	local isActive = QuestMapFrame and QuestMapFrame.displayMode == DISPLAY_MODE
+	if tabButton.SetChecked then tabButton:SetChecked(isActive) end
+	-- Keep panel alpha in sync with current mode without Show/Hide
+	if panel then SafeSetVisible(panel, isActive and true or false) end
 
 	tabButton:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -803,17 +803,17 @@ local function EnsureTab(parent, anchorTo)
 	end)
 	tabButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    tabButton:SetScript("OnMouseUp", function(self, button, upInside)
-        if button ~= "LeftButton" or not upInside then return end
-        if not panel then return end
-        if QuestMapFrame and QuestMapFrame.SetDisplayMode then
-            QuestMapFrame:SetDisplayMode(DISPLAY_MODE)
-        else
-            -- No safe fallback: avoid showing protected frames directly
-            -- Defer selection to the next OnShow if available
-            f._selectOnNextShow = true
-        end
-    end)
+	tabButton:SetScript("OnMouseUp", function(self, button, upInside)
+		if button ~= "LeftButton" or not upInside then return end
+		if not panel then return end
+		if QuestMapFrame and QuestMapFrame.SetDisplayMode then
+			QuestMapFrame:SetDisplayMode(DISPLAY_MODE)
+		else
+			-- No safe fallback: avoid showing protected frames directly
+			-- Defer selection to the next OnShow if available
+			f._selectOnNextShow = true
+		end
+	end)
 
 	return tabButton
 end
@@ -915,17 +915,17 @@ function f:TryInit()
 	if QuestMapFrame and QuestMapFrame.ValidateTabs then QuestMapFrame:ValidateTabs() end
 
 	-- Track display mode changes to update our tab state and refresh content
-    if EventRegistry and not f._eqolDisplayEvent then
-        EventRegistry:RegisterCallback("QuestLog.SetDisplayMode", function(_, mode)
-            if mode == DISPLAY_MODE then
-                if tabButton and tabButton.SetChecked then tabButton:SetChecked(true) end
-                if panel then SafeSetVisible(panel, true) end
-                f:RefreshPanel()
-            else
-                if tabButton and tabButton.SetChecked then tabButton:SetChecked(false) end
-                if panel then SafeSetVisible(panel, false) end
-            end
-        end, f)
+	if EventRegistry and not f._eqolDisplayEvent then
+		EventRegistry:RegisterCallback("QuestLog.SetDisplayMode", function(_, mode)
+			if mode == DISPLAY_MODE then
+				if tabButton and tabButton.SetChecked then tabButton:SetChecked(true) end
+				if panel then SafeSetVisible(panel, true) end
+				f:RefreshPanel()
+			else
+				if tabButton and tabButton.SetChecked then tabButton:SetChecked(false) end
+				if panel then SafeSetVisible(panel, false) end
+			end
+		end, f)
 		f._eqolDisplayEvent = true
 	end
 
@@ -965,24 +965,24 @@ end
 
 -- Events to build/refresh --------------------------------------------------
 f:SetScript("OnEvent", function(self, event, arg1)
-    if event == "PLAYER_REGEN_DISABLED" then
-        SetCombatScrolling(false)
-        SetButtonsInteractable(false)
-        if panel and panel.Blocker then
-            panel.Blocker:SetAlpha(1)
-            panel.Blocker:EnableMouse(true)
-            panel.Blocker:EnableMouseWheel(true)
-        end
-        -- Avoid Show/Hide while in combat
-        return
-    elseif event == "PLAYER_REGEN_ENABLED" then
-        SetCombatScrolling(true)
-        SetButtonsInteractable(true)
-        if panel and panel.Blocker then
-            panel.Blocker:SetAlpha(0)
-            panel.Blocker:EnableMouse(false)
-            panel.Blocker:EnableMouseWheel(false)
-        end
+	if event == "PLAYER_REGEN_DISABLED" then
+		SetCombatScrolling(false)
+		SetButtonsInteractable(false)
+		if panel and panel.Blocker then
+			panel.Blocker:SetAlpha(1)
+			panel.Blocker:EnableMouse(true)
+			panel.Blocker:EnableMouseWheel(true)
+		end
+		-- Avoid Show/Hide while in combat
+		return
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		SetCombatScrolling(true)
+		SetButtonsInteractable(true)
+		if panel and panel.Blocker then
+			panel.Blocker:SetAlpha(0)
+			panel.Blocker:EnableMouse(false)
+			panel.Blocker:EnableMouseWheel(false)
+		end
 		-- Apply any deferred visibility changes now that combat ended
 		if panel and panel._eqolPendingVisible ~= nil then
 			SafeSetVisible(panel, panel._eqolPendingVisible)
@@ -1103,8 +1103,8 @@ function addon.MythicPlus.functions.RefreshWorldMapTeleportPanel()
 					QuestMapFrame.QuestsTab:Click()
 				end
 			end
-            if panel then SafeSetVisible(panel, false) end
-            if tabButton then SafeSetVisible(tabButton, false) end
+			if panel then SafeSetVisible(panel, false) end
+			if tabButton then SafeSetVisible(tabButton, false) end
 			return
 		end
 
