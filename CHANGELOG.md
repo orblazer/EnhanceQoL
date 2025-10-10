@@ -7,6 +7,7 @@
 - BR Tracker is also visible in Raid encounter now
 - LibOpenKeystone is silent during M+ runs and in combat now
 - Some options and elements are disabled in remix/timerunner content
+- Remix/Timerunner: Enchant display and missing‑enchant checks are fully disabled on Character and Inspect frames
 - Flight Masters Whistle is now a toy
 
 ### 🐛 Fixed

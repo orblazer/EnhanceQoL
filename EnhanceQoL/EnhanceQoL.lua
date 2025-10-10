@@ -564,12 +564,16 @@ end
 local function CharOpt(opt)
 	_ensureDisplayDB()
 	local t = addon.db.charDisplayOptions or {}
+	-- Disable enchant checks entirely for Timerunners
+	if opt == "enchants" and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then return false end
 	return t[opt] == true
 end
 
 local function InspectOpt(opt)
 	_ensureDisplayDB()
 	local t = addon.db.inspectDisplayOptions or {}
+	-- Also suppress enchant checks in Inspect when player is a Timerunner
+	if opt == "enchants" and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then return false end
 	return t[opt] == true
 end
 
