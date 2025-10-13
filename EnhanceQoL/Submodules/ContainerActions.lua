@@ -76,6 +76,26 @@ local function SetButtonIconTexCoord(button, ...)
 	if icon and icon.SetTexCoord then icon:SetTexCoord(...) end
 end
 
+local AREA_BLOCKS = {
+	dungeon = { labelConst = "LFG_TYPE_DUNGEON", labelFallback = "Dungeons", types = { party = true } },
+	raid = { labelConst = "LFG_TYPE_RAID", labelFallback = "Raids", types = { raid = true } },
+	arena = { labelConst = "ARENA", labelFallback = "Arena", types = { arena = true } },
+	battleground = { labelConst = "BATTLEFIELDS", labelFallback = "Battlegrounds", types = { pvp = true } },
+	scenario = { labelConst = "SCENARIOS", labelFallback = "Scenarios", types = { scenario = true } },
+	outdoor = { labelConst = "WORLD", labelFallback = "World", types = { none = true } },
+}
+
+local AREA_BLOCK_ORDER = { "dungeon", "raid", "arena", "battleground", "scenario", "outdoor" }
+
+local function GetCurrentInstanceType()
+	if not GetInstanceInfo then return "none" end
+	local ok, _, instanceType = pcall(GetInstanceInfo)
+	if not ok then return "none" end
+	instanceType = instanceType or "none"
+	if instanceType == "" then instanceType = "none" end
+	return instanceType
+end
+
 function ContainerActions:IsEnabled() return addon.db and addon.db["automaticallyOpenContainer"] end
 
 function ContainerActions:GetAnchorConfig()
@@ -242,14 +262,17 @@ function ContainerActions:Init()
 		elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA" then
 			ContainerActions:UpdateVehicleState()
 			ContainerActions:UpdateChallengeModeState()
+			ContainerActions:UpdateAreaBlocks()
 		elseif event == "PLAYER_ENTERING_WORLD" then
 			ContainerActions:UpdateVehicleState()
 			ContainerActions:UpdateChallengeModeState()
+			ContainerActions:UpdateAreaBlocks()
 		end
 	end)
 	self.eventFrame = frame
 	self:UpdateVehicleState()
 	self:UpdateChallengeModeState()
+	self:UpdateAreaBlocks()
 end
 
 function ContainerActions:OnCombatStart()
@@ -420,6 +443,29 @@ function ContainerActions:GetManagedItemList()
 	return list
 end
 
+function ContainerActions:GetAreaBlockOptions()
+	local list = {}
+	for _, key in ipairs(AREA_BLOCK_ORDER) do
+		local def = AREA_BLOCKS[key]
+		if def then
+			local text
+			if def.label then
+				text = def.label
+			elseif def.labelConst and _G and type(_G[def.labelConst]) == "string" and _G[def.labelConst] ~= "" then
+				text = _G[def.labelConst]
+			elseif def.labelFallback then
+				text = def.labelFallback
+			elseif def.labelKey and L then
+				text = L[def.labelKey]
+			else
+				text = def.labelConst or def.labelKey or key
+			end
+			list[#list + 1] = { key = key, label = text }
+		end
+	end
+	return list
+end
+
 function ContainerActions:OnItemToggle(itemID, enabled)
 	self:Init()
 	if addon.functions and addon.functions.checkForContainer then addon.functions.checkForContainer() end
@@ -529,6 +575,24 @@ function ContainerActions:UpdateItems(list)
 	end
 end
 
+function ContainerActions:UpdateAreaBlocks()
+	local config = addon.db and addon.db.containerActionAreaBlocks or {}
+	local instanceType = GetCurrentInstanceType()
+	for _, key in ipairs(AREA_BLOCK_ORDER) do
+		local def = AREA_BLOCKS[key]
+		if def then
+			local reason = "area:" .. key
+			local matches = def.types and def.types[instanceType]
+			local shouldBlock = matches and config[key]
+			self:SetVisibilityBlock(reason, shouldBlock and true or false)
+		end
+	end
+end
+
+function ContainerActions:OnAreaBlockSettingChanged()
+	self:UpdateAreaBlocks()
+end
+
 function ContainerActions:OnUnitEnteredVehicle(unit)
 	if unit ~= "player" then return end
 	self:SetVisibilityBlock("vehicle", true)
@@ -551,12 +615,14 @@ end
 
 function ContainerActions:OnChallengeModeStart()
 	self:SetVisibilityBlock("challengeMode", true)
+	self:UpdateAreaBlocks()
 end
 
 function ContainerActions:OnChallengeModeCompleted()
 	-- falls der Abschluss noch als aktiv markiert ist, korrigiert UpdateChallengeModeState dies
 	self:SetVisibilityBlock("challengeMode", false)
 	self:UpdateChallengeModeState()
+	self:UpdateAreaBlocks()
 end
 
 function ContainerActions:IsChallengeModeActive()
@@ -711,6 +777,7 @@ function ContainerActions:OnSettingChanged(enabled)
 		self:UpdateItems({})
 	else
 		self:ApplyAnchorPosition()
+		self:UpdateAreaBlocks()
 		if addon.functions and addon.functions.checkForContainer then addon.functions.checkForContainer() end
 	end
 end
