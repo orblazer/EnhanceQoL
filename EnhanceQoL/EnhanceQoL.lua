@@ -4490,8 +4490,97 @@ local function merchantItemIsKnown(itemIndex)
 	return false
 end
 
+--[[
+        Applies or removes a desaturation effect on the merchant item button icon. This mirrors
+        the "greyed out" visual feedback players are familiar with from the default UI when an
+        item cannot be interacted with.
+]]
+local function desaturateMerchantIcon(itemButton, desaturate)
+	if not itemButton then return end
+
+	local iconTexture = itemButton.Icon or itemButton.icon or itemButton.IconTexture or itemButton:GetNormalTexture()
+	if iconTexture then
+		if iconTexture.SetDesaturated then iconTexture:SetDesaturated(desaturate) end
+		if iconTexture.SetVertexColor then
+			if desaturate then
+				iconTexture:SetVertexColor(0.7, 0.7, 0.7, 1)
+			else
+				iconTexture:SetVertexColor(1, 1, 1, 1)
+			end
+		end
+	end
+end
+
+local function applyKnownFontTint(fontString, state)
+	if not fontString or fontString.GetObjectType and fontString:GetObjectType() ~= "FontString" then return end
+	if state then
+		if not fontString.__EnhanceQoLOriginalColor then
+			local r, g, b, a = fontString:GetTextColor()
+			if not r or not g or not b then r, g, b = 1, 1, 1 end
+			if not a then a = 1 end
+			fontString.__EnhanceQoLOriginalColor = { r, g, b, a }
+		end
+		local stored = fontString.__EnhanceQoLOriginalColor
+		local r, g, b = stored[1], stored[2], stored[3]
+		fontString:SetTextColor(r or 1, g or 1, b or 1, 0.4)
+	elseif fontString.__EnhanceQoLOriginalColor then
+		local color = fontString.__EnhanceQoLOriginalColor
+		fontString:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+		fontString.__EnhanceQoLOriginalColor = nil
+	end
+end
+
+local function applyKnownTextureTint(texture, state)
+	if not texture or texture.GetObjectType and texture:GetObjectType() ~= "Texture" then return end
+	if state then
+		if not texture.__EnhanceQoLOriginalVertexColor then
+			local r, g, b, a = texture:GetVertexColor()
+			if not r or not g or not b then r, g, b = 1, 1, 1 end
+			if not a or a == 0 then a = texture:GetAlpha() or 1 end
+			texture.__EnhanceQoLOriginalVertexColor = { r, g, b, a }
+		end
+		local stored = texture.__EnhanceQoLOriginalVertexColor
+		texture:SetVertexColor(0.55, 0.55, 0.55, stored and stored[4] or texture:GetAlpha() or 1)
+	else
+		local color = texture.__EnhanceQoLOriginalVertexColor
+		if color then
+			texture:SetVertexColor(color[1], color[2], color[3], color[4] or texture:GetAlpha() or 1)
+			texture.__EnhanceQoLOriginalVertexColor = nil
+		end
+	end
+end
+
+local function applyKnownStateToFrame(frame, state, visited)
+	if not frame or visited[frame] then return end
+	visited[frame] = true
+
+	local objectType = frame.GetObjectType and frame:GetObjectType()
+	if objectType == "FontString" then
+		applyKnownFontTint(frame, state)
+		return
+	elseif objectType == "Texture" then
+		applyKnownTextureTint(frame, state)
+		return
+	end
+
+	if frame.GetRegions then
+		local regions = { frame:GetRegions() }
+		for _, region in ipairs(regions) do
+			applyKnownStateToFrame(region, state, visited)
+		end
+	end
+
+	if frame.GetChildren then
+		local children = { frame:GetChildren() }
+		for _, child in ipairs(children) do
+			applyKnownStateToFrame(child, state, visited)
+		end
+	end
+end
+
 local function setMerchantKnownIcon(itemButton, state)
 	if not itemButton then return end
+
 	if state then
 		if not itemButton.MerchantKnownIcon then
 			local icon = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -4506,8 +4595,42 @@ local function setMerchantKnownIcon(itemButton, state)
 			itemButton.MerchantKnownIcon = icon
 		end
 		itemButton.MerchantKnownIcon:Show()
+		if not itemButton.MerchantKnownOverlay then
+			local overlay = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
+			overlay:SetAllPoints()
+			overlay:SetColorTexture(0.1, 0.1, 0.1, 0.55)
+			itemButton.MerchantKnownOverlay = overlay
+		end
+		itemButton.MerchantKnownOverlay:Show()
+		desaturateMerchantIcon(itemButton, true)
+		local parentFrame = itemButton:GetParent()
+		if parentFrame then
+			local parentName = parentFrame:GetName()
+			local nameRegion = parentFrame.Name or (parentName and _G[parentName .. "Name"])
+			if nameRegion then applyKnownFontTint(nameRegion, true) end
+
+			local moneyFrame = parentFrame.MoneyFrame or (parentName and _G[parentName .. "MoneyFrame"])
+			if moneyFrame then applyKnownStateToFrame(moneyFrame, true, {}) end
+
+			local altCurrencyFrame = parentFrame.AltCurrencyFrame or (parentName and _G[parentName .. "AltCurrencyFrame"])
+			if altCurrencyFrame then applyKnownStateToFrame(altCurrencyFrame, true, {}) end
+		end
 	else
 		if itemButton.MerchantKnownIcon then itemButton.MerchantKnownIcon:Hide() end
+		if itemButton.MerchantKnownOverlay then itemButton.MerchantKnownOverlay:Hide() end
+		-- desaturateMerchantIcon(itemButton, false)
+		local parentFrame = itemButton:GetParent()
+		if parentFrame then
+			local parentName = parentFrame:GetName()
+			local nameRegion = parentFrame.Name or (parentName and _G[parentName .. "Name"])
+			if nameRegion then applyKnownFontTint(nameRegion, false) end
+
+			local moneyFrame = parentFrame.MoneyFrame or (parentName and _G[parentName .. "MoneyFrame"])
+			if moneyFrame then applyKnownStateToFrame(moneyFrame, false, {}) end
+
+			local altCurrencyFrame = parentFrame.AltCurrencyFrame or (parentName and _G[parentName .. "AltCurrencyFrame"])
+			if altCurrencyFrame then applyKnownStateToFrame(altCurrencyFrame, false, {}) end
+		end
 	end
 end
 
