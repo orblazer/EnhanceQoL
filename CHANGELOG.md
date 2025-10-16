@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.7.0] – 2025-10-16
+
+### ✨ Added
+
+- Option to mark collected battle pets at merchants
+
+### 🔄 Changed
+
+- More visibility to "known" items at merchants with a gray overlay and dim to texts
+
+---
+
 ## [5.6.0] – 2025-10-15
 
 ### ✨ Added

@@ -2385,6 +2385,18 @@ local function addVendorMainFrame2(container)
 		end, L["markKnownOnMerchantDesc"])
 		g:AddChild(highlightKnownCheckbox)
 
+		local highlightCollectedPetsCheckbox = addon.functions.createCheckboxAce(L["markCollectedPetsOnMerchant"], addon.db["markCollectedPetsOnMerchant"], function(_, _, value)
+			addon.db["markCollectedPetsOnMerchant"] = value
+			if MerchantFrame and MerchantFrame:IsShown() then
+				if MerchantFrame.selectedTab == 2 then
+					if MerchantFrame_UpdateBuybackInfo then MerchantFrame_UpdateBuybackInfo() end
+				else
+					if MerchantFrame_UpdateMerchantInfo then MerchantFrame_UpdateMerchantInfo() end
+				end
+			end
+		end, L["markCollectedPetsOnMerchantDesc"])
+		g:AddChild(highlightCollectedPetsCheckbox)
+
 		if known then
 			g:ResumeLayout()
 			doLayout()
@@ -4490,6 +4502,42 @@ local function merchantItemIsKnown(itemIndex)
 	return false
 end
 
+local petCollectedCache = {}
+
+local function clearPetCollectedCache() wipe(petCollectedCache) end
+
+local function getPetCollectedCount(speciesID)
+	if not speciesID then return 0 end
+	local cached = petCollectedCache[speciesID]
+	if cached ~= nil then return cached end
+	if not C_PetJournal or not C_PetJournal.GetNumCollectedInfo then return 0 end
+	local numCollected = C_PetJournal.GetNumCollectedInfo(speciesID) or 0
+	petCollectedCache[speciesID] = numCollected
+	return numCollected
+end
+
+local function IsPetAlreadyCollectedFromItem(itemID)
+	if not C_PetJournal or not C_PetJournal.GetNumCollectedInfo then return false end
+	if not itemID then return false end
+
+	if not C_PetJournal.GetPetInfoByItemID then return false end
+
+	local speciesID = select(13, C_PetJournal.GetPetInfoByItemID(itemID))
+	if not speciesID then return false end
+
+	local count = getPetCollectedCount(speciesID)
+	return count > 0
+end
+
+if C_PetJournal then
+	local petJournalWatcher = CreateFrame("Frame")
+	petJournalWatcher:RegisterEvent("PET_JOURNAL_LIST_UPDATE")
+	petJournalWatcher:RegisterEvent("PET_JOURNAL_PET_DELETED")
+	petJournalWatcher:RegisterEvent("PET_JOURNAL_PET_RESTORED")
+	petJournalWatcher:RegisterEvent("NEW_PET_ADDED")
+	petJournalWatcher:SetScript("OnEvent", clearPetCollectedCache)
+end
+
 --[[
         Applies or removes a desaturation effect on the merchant item button icon. This mirrors
         the "greyed out" visual feedback players are familiar with from the default UI when an
@@ -4516,7 +4564,9 @@ local function applyKnownFontTint(fontString, state)
 	if state then
 		if not fontString.__EnhanceQoLOriginalColor then
 			local r, g, b, a = fontString:GetTextColor()
-			if not r or not g or not b then r, g, b = 1, 1, 1 end
+			if not r or not g or not b then
+				r, g, b = 1, 1, 1
+			end
 			if not a then a = 1 end
 			fontString.__EnhanceQoLOriginalColor = { r, g, b, a }
 		end
@@ -4535,7 +4585,9 @@ local function applyKnownTextureTint(texture, state)
 	if state then
 		if not texture.__EnhanceQoLOriginalVertexColor then
 			local r, g, b, a = texture:GetVertexColor()
-			if not r or not g or not b then r, g, b = 1, 1, 1 end
+			if not r or not g or not b then
+				r, g, b = 1, 1, 1
+			end
 			if not a or a == 0 then a = texture:GetAlpha() or 1 end
 			texture.__EnhanceQoLOriginalVertexColor = { r, g, b, a }
 		end
@@ -4637,7 +4689,8 @@ end
 local function updateMerchantButtonInfo()
 	local showIlvl = addon.db["showIlvlOnMerchantframe"]
 	local highlightKnown = addon.db["markKnownOnMerchant"]
-	if not showIlvl and not highlightKnown then
+	local highlightCollectedPets = addon.db["markCollectedPetsOnMerchant"]
+	if not showIlvl and not highlightKnown and not highlightCollectedPets then
 		local itemsPerPage = MERCHANT_ITEMS_PER_PAGE or 10
 		for i = 1, itemsPerPage do
 			local itemButton = _G["MerchantItem" .. i .. "ItemButton"]
@@ -4662,12 +4715,21 @@ local function updateMerchantButtonInfo()
 		local itemLink = GetMerchantItemLink(itemIndex)
 
 		if itemButton then
-			if highlightKnown then
-				local isKnown = itemLink and merchantItemIsKnown(itemIndex)
-				setMerchantKnownIcon(itemButton, isKnown)
-			else
-				setMerchantKnownIcon(itemButton, false)
+			local shouldHighlight = false
+			if highlightKnown and merchantItemIsKnown(itemIndex) then
+				shouldHighlight = true
+			elseif highlightCollectedPets then
+				if itemLink then
+					local isBattlePetClass = false
+					local itemID, classID, subclassID, _ = nil, nil, nil, nil
+					itemID, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(itemLink)
+					if classID == 15 and subclassID == 2 then
+						local collected = IsPetAlreadyCollectedFromItem(itemID)
+						if collected then shouldHighlight = true end
+					end
+				end
 			end
+			setMerchantKnownIcon(itemButton, shouldHighlight)
 			-- Clear any stale overlays from recycled buttons
 			if itemButton.ItemUpgradeArrow then itemButton.ItemUpgradeArrow:Hide() end
 			if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
@@ -6677,6 +6739,7 @@ local function initCharacter()
 	addon.functions.InitDBValue("showIlvlOnBankFrame", false)
 	addon.functions.InitDBValue("showIlvlOnMerchantframe", false)
 	addon.functions.InitDBValue("markKnownOnMerchant", false)
+	addon.functions.InitDBValue("markCollectedPetsOnMerchant", false)
 	addon.functions.InitDBValue("showIlvlOnCharframe", false)
 	addon.functions.InitDBValue("showIlvlOnBagItems", false)
 	addon.functions.InitDBValue("showBagFilterMenu", false)
