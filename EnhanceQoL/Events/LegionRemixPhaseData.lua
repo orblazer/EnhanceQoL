@@ -354,6 +354,10 @@ EnhanceQoLLegionRemixPhaseData = {
 	},
 	set = {
 		-- Raid ensembles: Nighthold=1, Tomb of Sargeras=3, Antorus=4
+		[174] = 1,
+		[178] = 1,
+		[182] = 1,
+		[186] = 1,
 		[1004] = 1,
 		[1338] = 3,
 		[1474] = 4, -- DK

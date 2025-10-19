@@ -352,6 +352,13 @@ local CATEGORY_DATA = {
 		},
 	},
 	{
+		key = "raidfinder",
+		label = T("Raid Finder", RAID_FINDER or "Raid Finder"),
+		groups = {
+			{ type = "set_mixed", cost = 20000, items = { 186, 182, 178, 174 } },
+		},
+	},
+	{
 		key = "mythic",
 		label = T("Mythic", DIFFICULTY_MYTHIC or "Mythic"),
 		groups = {
