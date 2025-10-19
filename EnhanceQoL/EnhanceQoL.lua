@@ -7269,10 +7269,10 @@ local function CreateUI()
 	end
 
 	-- Top: Events
-	addon.functions.addToTree(nil, {
-		value = "events",
-		text = EVENTS_LABEL or L["Events"] or "Events",
-	})
+	-- if addon.functions.IsTimerunner() then addon.functions.addToTree(nil, {
+	-- 	value = "events",
+	-- 	text = EVENTS_LABEL or L["Events"] or "Events",
+	-- }) end
 
 	-- Top: Profiles
 	table.insert(addon.treeGroupData, {
@@ -8159,6 +8159,10 @@ local eventHandlers = {
 				end
 			end
 		end
+		if addon.functions.IsTimerunner() then addon.functions.addToTree(nil, {
+			value = "events",
+			text = EVENTS_LABEL or L["Events"] or "Events",
+		}) end
 	end,
 	["PLAYER_MONEY"] = function()
 		if addon.db["showDurabilityOnCharframe"] then calculateDurability() end

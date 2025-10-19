@@ -35,6 +35,8 @@ for _, list in pairs(LegionRemix.phaseAchievements) do
 	table.sort(list)
 end
 LegionRemix.phaseTotals = LegionRemix.phaseTotals or {}
+LegionRemix.eventsRegistered = LegionRemix.eventsRegistered or false
+LegionRemix.active = LegionRemix.active or false
 
 function LegionRemix:GetAllPhases()
 	if self.cachedPhases then return self.cachedPhases end
@@ -244,7 +246,7 @@ end
 
 local BRONZE_CURRENCY_ID = 3252
 local DEFAULTS = {
-	overlayEnabled = true,
+	overlayEnabled = false,
 	overlayHidden = false,
 	locked = false,
 	collapsed = false,
@@ -254,9 +256,26 @@ local DEFAULTS = {
 	itemNameCache = {},
 	categoryFilters = {},
 	hideCompleteCategories = false,
-	zoneFilters = {},
+	zoneFilters = { dungeon = true, world = true, raid = true, other = true },
 	phaseFilters = { mode = "all" },
 	anchor = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 0, y = -120 },
+}
+
+local EVENT_LIST = {
+	"PLAYER_ENTERING_WORLD",
+	"NEW_MOUNT_ADDED",
+	"MOUNT_JOURNAL_USABILITY_CHANGED",
+	"TOYS_UPDATED",
+	"PET_JOURNAL_LIST_UPDATE",
+	"TRANSMOG_COLLECTION_UPDATED",
+	"TRANSMOG_COLLECTION_SOURCE_ADDED",
+	"TRANSMOG_COLLECTION_SOURCE_REMOVED",
+	"TRANSMOG_SETS_UPDATE_FAVORITE",
+	"PLAYER_SPECIALIZATION_CHANGED",
+	"CURRENCY_DISPLAY_UPDATE",
+	"ZONE_CHANGED_NEW_AREA",
+	"ZONE_CHANGED",
+	"ZONE_CHANGED_INDOORS",
 }
 
 local CLASS_MASKS = {
@@ -275,44 +294,29 @@ local CLASS_MASKS = {
 	EVOKER = 4096,
 }
 
-local REMIX_ZONE_IDS = {}
-LegionRemix.remixZoneList = LegionRemix.remixZoneList or {}
-wipe(LegionRemix.remixZoneList)
-local remixZoneSeed = {
-	619,
-	747,
-	748,
-	749,
-	750,
-	751,
-	752,
-	753,
-	754,
-	755,
-	756,
-	1456,
-	1458,
-	1466,
-	1477,
-	1492,
-	1493,
-	1501,
-	1516,
-	1520,
-	1530,
-	1544,
-	1571,
-	1648,
-	1651,
-	1676,
-	1677,
-	1712,
-	1753,
+local SUPPORTED_ZONE_TYPES = { "world", "dungeon", "raid" }
+
+local INSTANCE_DIFFICULTY_GROUPS = {
+	world = { ids = { 0 } },
+	dungeon = { ids = { 1, 2, 8, 23, 24, 33, 150 } },
+	raid = { ids = { 3, 4, 5, 6, 7, 9, 14, 15, 16, 17, 151 } },
 }
-for _, mapID in ipairs(remixZoneSeed) do
-	REMIX_ZONE_IDS[mapID] = true
-	table.insert(LegionRemix.remixZoneList, mapID)
+
+local DIFFICULTY_TO_ZONE_KEY = {}
+for zoneKey, data in pairs(INSTANCE_DIFFICULTY_GROUPS) do
+	for _, difficultyID in ipairs(data.ids) do
+		DIFFICULTY_TO_ZONE_KEY[difficultyID] = zoneKey
+	end
 end
+
+local INSTANCE_TYPE_ZONE_FALLBACK = {
+	none = "world",
+	party = "dungeon",
+	scenario = "dungeon",
+	raid = "raid",
+	pvp = "other",
+	arena = "other",
+}
 
 local CATEGORY_DATA = {
 	{
@@ -568,27 +572,14 @@ function LegionRemix:GetPhaseLookup() return PHASE_LOOKUP end
 function LegionRemix:GetPhaseAchievements() return self.phaseAchievements end
 
 local ZONE_TYPE_LABELS = {
-	any = ALL,
+	-- any = ALL,
 	world = WORLD,
 	dungeon = LFG_TYPE_DUNGEON,
 	raid = LFG_TYPE_RAID,
-	starter = L["Starter Zone"],
 	other = OTHER,
 }
 
-local ZONE_TYPE_ORDER = { "any", "world", "dungeon", "raid", "starter", "other" }
-
-local REMIX_ZONE_TYPES = {}
-
-local function MapTypeToZoneKey(mapType)
-	if not mapType then return "other" end
-	local uiMapType = Enum and Enum.UIMapType or {}
-	if mapType == uiMapType.Dungeon or mapType == uiMapType.Micro then return "dungeon" end
-	if mapType == uiMapType.Raid then return "raid" end
-	if mapType == uiMapType.Scenario then return "starter" end
-	if mapType == uiMapType.Zone or mapType == uiMapType.Continent or mapType == uiMapType.World or mapType == uiMapType.Cosmic then return "world" end
-	return "other"
-end
+local ZONE_TYPE_ORDER = { "world", "dungeon", "raid", "other" }
 
 function LegionRemix:GetZoneTypeLabel(key) return ZONE_TYPE_LABELS[key] or key end
 
@@ -753,11 +744,10 @@ function LegionRemix:EnsureZoneFilterDefaults(db)
 			end
 		end
 	end
-	-- ensure discovered zone types are marked as enabled when no selection is stored
+	self:InitializeZoneTypes()
 	if not hasSelection then
-		for _, mapID in ipairs(LegionRemix.remixZoneList or {}) do
-			local zoneKey = LegionRemix:GetZoneCategory(mapID)
-			if zoneKey and zoneKey ~= "any" then db.zoneFilters[zoneKey] = true end
+		for _, zoneKey in ipairs(SUPPORTED_ZONE_TYPES) do
+			db.zoneFilters[zoneKey] = true
 		end
 	end
 end
@@ -798,21 +788,29 @@ function LegionRemix:ResetCategoryFilters()
 	self:RefreshData()
 end
 
-function LegionRemix:GetZoneCategory(mapID)
-	if not mapID then return "other" end
-	if REMIX_ZONE_TYPES[mapID] then return REMIX_ZONE_TYPES[mapID] end
-	local info = C_Map.GetMapInfo(mapID)
-	local key = MapTypeToZoneKey(info and info.mapType or nil)
-	REMIX_ZONE_TYPES[mapID] = key
-	LegionRemix.zoneTypeLabels = LegionRemix.zoneTypeLabels or {}
-	LegionRemix.zoneTypeLabels[key] = LegionRemix:GetZoneTypeLabel(key)
+function LegionRemix:GetZoneCategory()
+	local instanceType, difficultyID
+	if type(GetInstanceInfo) == "function" then
+		local _, instType, diffID = GetInstanceInfo()
+		instanceType = instType
+		difficultyID = diffID
+	end
+
+	local key = difficultyID and DIFFICULTY_TO_ZONE_KEY[difficultyID] or nil
+	if not key and instanceType then key = INSTANCE_TYPE_ZONE_FALLBACK[instanceType] end
+	if not key then key = "other" end
+
+	self.zoneTypeLabels = self.zoneTypeLabels or {}
+	self.zoneTypeLabels[key] = self:GetZoneTypeLabel(key)
 	return key
 end
 
 function LegionRemix:InitializeZoneTypes()
-	for _, mapID in ipairs(self.remixZoneList or {}) do
-		self:GetZoneCategory(mapID)
+	self.zoneTypeLabels = self.zoneTypeLabels or {}
+	for _, key in ipairs(SUPPORTED_ZONE_TYPES) do
+		self.zoneTypeLabels[key] = self:GetZoneTypeLabel(key)
 	end
+	self.zoneTypeLabels.other = self:GetZoneTypeLabel("other")
 end
 
 function LegionRemix:GetZoneFilterOptions()
@@ -1435,7 +1433,16 @@ end
 
 function LegionRemix:RefreshData()
 	if not addon.db then return end
-	self:GetDB()
+	local db = self:GetDB()
+	if not self:IsActive(db) then
+		self.phaseTotals = {}
+		LegionRemix.phaseTotals = self.phaseTotals
+		self.latestCategories = {}
+		self.totalCost = 0
+		self.totalCollected = 0
+		self:UpdateOverlay()
+		return
+	end
 	self.phaseTotals = {}
 	LegionRemix.phaseTotals = self.phaseTotals
 	local categories = {}
@@ -1460,20 +1467,52 @@ function LegionRemix:GetBronzeCurrency()
 end
 
 function LegionRemix:IsInLegionRemixZone()
-	local mapID = C_Map.GetBestMapForUnit("player")
-	if not mapID then return false end
 	local filters, hasSpecific = self:GetActiveZoneFilters()
 	if filters.any then return true end
-	if not next(filters) then return REMIX_ZONE_IDS[mapID] or false end
-	if not REMIX_ZONE_IDS[mapID] then return false end
+	if not next(filters) then return true end
+
+	local zoneType = self:GetZoneCategory()
+	if not zoneType then return false end
 	if not hasSpecific then return true end
-	local zoneType = self:GetZoneCategory(mapID)
-	return filters[zoneType] or false
+
+	return filters[zoneType] and true or false
+end
+
+function LegionRemix:IsTimerunner() return addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() or false end
+
+function LegionRemix:IsOverlaySettingEnabled(db)
+	db = db or self:GetDB()
+	return db and db.overlayEnabled and true or false
+end
+
+function LegionRemix:IsActive(db)
+	db = db or self:GetDB()
+	if not self:IsOverlaySettingEnabled(db) then return false end
+	if not self:IsTimerunner() then return false end
+	return true
+end
+
+function LegionRemix:UpdateActivationState()
+	if not addon or not addon.db then return end
+	local db = self:GetDB()
+	local shouldActivate = self:IsActive(db)
+	if shouldActivate then
+		if not self.eventsRegistered then self:RegisterEvents() end
+		if not self.active then
+			self.active = true
+			self:InvalidateAllCaches()
+		end
+		self:RefreshData()
+	else
+		if self.eventsRegistered then self:UnregisterEvents() end
+		if self.active then self.active = false end
+		if self.overlay then self.overlay:Hide() end
+	end
 end
 
 function LegionRemix:ShouldOverlayBeVisible()
 	local db = self:GetDB()
-	if not db or not db.overlayEnabled then return false end
+	if not self:IsActive(db) then return false end
 	if db.overlayHidden then return false end
 	return self:IsInLegionRemixZone()
 end
@@ -2117,7 +2156,7 @@ function LegionRemix:SetOverlayEnabled(value)
 	if not db then return end
 	db.overlayEnabled = value and true or false
 	if value then db.overlayHidden = false end
-	self:UpdateOverlay()
+	self:UpdateActivationState()
 	self:RefreshLockButton()
 end
 
@@ -2200,6 +2239,7 @@ end
 LegionRemix.refreshPending = false
 
 function LegionRemix:RequestRefresh()
+	if not self:IsActive() then return end
 	if self.refreshPending then return end
 	self.refreshPending = true
 	C_Timer.After(0.25, function()
@@ -2221,7 +2261,11 @@ local EVENT_TO_CACHE = {
 }
 
 function LegionRemix:OnEvent(event, arg1)
-	if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_LOGIN" then
+	if not self:IsActive() then
+		self:UpdateActivationState()
+		return
+	end
+	if event == "PLAYER_ENTERING_WORLD" then
 		self.playerClass = nil
 		self:InvalidateAllCaches()
 		self:RequestRefresh()
@@ -2241,41 +2285,38 @@ function LegionRemix:OnEvent(event, arg1)
 end
 
 function LegionRemix:RegisterEvents()
-	if self.eventFrame then return end
-	local frame = CreateFrame("Frame")
-	self.eventFrame = frame
-	frame:SetScript("OnEvent", function(_, event, ...) LegionRemix:OnEvent(event, ...) end)
-	local events = {
-		"PLAYER_LOGIN",
-		"PLAYER_ENTERING_WORLD",
-		"NEW_MOUNT_ADDED",
-		"MOUNT_JOURNAL_USABILITY_CHANGED",
-		"TOYS_UPDATED",
-		"PET_JOURNAL_LIST_UPDATE",
-		"TRANSMOG_COLLECTION_UPDATED",
-		"TRANSMOG_COLLECTION_SOURCE_ADDED",
-		"TRANSMOG_COLLECTION_SOURCE_REMOVED",
-		"TRANSMOG_SETS_UPDATE_FAVORITE",
-		"PLAYER_SPECIALIZATION_CHANGED",
-		"CURRENCY_DISPLAY_UPDATE",
-		"ZONE_CHANGED_NEW_AREA",
-		"ZONE_CHANGED",
-		"ZONE_CHANGED_INDOORS",
-	}
-	for _, event in ipairs(events) do
-		frame:RegisterEvent(event)
+	if self.eventsRegistered then return end
+	local frame = self.eventFrame
+	if not frame then
+		frame = CreateFrame("Frame")
+		self.eventFrame = frame
+		frame:SetScript("OnEvent", function(_, event, ...) LegionRemix:OnEvent(event, ...) end)
 	end
+	for _, eventName in ipairs(EVENT_LIST) do
+		frame:RegisterEvent(eventName)
+	end
+	self.eventsRegistered = true
+end
+
+function LegionRemix:UnregisterEvents()
+	if not self.eventFrame or not self.eventsRegistered then return end
+	for _, eventName in ipairs(EVENT_LIST) do
+		self.eventFrame:UnregisterEvent(eventName)
+	end
+	self.eventsRegistered = false
 end
 
 function LegionRemix:Init()
-	if self.initialized then return end
+	if self.initialized then
+		self:UpdateActivationState()
+		return
+	end
 	if not addon.db then return end
 	self:GetDB()
 	self:InitializeZoneTypes()
 	self:InvalidateAllCaches()
-	self:RegisterEvents()
 	self.initialized = true
-	self:RefreshData()
+	self:UpdateActivationState()
 end
 
 local function addSpacer(container)
@@ -2489,3 +2530,11 @@ function LegionRemix.functions.treeCallback(container, group)
 	LegionRemix:Init()
 	LegionRemix:BuildOptionsUI(container)
 end
+
+local loginFrame = CreateFrame("Frame")
+loginFrame:SetScript("OnEvent", function(_, event, ...)
+	LegionRemix:OnEvent(event, ...)
+	loginFrame:UnregisterEvent("PLAYER_LOGIN")
+	loginFrame = nil
+end)
+loginFrame:RegisterEvent("PLAYER_LOGIN")
