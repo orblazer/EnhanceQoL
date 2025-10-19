@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.9.1] – 2025-10-19
+
+### 🐛 Fixed
+
+- Sometimes the gossip autoselect throws a lua error
+
+---
+
 ## [5.9.0] – 2025-10-19
 
 ### ✨ Added

@@ -7990,15 +7990,17 @@ local eventHandlers = {
 					if #options > 1 then
 						for _, v in pairs(options) do
 							if v.gossipOptionID and addon.db["autogossipID"][v.gossipOptionID] then C_GossipInfo.SelectOption(v.gossipOptionID) end
-							if v.flags == 1 then
-								-- 1 könnte "Quest abgabe" sein
+							if v.flags == 1 and v.gossipOptionID then
 								C_GossipInfo.SelectOption(v.gossipOptionID)
 								return
 							end
 						end
-					elseif #options == 1 and options[1] and not gossipClicked[options[1].gossipOptionID] then
-						gossipClicked[options[1].gossipOptionID] = true
-						C_GossipInfo.SelectOption(options[1].gossipOptionID)
+					elseif #options == 1 then
+						local onlyOption = options[1]
+						if onlyOption and onlyOption.gossipOptionID and not gossipClicked[onlyOption.gossipOptionID] then
+							gossipClicked[onlyOption.gossipOptionID] = true
+							C_GossipInfo.SelectOption(onlyOption.gossipOptionID)
+						end
 					end
 				end
 			end
