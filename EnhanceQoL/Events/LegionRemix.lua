@@ -36,14 +36,6 @@ for _, list in pairs(LegionRemix.phaseAchievements) do
 end
 LegionRemix.phaseTotals = LegionRemix.phaseTotals or {}
 
-local function T(key, fallback)
-	if type(L) == "table" then
-		local value = rawget(L, key)
-		if value then return value end
-	end
-	return fallback or key
-end
-
 function LegionRemix:GetAllPhases()
 	if self.cachedPhases then return self.cachedPhases end
 	local seen = {}
@@ -232,7 +224,7 @@ function LegionRemix:BuildFilterButtons()
 	end
 
 	createButton("all", ALL, function() LegionRemix:ResetPhaseFilters() end, "all")
-	createButton("current", T("Current Available", "Current Available"), function() LegionRemix:SetPhaseFilterMode("current") end, "current")
+	createButton("current", L["Current Available"], function() LegionRemix:SetPhaseFilterMode("current") end, "current")
 
 	self:LayoutFilterButtons()
 	if C_Timer then C_Timer.After(0, function() LegionRemix:LayoutFilterButtons() end) end
@@ -460,7 +452,7 @@ local CATEGORY_DATA = {
 	},
 	{
 		key = "rare_appearance",
-		label = T("Rare Appearance", "Rare Appearances"),
+		label = L["Rare Appearance"],
 		groups = {
 			{ type = "transmog", cost = 30000, items = { 242368, 151524, 255006, 253273 } },
 		},
@@ -518,7 +510,7 @@ local CATEGORY_DATA = {
 	},
 	{
 		key = "unique",
-		label = ITEM_UNIQUE,
+		label = L["Remix Exclusives"],
 		groups = {
 			{ type = "set_mixed", cost = 7500, items = { 4427, 4428, 4429, 4430, 4431, 4432, 4489, 4491 } },
 			{ type = "set_mixed", cost = 7500, items = { 4433, 4434, 4435, 4436, 4437, 4457, 2337 } },
@@ -576,11 +568,11 @@ function LegionRemix:GetPhaseLookup() return PHASE_LOOKUP end
 function LegionRemix:GetPhaseAchievements() return self.phaseAchievements end
 
 local ZONE_TYPE_LABELS = {
-	any = T("All Areas", "All Areas"),
+	any = ALL,
 	world = WORLD,
 	dungeon = LFG_TYPE_DUNGEON,
 	raid = LFG_TYPE_RAID,
-	starter = T("Starter Zone", "Starter Zone"),
+	starter = L["Starter Zone"],
 	other = OTHER,
 }
 
@@ -964,7 +956,7 @@ function LegionRemix:RefreshLockButton()
 	self.overlay.lockButton.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 	self.overlay.lockButton:SetBackdropColor(locked and 0.12 or 0.05, 0.15, locked and 0.04 or 0.06, 0.88)
 	self.overlay.lockButton:SetBackdropBorderColor(locked and 0.32 or 0.18, locked and 0.52 or 0.48, 0.12, 0.75)
-	self.overlay.lockButton.tooltipText = locked and T("Unlock Position", "Unlock Position") or T("Lock Position", "Lock Position")
+	self.overlay.lockButton.tooltipText = locked and UNLOCK or LOCK
 end
 
 function LegionRemix:PlayerHasMount(mountId)
@@ -1026,7 +1018,7 @@ function LegionRemix:GetAchievementDetails(achievementId)
 		return info.name, info.completed
 	end
 	local _, name, _, completed = GetAchievementInfo(achievementId)
-	if not name or name == "" then name = string.format(T("Achievement #%d", "Achievement #%d"), achievementId) end
+	if not name or name == "" then name = string.format(L["Achievement #%d"], achievementId) end
 	info = { name = name, completed = completed and true or false }
 	self.cache.achievementInfo[achievementId] = info
 	self.cache.achievements = ensureTable(self.cache.achievements)
@@ -1742,7 +1734,7 @@ function LegionRemix:HideUnusedRows(fromIndex)
 end
 
 function LegionRemix:GetItemName(entry)
-	if not entry then return T("Unknown", "Unknown") end
+	if not entry then return UNKNOWN end
 	local kind = entry.kind
 	local id = entry.id
 	local cached = self:GetCachedItemName(kind, id)
@@ -1835,7 +1827,7 @@ function LegionRemix:GetItemName(entry)
 		C_Item.RequestLoadItemDataByID(id or 0)
 		return ("Item #" .. tostring(id or "?"))
 	end
-	return T("Unknown", "Unknown")
+	return UNKNOWN
 end
 
 function LegionRemix:ShowCategoryTooltip(row)
@@ -1845,24 +1837,24 @@ function LegionRemix:ShowCategoryTooltip(row)
 	GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
 	GameTooltip:SetText(data.label or "")
 	GameTooltip:AddDoubleLine(ITEMS, string.format("%d / %d", data.collectedCount or 0, data.totalCount or 0), 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
-	GameTooltip:AddDoubleLine(T("Bronze", "Bronze"), string.format("%s / %s", formatBronze(data.collectedCost), formatBronze(data.totalCost)), 0.8, 0.8, 0.8, 0.9, 0.9, 0.9)
+	GameTooltip:AddDoubleLine(L["Bronze"], string.format("%s / %s", formatBronze(data.collectedCost), formatBronze(data.totalCost)), 0.8, 0.8, 0.8, 0.9, 0.9, 0.9)
 	GameTooltip:AddLine(" ")
 	local missing = data.filteredMissing or data.missing or {}
 	if #missing == 0 then
-		GameTooltip:AddLine(T("All items collected.", "All items collected."), 0.4, 1, 0.4)
+		GameTooltip:AddLine(L["All items collected."], 0.4, 1, 0.4)
 	else
-		GameTooltip:AddLine(T("Missing items:", "Missing items:"), 1, 0.82, 0)
+		GameTooltip:AddLine(L["Missing items:"], 1, 0.82, 0)
 		local maxEntries = 12
 		for i = 1, math.min(maxEntries, #missing) do
 			local entry = missing[i]
 			local label = self:GetItemName(entry)
-			if entry.phase then label = string.format("%s (%s)", label, string.format(T("Phase %d", "Phase %d"), entry.phase)) end
+			if entry.phase then label = string.format("%s (%s)", label, string.format(L["Phase %d"], entry.phase)) end
 			local costDisplay = (entry.cost and entry.cost > 0) and formatBronze(entry.cost) or ""
 			GameTooltip:AddDoubleLine(label, costDisplay, 0.9, 0.9, 0.9, 0.7, 0.9, 0.7)
 			if entry.requiredAchievement then
 				local achievementName, completed = self:GetAchievementDetails(entry.requiredAchievement)
-				if not achievementName or achievementName == "" then achievementName = string.format(T("Achievement #%d", "Achievement #%d"), entry.requiredAchievement) end
-				local requirementLabel = string.format(T("Requires: %s", "Requires: %s"), achievementName)
+				if not achievementName or achievementName == "" then achievementName = string.format(L["Achievement #%d"], entry.requiredAchievement) end
+				local requirementLabel = string.format(L["Requires: %s"], achievementName)
 				local statusText = completed and CRITERIA_COMPLETED or CRITERIA_NOT_COMPLETED
 				local statusR, statusG, statusB
 				if completed then
@@ -1873,7 +1865,7 @@ function LegionRemix:ShowCategoryTooltip(row)
 				GameTooltip:AddDoubleLine("  " .. requirementLabel, statusText, 0.7, 0.85, 1, statusR, statusG, statusB)
 			end
 		end
-		if #missing > maxEntries then GameTooltip:AddLine(string.format(T("+ %d more...", "+ %d more..."), #missing - maxEntries), 0.5, 0.5, 0.5) end
+		if #missing > maxEntries then GameTooltip:AddLine(string.format(L["+ %d more..."], #missing - maxEntries), 0.5, 0.5, 0.5) end
 	end
 	GameTooltip:Show()
 end
@@ -1920,7 +1912,7 @@ function LegionRemix:CreateOverlay()
 	local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 	title:SetPoint("TOPLEFT", 12, -8)
 	title:SetJustifyH("LEFT")
-	title:SetText(T("Legion Remix Collection", "Legion Remix Collection"))
+	title:SetText(L["Legion Remix Collection"])
 
 	local bronzeText = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	bronzeText:SetPoint("BOTTOMLEFT", 12, 10)
@@ -1969,10 +1961,10 @@ function LegionRemix:CreateOverlay()
 
 	local lockButton = createHeaderButton(28, 26)
 	lockButton:SetPoint("RIGHT", closeButton, "LEFT", -6, 0)
-	lockButton.tooltipText = T("Lock Position", "Lock Position")
+	lockButton.tooltipText = LOCK
 	lockButton:SetScript("OnEnter", function(btn)
 		GameTooltip:SetOwner(btn, "ANCHOR_LEFT")
-		GameTooltip:SetText(btn.tooltipText or T("Lock Position", "Lock Position"))
+		GameTooltip:SetText(btn.tooltipText or LOCK)
 	end)
 	lockButton:SetScript("OnLeave", GameTooltip_Hide)
 	lockButton:SetScript("OnClick", function()
@@ -1984,10 +1976,10 @@ function LegionRemix:CreateOverlay()
 
 	local collapse = createHeaderButton(26, 26)
 	collapse:SetPoint("RIGHT", lockButton, "LEFT", -6, 0)
-	collapse.tooltipText = T("Collapse", "Collapse")
+	collapse.tooltipText = HERO_TALENTS_COLLAPSE
 	collapse:SetScript("OnEnter", function(btn)
 		GameTooltip:SetOwner(btn, "ANCHOR_LEFT")
-		GameTooltip:SetText(btn.tooltipText or T("Collapse", "Collapse"))
+		GameTooltip:SetText(btn.tooltipText or HERO_TALENTS_COLLAPSE)
 	end)
 	collapse:SetScript("OnLeave", GameTooltip_Hide)
 	collapse:SetScript("OnClick", function()
@@ -2060,9 +2052,9 @@ function LegionRemix:UpdateOverlay()
 
 	local db = self:GetDB()
 	frame:Show()
-	if frame.collapseButton then frame.collapseButton.tooltipText = db and db.collapsed and T("Expand", "Expand") or T("Collapse", "Collapse") end
+	if frame.collapseButton then frame.collapseButton.tooltipText = db and db.collapsed and HERO_TALENTS_EXPAND or HERO_TALENTS_COLLAPSE end
 	setButtonTexture(frame.collapseButton, db and db.collapsed)
-	if frame.lockButton then frame.lockButton.tooltipText = db and db.locked and T("Unlock Position", "Unlock Position") or T("Lock Position", "Lock Position") end
+	if frame.lockButton then frame.lockButton.tooltipText = db and db.locked and UNLOCK or LOCK end
 	self:RefreshLockButton()
 
 	local activeSet, allActive = self:GetActivePhaseFilterSet()
@@ -2077,7 +2069,7 @@ function LegionRemix:UpdateOverlay()
 	frame.remainingText:SetWidth(availableWidth * 0.55)
 
 	frame.bronzeText:SetFormattedText("%s: %s", CURRENCY, formatBronze(bronze))
-	frame.remainingText:SetFormattedText("%s: %s", T("Total Remaining", "Total Remaining"), formatBronze(remaining))
+	frame.remainingText:SetFormattedText("%s: %s", L["Total Remaining"], formatBronze(remaining))
 
 	if db and db.collapsed then
 		if frame.filterBar and frame.filterBar.hasButtons then frame.filterBar:Hide() end
@@ -2311,22 +2303,22 @@ function LegionRemix:BuildOptionsUI(container)
 
 	local intro = AceGUI:Create("Label")
 	intro:SetFullWidth(true)
-	intro:SetText(T("Track your Legion Remix Bronze collection, inspired by the community WeakAura.", "Track your Legion Remix Bronze collection, inspired by the community WeakAura."))
+	intro:SetText(L["Track your Legion Remix Bronze collection"])
 	scroll:AddChild(intro)
 
 	addSpacer(scroll)
 
-	addCheckbox(scroll, T("Enable overlay", "Enable overlay"), function()
+	addCheckbox(scroll, L["Enable overlay"], function()
 		local db = LegionRemix:GetDB()
 		return db and db.overlayEnabled
 	end, function(value) LegionRemix:SetOverlayEnabled(value) end)
 
-	addCheckbox(scroll, T("Collapse progress list by default", "Collapse progress list by default"), function()
+	addCheckbox(scroll, L["Collapse progress list by default"]:format(HERO_TALENTS_COLLAPSE), function()
 		local db = LegionRemix:GetDB()
 		return db and db.collapsed
 	end, function(value) LegionRemix:SetCollapsed(value) end)
 
-	addCheckbox(scroll, T("Lock overlay position", "Lock overlay position"), function()
+	addCheckbox(scroll, L["Lock overlay position"], function()
 		local db = LegionRemix:GetDB()
 		return db and db.locked
 	end, function(value)
@@ -2340,7 +2332,7 @@ function LegionRemix:BuildOptionsUI(container)
 	addSpacer(scroll)
 
 	local scaleSlider = AceGUI:Create("Slider")
-	scaleSlider:SetLabel(T("Overlay Scale", "Overlay Scale"))
+	scaleSlider:SetLabel(L["Overlay Scale"])
 	scaleSlider:SetSliderValues(0.6, 1.6, 0.05)
 	local initialScale = LegionRemix:GetOverlayScale()
 	if type(initialScale) ~= "number" then initialScale = DEFAULTS.overlayScale or 1 end
@@ -2355,7 +2347,7 @@ function LegionRemix:BuildOptionsUI(container)
 	addSpacer(scroll)
 
 	local zoneDropdown = AceGUI:Create("Dropdown")
-	zoneDropdown:SetLabel(T("Show overlay in", "Show overlay in"))
+	zoneDropdown:SetLabel(L["Show overlay in"])
 	zoneDropdown:SetMultiselect(true)
 	zoneDropdown:SetFullWidth(true)
 	local zoneOptions = LegionRemix:GetZoneFilterOptions()
@@ -2375,7 +2367,7 @@ function LegionRemix:BuildOptionsUI(container)
 	zoneButtons:SetLayout("Flow")
 	zoneButtons:SetFullWidth(true)
 	local allZonesBtn = AceGUI:Create("Button")
-	allZonesBtn:SetText(T("Remix Zones", "Remix Zones"))
+	allZonesBtn:SetText(L["Remix Zones"])
 	allZonesBtn:SetWidth(140)
 	allZonesBtn:SetCallback("OnClick", function()
 		LegionRemix:ResetZoneFilters()
@@ -2384,7 +2376,7 @@ function LegionRemix:BuildOptionsUI(container)
 	zoneButtons:AddChild(allZonesBtn)
 
 	local everywhereBtn = AceGUI:Create("Button")
-	everywhereBtn:SetText(T("Show Everywhere", "Show Everywhere"))
+	everywhereBtn:SetText(L["Show Everywhere"])
 	everywhereBtn:SetWidth(160)
 	everywhereBtn:SetCallback("OnClick", function()
 		LegionRemix:SetZoneFilter("any", true)
@@ -2395,19 +2387,19 @@ function LegionRemix:BuildOptionsUI(container)
 
 	addSpacer(scroll)
 
-	addCheckbox(scroll, T("Only consider sets wearable by the current character", "Only consider sets wearable by the current character"), function()
+	addCheckbox(scroll, L["Only consider sets wearable by the current character"], function()
 		local db = LegionRemix:GetDB()
 		return db and db.classOnly
 	end, function(value) LegionRemix:SetClassOnly(value) end)
 
-	addCheckbox(scroll, T("Enhanced transmog tracking (slower on login)", "Enhanced transmog tracking (slower on login)"), function()
+	addCheckbox(scroll, L["Enhanced transmog tracking (slower on login)"], function()
 		local db = LegionRemix:GetDB()
 		return db and db.enhancedTracking
 	end, function(value) LegionRemix:SetEnhancedTracking(value) end)
 
 	addCheckbox(
 		scroll,
-		T("Hide complete categories", "Hide complete categories"),
+		L["Hide complete categories"],
 		function() return LegionRemix:IsHidingCompleteCategories() end,
 		function(value) LegionRemix:SetHideCompleteCategories(value) end
 	)
@@ -2415,7 +2407,7 @@ function LegionRemix:BuildOptionsUI(container)
 	addSpacer(scroll)
 
 	local categoryDropdown = AceGUI:Create("Dropdown")
-	categoryDropdown:SetLabel(T("Visible categories", "Visible categories"))
+	categoryDropdown:SetLabel(L["Visible categories"])
 	categoryDropdown:SetMultiselect(true)
 	categoryDropdown:SetFullWidth(true)
 	local categoryOptions = LegionRemix:GetCategoryOptions()
@@ -2438,7 +2430,7 @@ function LegionRemix:BuildOptionsUI(container)
 	categoryButtons:SetLayout("Flow")
 	categoryButtons:SetFullWidth(true)
 	local showAllCategories = AceGUI:Create("Button")
-	showAllCategories:SetText(T("Show all categories", "Show all categories"))
+	showAllCategories:SetText(L["Show all categories"])
 	showAllCategories:SetWidth(180)
 	showAllCategories:SetCallback("OnClick", function()
 		LegionRemix:ResetCategoryFilters()
@@ -2455,7 +2447,7 @@ function LegionRemix:BuildOptionsUI(container)
 	scroll:AddChild(buttonsGroup)
 
 	local showBtn = AceGUI:Create("Button")
-	showBtn:SetText(T("Show overlay", "Show overlay"))
+	showBtn:SetText(L["Show overlay"])
 	showBtn:SetWidth(160)
 	showBtn:SetCallback("OnClick", function()
 		LegionRemix:SetHidden(false)
@@ -2464,7 +2456,7 @@ function LegionRemix:BuildOptionsUI(container)
 	buttonsGroup:AddChild(showBtn)
 
 	local hideBtn = AceGUI:Create("Button")
-	hideBtn:SetText(T("Hide overlay", "Hide overlay"))
+	hideBtn:SetText(L["Hide overlay"])
 	hideBtn:SetWidth(160)
 	hideBtn:SetCallback("OnClick", function() LegionRemix:SetHidden(true) end)
 	buttonsGroup:AddChild(hideBtn)
@@ -2486,7 +2478,7 @@ function LegionRemix:BuildOptionsUI(container)
 	local status = AceGUI:Create("Label")
 	status:SetFullWidth(true)
 	local remaining = math.max((LegionRemix.totalCost or 0) - (LegionRemix.totalCollected or 0), 0)
-	status:SetText(string.format(T("Remaining Bronze: %s", "Remaining Bronze: %s"), formatBronze(remaining)))
+	status:SetText(string.format(L["Remaining Bronze: %s"], formatBronze(remaining)))
 	scroll:AddChild(status)
 end
 
