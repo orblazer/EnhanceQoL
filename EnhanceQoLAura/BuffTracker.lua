@@ -506,6 +506,72 @@ local function hasMissingCondition(group)
 	return false
 end
 
+local function hasKnownCondition(group)
+	if not group then return false end
+	for _, child in ipairs(group.conditions or {}) do
+		if child.join then
+			if hasKnownCondition(child) then return true end
+		elseif child.type == "known" then
+			return true
+		end
+	end
+	return false
+end
+
+local function evaluateKnownConditions(group, aura)
+	local function evaluate(node)
+		if not node then return true, false end
+		local join = node.join or "AND"
+		local children = node.conditions or {}
+		if #children == 0 then return true, false end
+
+		if join == "AND" then
+			local hasKnown = false
+			for _, child in ipairs(children) do
+				local ok, childHasKnown
+				if child.join then
+					ok, childHasKnown = evaluate(child)
+				elseif child.type == "known" then
+					ok = evaluateCondition(child, aura)
+					childHasKnown = true
+				else
+					ok = true
+					childHasKnown = false
+				end
+				if childHasKnown then
+					hasKnown = true
+					if not ok then return false, true end
+				end
+			end
+			return true, hasKnown
+		end
+
+		local hasKnown = false
+		for _, child in ipairs(children) do
+			local ok, childHasKnown
+			if child.join then
+				ok, childHasKnown = evaluate(child)
+			elseif child.type == "known" then
+				ok = evaluateCondition(child, aura)
+				childHasKnown = true
+			else
+				ok = true
+				childHasKnown = false
+			end
+			if childHasKnown then
+				hasKnown = true
+				if ok then return true, true end
+			end
+		end
+		if hasKnown then return false, true end
+		return true, false
+	end
+
+	local result, found = evaluate(group)
+	if found then return result end
+	return true
+end
+
 local function hasTimeCondition(group)
 	if not group then return false end
 	for _, child in ipairs(group.conditions or {}) do
@@ -523,6 +589,7 @@ local function refreshBuffMeta(buff)
 	if not buff then return end
 	buff._hasMissing = hasMissingCondition(buff.conditions)
 	buff._hasTime = hasTimeCondition(buff.conditions)
+	buff._hasKnown = hasKnownCondition(buff.conditions)
 end
 
 local function getCategory(id) return addon.db["buffTrackerCategories"][id] end
@@ -1029,61 +1096,73 @@ function updateBuff(catId, id, changedId, firstScan)
 	local wasActive = frame and frame.isActive
 
 	if buff and buff.showAlways then
-		local icon = buff.icon or (aura and aura.icon)
-		local showTimer = buff.showTimerText
-		if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
-		if showTimer == nil then showTimer = true end
-		if not frame then
-			frame = createBuffFrame(icon, ensureAnchor(catId), getCategory(catId).size, false, id, showTimer)
-			activeBuffFrames[catId][id] = frame
-		else
-			frame.cd:SetHideCountdownNumbers(not showTimer)
-		end
-		frame.icon:SetTexture(icon)
-		if aura then
-			if firstScan and aura.expirationTime and aura.expirationTime > 0 and (not aura.duration or aura.duration <= 0) then aura.duration = aura.expirationTime - GetTime() end
-			if aura.duration and aura.duration > 0 then
-				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
-				frame.cd:SetReverse(tType == "DEBUFF")
-			else
-				frame.cd:SetReverse(false)
-				frame.cd:Clear()
-			end
-			frame.icon:SetDesaturated(false)
-			frame.icon:SetAlpha(1)
-			if not wasActive and not firstScan then playBuffSound(catId, id, triggeredId) end
-			frame.isActive = true
-		else
-			frame.cd:SetReverse(false)
-			if buff.showCooldown then
-				local spellInfo = getSpellCooldown(id)
-				if spellInfo then
-					local cdStart = spellInfo.startTime
-					local cdDur = spellInfo.duration
-					local cdEnable = spellInfo.isEnabled
-					local modRate = spellInfo.modRate
-					if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
-						frame.cd:SetCooldown(cdStart, cdDur, modRate)
-						frame.icon:SetDesaturated(true)
-						frame.icon:SetAlpha(0.5)
-						frame.cd:SetScript("OnCooldownDone", CDResetScript)
-					else
-						frame.cd:Clear()
-						frame.cd:SetScript("OnCooldownDone", nil)
-						frame.icon:SetDesaturated(false)
-						frame.icon:SetAlpha(1)
-					end
-				end
-			else
-				frame.cd:Clear()
+		if buff._hasKnown and not evaluateKnownConditions(buff.conditions, aura) then
+			if frame then
 				frame.cd:SetScript("OnCooldownDone", nil)
+				frame.cd:Clear()
 				frame.icon:SetDesaturated(true)
 				frame.icon:SetAlpha(0.5)
+				frame.isActive = false
+				setGlow(frame, false)
+				frame:Hide()
 			end
-			frame.isActive = false
+		else
+			local icon = buff.icon or (aura and aura.icon)
+			local showTimer = buff.showTimerText
+			if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
+			if showTimer == nil then showTimer = true end
+			if not frame then
+				frame = createBuffFrame(icon, ensureAnchor(catId), getCategory(catId).size, false, id, showTimer)
+				activeBuffFrames[catId][id] = frame
+			else
+				frame.cd:SetHideCountdownNumbers(not showTimer)
+			end
+			frame.icon:SetTexture(icon)
+			if aura then
+				if firstScan and aura.expirationTime and aura.expirationTime > 0 and (not aura.duration or aura.duration <= 0) then aura.duration = aura.expirationTime - GetTime() end
+				if aura.duration and aura.duration > 0 then
+					frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+					frame.cd:SetReverse(tType == "DEBUFF")
+				else
+					frame.cd:SetReverse(false)
+					frame.cd:Clear()
+				end
+				frame.icon:SetDesaturated(false)
+				frame.icon:SetAlpha(1)
+				if not wasActive and not firstScan then playBuffSound(catId, id, triggeredId) end
+				frame.isActive = true
+			else
+				frame.cd:SetReverse(false)
+				if buff.showCooldown then
+					local spellInfo = getSpellCooldown(id)
+					if spellInfo then
+						local cdStart = spellInfo.startTime
+						local cdDur = spellInfo.duration
+						local cdEnable = spellInfo.isEnabled
+						local modRate = spellInfo.modRate
+						if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
+							frame.cd:SetCooldown(cdStart, cdDur, modRate)
+							frame.icon:SetDesaturated(true)
+							frame.icon:SetAlpha(0.5)
+							frame.cd:SetScript("OnCooldownDone", CDResetScript)
+						else
+							frame.cd:Clear()
+							frame.cd:SetScript("OnCooldownDone", nil)
+							frame.icon:SetDesaturated(false)
+							frame.icon:SetAlpha(1)
+						end
+					end
+				else
+					frame.cd:Clear()
+					frame.cd:SetScript("OnCooldownDone", nil)
+					frame.icon:SetDesaturated(true)
+					frame.icon:SetAlpha(0.5)
+				end
+				frame.isActive = false
+			end
+			setGlow(frame, buff.glow and frame.isActive)
+			frame:Show()
 		end
-		setGlow(frame, buff.glow and frame.isActive)
-		frame:Show()
 	elseif condOk then
 		if displayAura then
 			if firstScan and displayAura.expirationTime and displayAura.expirationTime > 0 and (not displayAura.duration or displayAura.duration <= 0) then

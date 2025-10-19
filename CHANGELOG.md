@@ -5,6 +5,7 @@
 ### 🐛 Fixed
 
 - Sometimes the gossip autoselect throws a lua error
+- Backs were not counted as collected
 
 ---
 

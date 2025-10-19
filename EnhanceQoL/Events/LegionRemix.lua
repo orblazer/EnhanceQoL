@@ -537,10 +537,10 @@ local CATEGORY_DATA = {
 		key = "cloaks",
 		label = BACKSLOT,
 		groups = {
-			{ type = "set_mixed", cost = 2000, items = { 4502, 4500 } },
-			{ type = "set_mixed", cost = 4000, items = { 4494, 4495, 4511, 4498 } },
-			{ type = "set_mixed", cost = 6000, items = { 4496, 4505, 4504, 4506, 4510, 4508, 4507 } },
-			{ type = "set_mixed", cost = 8000, items = { 4503, 4501, 4499, 4497, 4509 } },
+			{ type = "set_achievement_item", cost = 2000, items = { 241944, 241667 }, mod = 0 },
+			{ type = "set_achievement_item", cost = 4000, items = { 242213, 241804, 251539, 242105 }, mod = 0 },
+			{ type = "set_achievement_item", cost = 6000, items = { 251876, 241820, 241879, 241767, 241690, 239846, 241749 }, mod = 0 },
+			{ type = "set_achievement_item", cost = 8000, items = { 241790, 242002, 242070, 242121, 251874 }, mod = 0 },
 		},
 	},
 	{
@@ -1070,12 +1070,13 @@ function LegionRemix:PlayerHasSet(setId)
 	return true
 end
 
-function LegionRemix:PlayerHasTransmog(itemId)
+function LegionRemix:PlayerHasTransmog(itemId, mod)
 	if not itemId then return false end
+	if nil == mod then mod = 1 end
 	local cache = ensureTable(self.cache.transmog)
 	self.cache.transmog = cache
 	if cache[itemId] ~= nil then return cache[itemId] end
-	cache[itemId] = C_TransmogCollection.PlayerHasTransmog(itemId, 1) and true or false
+	cache[itemId] = C_TransmogCollection.PlayerHasTransmog(itemId, mod) and true or false
 	return cache[itemId]
 end
 
@@ -1151,6 +1152,7 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 	if group.type == "set_achievement_item" then
 		local cost = group.cost or 0
 		local requirements = group.requirements
+		local itemAppearanceModID = group.mod or 1
 		for _, itemId in ipairs(group.items) do
 			local entry = { kind = "transmog", id = itemId }
 			if requirements then
@@ -1160,7 +1162,7 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 					entry.requirementComplete = self:PlayerHasAchievement(requiredAchievement)
 				end
 			end
-			local owned = self:PlayerHasTransmog(itemId)
+			local owned = self:PlayerHasTransmog(itemId, itemAppearanceModID)
 			addItemResult(categoryResult, owned, cost, entry)
 		end
 		return
@@ -2235,12 +2237,7 @@ function LegionRemix:OnEvent(event, arg1)
 	elseif event == "CURRENCY_DISPLAY_UPDATE" then
 		if not arg1 or arg1 == BRONZE_CURRENCY_ID then self:UpdateOverlay() end
 	else
-		local cacheKey = EVENT_TO_CACHE[event]
-		if cacheKey then
-			self.cache[cacheKey] = {}
-		else
-			self:InvalidateAllCaches()
-		end
+		self:InvalidateAllCaches()
 		self:RequestRefresh()
 	end
 
@@ -2464,10 +2461,33 @@ function LegionRemix.functions.treeCallback(container, group)
 	LegionRemix:BuildOptionsUI(container)
 end
 
-local loginFrame = CreateFrame("Frame")
-loginFrame:SetScript("OnEvent", function(_, event, ...)
-	LegionRemix:OnEvent(event, ...)
-	loginFrame:UnregisterEvent("PLAYER_LOGIN")
-	loginFrame = nil
+local activationEvents = {
+	"PLAYER_LOGIN",
+	"PLAYER_ENTERING_WORLD",
+	"ZONE_CHANGED_NEW_AREA",
+	"ZONE_CHANGED",
+	"ZONE_CHANGED_INDOORS",
+}
+
+local activationWatcher = CreateFrame("Frame")
+for _, eventName in ipairs(activationEvents) do
+	activationWatcher:RegisterEvent(eventName)
+end
+
+activationWatcher:SetScript("OnEvent", function(_, event, ...)
+	if event == "PLAYER_LOGIN" then
+		LegionRemix:OnEvent(event, ...)
+		return
+	end
+
+	local wasRegistered = LegionRemix.eventsRegistered and true or false
+	LegionRemix:UpdateActivationState()
+	local isRegistered = LegionRemix.eventsRegistered and true or false
+
+	if not wasRegistered and isRegistered then
+		LegionRemix:OnEvent(event, ...)
+		return
+	end
+
+	if not isRegistered and addon and addon.db then LegionRemix:UpdateOverlay() end
 end)
-loginFrame:RegisterEvent("PLAYER_LOGIN")
