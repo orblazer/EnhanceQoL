@@ -916,15 +916,15 @@ function ContainerActions:BuildEntry(bag, slot, info, overrides)
 	}
 end
 
-function ContainerActions:ScanBags()
+function ContainerActions:ScanBags(bags)
 	self:Init()
-	self._tooltipScanBudget = (addon.db and addon.db.containerActionTooltipBudget) or 8
+	self._tooltipScanBudget = (addon.db and addon.db.containerActionTooltipBudget) or 4
 	local scanOpenables = (addon.db and addon.db.containerActionScanOpenables) ~= false
 	local safeItems, secureItems = self._safe, self._secure
 	if #safeItems > 0 then wipe(safeItems) end
 	if #secureItems > 0 then wipe(secureItems) end
 	if not self:IsEnabled() then return safeItems, secureItems end
-	for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
+	local function ScanBag(bag)
 		local slotCount = GetContainerNumSlots and GetContainerNumSlots(bag)
 		if slotCount and slotCount > 0 then
 			for slot = 1, slotCount do
@@ -959,6 +959,22 @@ function ContainerActions:ScanBags()
 					end
 				end
 			end
+		end
+	end
+	local processedBags = {}
+	local usedSpecificBags = false
+	if type(bags) == "table" then
+		for _, bag in ipairs(bags) do
+			if type(bag) == "number" and not processedBags[bag] then
+				processedBags[bag] = true
+				ScanBag(bag)
+				usedSpecificBags = true
+			end
+		end
+	end
+	if not usedSpecificBags then
+		for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
+			ScanBag(bag)
 		end
 	end
 	return safeItems, secureItems

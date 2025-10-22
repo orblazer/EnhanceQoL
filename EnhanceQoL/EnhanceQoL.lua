@@ -7820,7 +7820,7 @@ local function openItems(items)
 	openNextItem()
 end
 
-function addon.functions.checkForContainer()
+function addon.functions.checkForContainer(bags)
 	if not addon.db["automaticallyOpenContainer"] then
 		if addon.ContainerActions and addon.ContainerActions.UpdateItems then addon.ContainerActions:UpdateItems({}) end
 		wOpen = false
@@ -7829,7 +7829,7 @@ function addon.functions.checkForContainer()
 
 	local safeItems, secureItems = {}, {}
 	if addon.ContainerActions and addon.ContainerActions.ScanBags then
-		safeItems, secureItems = addon.ContainerActions:ScanBags()
+		safeItems, secureItems = addon.ContainerActions:ScanBags(bags)
 	end
 
 	if addon.ContainerActions and addon.ContainerActions.UpdateItems then addon.ContainerActions:UpdateItems(secureItems) end
@@ -7924,13 +7924,40 @@ local eventHandlers = {
 		end
 		if arg1 == "Blizzard_ItemInteractionUI" then addon.functions.toggleInstantCatalystButton(addon.db["instantCatalystEnabled"]) end
 	end,
-	["BAG_UPDATE_DELAYED"] = function(arg1)
-		addon.functions.clearTooltipCache()
-		if addon.db["automaticallyOpenContainer"] then
-			if wOpen then return end
-			wOpen = true
-			addon.functions.checkForContainer()
+	["BAG_UPDATE"] = function(bag)
+		addon._bagsDirty = addon._bagsDirty or {}
+		if type(bag) == "number" then addon._bagsDirty[bag] = true end
+	end,
+	["BAG_UPDATE_DELAYED"] = function()
+		if addon.functions.clearTooltipCache then
+			local now = GetTime()
+			if not addon._ttCacheLastClear or (now - addon._ttCacheLastClear) > 0.25 then
+				addon._ttCacheLastClear = now
+				addon.functions.clearTooltipCache()
+			end
 		end
+
+		if not addon.db["automaticallyOpenContainer"] then return end
+		if wOpen or addon._bagScanScheduled then return end
+
+		addon._bagScanScheduled = true
+		C_Timer.After(0, function()
+			addon._bagScanScheduled = nil
+			if wOpen or not addon.db["automaticallyOpenContainer"] then return end
+
+			wOpen = true
+
+			local bags
+			if addon._bagsDirty and next(addon._bagsDirty) then
+				bags = {}
+				for b in pairs(addon._bagsDirty) do
+					if type(b) == "number" then table.insert(bags, b) end
+				end
+				addon._bagsDirty = nil
+			end
+
+			addon.functions.checkForContainer(bags)
+		end)
 	end,
 	["CURRENCY_DISPLAY_UPDATE"] = function(arg1)
 		if arg1 == addon.variables.catalystID and addon.variables.catalystID then
