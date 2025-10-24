@@ -20,6 +20,7 @@ local defaults = {
 		cvarOverrides = {},
 		cvarPersistenceEnabled = false,
 		optionsFrameScale = 1,
+		editModeLayouts = {},
 		legionRemix = {},
 	},
 }
