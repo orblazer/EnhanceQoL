@@ -216,6 +216,8 @@ function ContainerActions:EnsureAnchor()
 				name = L["containerActionsAreaHeader"],
 				kind = settingType.Dropdown,
 				height = 180,
+				default = {},
+				set = function() end,
 				generator = function(_, rootDescription)
 					for _, areaKey in ipairs(AREA_BLOCK_ORDER) do
 						local key = areaKey
@@ -706,41 +708,86 @@ function ContainerActions:RequestVisibility(show, skipDesiredUpdate)
 	if self:HasVisibilityBlock() then
 		desired = false
 	end
+	button:SetAlpha(desired and 1 or 0)
 	if InCombat() then
 		self.pendingVisibility = desired
-		if not desired then
-			button:SetAlpha(0)
-			button:EnableMouse(false)
-		else
-			button:EnableMouse(true)
-		end
 		return
 	end
 	if desired then
-		button:EnableMouse(true)
-		button:SetAlpha(1)
 		if not button:IsShown() then button:Show() end
+		if not button:IsMouseEnabled() then button:EnableMouse(true) end
 	else
-		button:EnableMouse(false)
-		button:SetAlpha(0)
 		if button:IsShown() then button:Hide() end
+		if button:IsMouseEnabled() then button:EnableMouse(false) end
 	end
 end
 
-function ContainerActions:UpdateItems(list)
+function ContainerActions:UpdateItems(list, dirtyBags)
 	self:Init()
-	self.secureItems = list or {}
-	if #self.secureItems > 1 then table.sort(self.secureItems, SecureSort) end
+
+	local source = type(list) == "table" and list or {}
+	local secureItems = self.secureItems
+	if type(secureItems) ~= "table" then
+		secureItems = {}
+		self.secureItems = secureItems
+	end
+
+	local dirtySet
+	if type(dirtyBags) == "table" then
+		local hasDirty = false
+		dirtySet = self._dirtyBagSet or {}
+		self._dirtyBagSet = dirtySet
+		if next(dirtySet) then wipe(dirtySet) end
+		for _, bag in ipairs(dirtyBags) do
+			if type(bag) == "number" then
+				dirtySet[bag] = true
+				hasDirty = true
+			end
+		end
+		if not hasDirty then
+			for bag, flag in pairs(dirtyBags) do
+				if flag and type(bag) == "number" and not dirtySet[bag] then
+					dirtySet[bag] = true
+					hasDirty = true
+				end
+			end
+		end
+		if not hasDirty then dirtySet = nil end
+	end
+
+	if dirtySet then
+		local write = 1
+		for read = 1, #secureItems do
+			local entry = secureItems[read]
+			if entry and not dirtySet[entry.bag] then
+				secureItems[write] = entry
+				write = write + 1
+			end
+		end
+		for i = write, #secureItems do
+			secureItems[i] = nil
+		end
+		for i = 1, #source do
+			secureItems[#secureItems + 1] = source[i]
+		end
+	else
+		if #secureItems > 0 then wipe(secureItems) end
+		for i = 1, #source do
+			secureItems[i] = source[i]
+		end
+	end
+
+	if #secureItems > 1 then table.sort(secureItems, SecureSort) end
 	if not self:IsEnabled() then
 		self:ApplyButtonEntry(nil)
 		self:RequestVisibility(false)
 		return
 	end
-	if #self.secureItems == 0 then
+	if #secureItems == 0 then
 		self:ApplyButtonEntry(nil)
 		self:RequestVisibility(false)
 	else
-		self:ApplyButtonEntry(self.secureItems[1])
+		self:ApplyButtonEntry(secureItems[1])
 		self:RequestVisibility(true)
 	end
 end
