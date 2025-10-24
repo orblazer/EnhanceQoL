@@ -51,6 +51,96 @@ local FALLBACK_ORDER = {
 	speed = 11,
 }
 
+local DISPLAY_MODE_LABELS = {
+	percent = L["StatDisplayModePercent"] or "Percent",
+	rating = L["StatDisplayModeRating"] or "Rating",
+	both = L["StatDisplayModeBoth"] or "Rating + Percent",
+}
+
+local DISPLAY_MODE_ORDER = { "percent", "rating", "both" }
+
+local VALID_DISPLAY_MODE = {
+	percent = true,
+	rating = true,
+	both = true,
+}
+
+local SECONDARY_STATS = {
+	"haste",
+	"mastery",
+	"versatility",
+	"crit",
+	"lifesteal",
+	"block",
+	"parry",
+	"dodge",
+	"avoidance",
+	"speed",
+}
+
+local function normalizeMode(mode)
+	if VALID_DISPLAY_MODE[mode] then return mode end
+	return "percent"
+end
+
+local function formatNumber(value)
+	if not value then return nil end
+	local intValue = math.floor(value + 0.5)
+	if BreakUpLargeNumbers then
+		local ok, result = pcall(BreakUpLargeNumbers, intValue)
+		if ok and result then return result end
+	end
+	local str = tostring(intValue)
+	local sign = ""
+	if str:sub(1, 1) == "-" then
+		sign = "-"
+		str = str:sub(2)
+	end
+	local formatted = str:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+	return sign .. formatted
+end
+
+local function formatPercent(value)
+	if value == nil then return nil end
+	local txt = ("%.2f"):format(value)
+	txt = txt:gsub("(%..-)0+$", "%1")
+	txt = txt:gsub("%.$", "")
+	return txt .. "%"
+end
+
+local function formatStatText(label, mode, ratingValue, percentValue, secondaryPercent)
+	mode = normalizeMode(mode)
+	local ratingText = ratingValue and formatNumber(ratingValue)
+	local percentText = percentValue and formatPercent(percentValue)
+	local secondaryPercentText = secondaryPercent and formatPercent(secondaryPercent)
+
+	if not ratingText and not percentText and not secondaryPercentText then return nil end
+
+	if mode == "rating" then
+		if ratingText then return ("%s: %s"):format(label, ratingText) end
+		if percentText then return ("%s: %s"):format(label, percentText) end
+		if secondaryPercentText then return ("%s: %s"):format(label, secondaryPercentText) end
+		return nil
+	elseif mode == "both" then
+		if secondaryPercentText then
+			local percentCombo = percentText and ("%s/%s"):format(percentText, secondaryPercentText) or secondaryPercentText
+			if ratingText and percentCombo then return ("%s: %s - %s"):format(label, ratingText, percentCombo) end
+			return ("%s: %s"):format(label, ratingText or percentCombo)
+		else
+			if ratingText and percentText then return ("%s: %s - %s"):format(label, ratingText, percentText) end
+			return ("%s: %s"):format(label, ratingText or percentText)
+		end
+	else -- percent
+		if secondaryPercentText then
+			if percentText then return ("%s: %s/%s"):format(label, percentText, secondaryPercentText) end
+			return ("%s: %s"):format(label, secondaryPercentText)
+		end
+		if percentText then return ("%s: %s"):format(label, percentText) end
+		if ratingText then return ("%s: %s"):format(label, ratingText) end
+		return nil
+	end
+end
+
 local function GetPlayerPrimaryStatIndex()
 	local spec = C_SpecializationInfo.GetSpecialization()
 	if spec then
@@ -113,34 +203,40 @@ local function getOptionsHint()
 	return L["Right-Click for options"]
 end
 
+local function ensureStatEntry(key, supportsMode)
+	db[key] = db[key] or {}
+	local entry = db[key]
+	if entry.enabled == nil then entry.enabled = true end
+	if supportsMode then
+		if entry.mode == nil then
+			if entry.rating ~= nil then
+				entry.mode = entry.rating and "rating" or "percent"
+			else
+				entry.mode = "percent"
+			end
+		end
+		entry.mode = normalizeMode(entry.mode)
+	else
+		entry.mode = nil
+	end
+	entry.rating = nil
+	entry.color = entry.color or { r = 1, g = 1, b = 1 }
+end
+
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
 	addon.db.datapanel.stats = addon.db.datapanel.stats or {}
 	db = addon.db.datapanel.stats
 	db.fontSize = db.fontSize or 14
 	db.vertical = db.vertical or false
-	db.primary = db.primary or { enabled = true }
-	db.haste = db.haste or { enabled = true, rating = false }
-	db.mastery = db.mastery or { enabled = true, rating = false }
-	db.versatility = db.versatility or { enabled = true, rating = false }
-	db.crit = db.crit or { enabled = true, rating = false }
-	db.lifesteal = db.lifesteal or { enabled = true, rating = false }
-	db.block = db.block or { enabled = true, rating = false }
-	db.parry = db.parry or { enabled = true, rating = false }
-	db.dodge = db.dodge or { enabled = true, rating = false }
-	db.avoidance = db.avoidance or { enabled = true, rating = false }
-	db.speed = db.speed or { enabled = true, rating = false }
+	db.primary = db.primary or {}
+	if db.primary.enabled == nil then db.primary.enabled = true end
 	db.primary.color = db.primary.color or { r = 1, g = 1, b = 1 }
-	db.haste.color = db.haste.color or { r = 1, g = 1, b = 1 }
-	db.mastery.color = db.mastery.color or { r = 1, g = 1, b = 1 }
-	db.versatility.color = db.versatility.color or { r = 1, g = 1, b = 1 }
-	db.crit.color = db.crit.color or { r = 1, g = 1, b = 1 }
-	db.lifesteal.color = db.lifesteal.color or { r = 1, g = 1, b = 1 }
-	db.block.color = db.block.color or { r = 1, g = 1, b = 1 }
-	db.parry.color = db.parry.color or { r = 1, g = 1, b = 1 }
-	db.dodge.color = db.dodge.color or { r = 1, g = 1, b = 1 }
-	db.avoidance.color = db.avoidance.color or { r = 1, g = 1, b = 1 }
-	db.speed.color = db.speed.color or { r = 1, g = 1, b = 1 }
+	ensureStatEntry("primary", false)
+
+	for _, key in ipairs(SECONDARY_STATS) do
+		ensureStatEntry(key, true)
+	end
 end
 
 local function RestorePosition(frame)
@@ -151,7 +247,7 @@ local function RestorePosition(frame)
 end
 
 local aceWindow
-local function addStatOptions(frame, key, label, includeRating)
+local function addStatOptions(frame, key, label, supportsMode)
 	local group = AceGUI:Create("InlineGroup")
 	group:SetTitle(label)
 	group:SetFullWidth(true)
@@ -166,15 +262,16 @@ local function addStatOptions(frame, key, label, includeRating)
 	end)
 	group:AddChild(show)
 
-	if includeRating ~= false then
-		local rating = AceGUI:Create("CheckBox")
-		rating:SetLabel(L["Use rating"]:format(RATING))
-		rating:SetValue(db[key].rating)
-		rating:SetCallback("OnValueChanged", function(_, _, val)
-			db[key].rating = val and true or false
+	if supportsMode ~= false then
+		local mode = AceGUI:Create("Dropdown")
+		mode:SetLabel(L["StatDisplayMode"] or "Display mode")
+		mode:SetList(DISPLAY_MODE_LABELS, DISPLAY_MODE_ORDER)
+		mode:SetValue(db[key].mode or "percent")
+		mode:SetCallback("OnValueChanged", function(_, _, val)
+			db[key].mode = normalizeMode(val)
 			addon.DataHub:RequestUpdate(stream)
 		end)
-		group:AddChild(rating)
+		group:AddChild(mode)
 	end
 
 	local color = AceGUI:Create("ColorPicker")
@@ -258,14 +355,6 @@ local function createAceWindow()
 	scroll:DoLayout()
 end
 
-local function formatStat(label, rating, percent)
-	if rating then
-		return ("%s: %d"):format(label, rating)
-	else
-		return ("%s: %.2f%%"):format(label, percent)
-	end
-end
-
 local function colorize(text, color)
 	if color and color.r and color.g and color.b then return ("|cff%02x%02x%02x%s|r"):format(color.r * 255, color.g * 255, color.b * 255, text) end
 	return text
@@ -290,110 +379,36 @@ local function checkStats(stream)
 		}
 	end
 
+	local function emitStat(key, token, label, ratingValue, percentValue, extraPercentValue)
+		local cfg = db[key]
+		if not cfg or not cfg.enabled then return end
+		local text = formatStatText(label, cfg.mode or "percent", ratingValue, percentValue, extraPercentValue)
+		push(key, token, text, cfg.color)
+	end
+
 	local primaryValue, _, primaryName, primaryToken = GetPlayerPrimaryStat()
-	if db.primary.enabled then push("primary", primaryToken, ("%s: %d"):format(primaryName, primaryValue), db.primary.color) end
-
-	if db.haste.enabled then
-		local text
-		if db.haste.rating then
-			text = formatStat(STAT_HASTE or "Haste", GetCombatRating(CR_HASTE_MELEE), nil)
-		else
-			text = formatStat(STAT_HASTE or "Haste", nil, GetHaste())
-		end
-		push("haste", STAT_TOKENS.haste, text, db.haste.color)
+	if db.primary.enabled then
+		local formattedPrimary = formatNumber(primaryValue) or (primaryValue ~= nil and tostring(primaryValue) or "")
+		push("primary", primaryToken, ("%s: %s"):format(primaryName, formattedPrimary), db.primary.color)
 	end
 
-	if db.mastery.enabled then
-		local text
-		if db.mastery.rating then
-			text = formatStat(STAT_MASTERY or "Mastery", GetCombatRating(CR_MASTERY), nil)
-		else
-			text = formatStat(STAT_MASTERY or "Mastery", nil, GetMasteryEffect())
-		end
-		push("mastery", STAT_TOKENS.mastery, text, db.mastery.color)
+	emitStat("haste", STAT_TOKENS.haste, STAT_HASTE or "Haste", GetCombatRating(CR_HASTE_MELEE), GetHaste())
+	emitStat("mastery", STAT_TOKENS.mastery, STAT_MASTERY or "Mastery", GetCombatRating(CR_MASTERY), GetMasteryEffect())
+
+	do
+		local rating = GetCombatRating(CR_VERSATILITY_DAMAGE_DONE)
+		local dmg = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) + GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE)
+		local red = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_TAKEN) + GetVersatilityBonus(CR_VERSATILITY_DAMAGE_TAKEN)
+		emitStat("versatility", STAT_TOKENS.versatility, STAT_VERSATILITY or "Vers", rating, dmg, red)
 	end
 
-	if db.versatility.enabled then
-		local text
-		if db.versatility.rating then
-			text = formatStat(STAT_VERSATILITY or "Vers", GetCombatRating(CR_VERSATILITY_DAMAGE_DONE), nil)
-		else
-			local dmg = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) + GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE)
-			local red = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_TAKEN) + GetVersatilityBonus(CR_VERSATILITY_DAMAGE_TAKEN)
-			text = ("%s %.2f%%/%.2f%%"):format(STAT_VERSATILITY or "Vers", dmg, red)
-		end
-		push("versatility", STAT_TOKENS.versatility, text, db.versatility.color)
-	end
-
-	if db.crit.enabled then
-		local text
-		if db.crit.rating then
-			text = formatStat(STAT_CRITICAL_STRIKE or "Crit", GetCombatRating(CR_CRIT_MELEE), nil)
-		else
-			text = formatStat(STAT_CRITICAL_STRIKE or "Crit", nil, GetCritChance())
-		end
-		push("crit", STAT_TOKENS.crit, text, db.crit.color)
-	end
-
-	if db.lifesteal.enabled then
-		local text
-		if db.lifesteal.rating then
-			text = formatStat(STAT_LIFESTEAL or "Leech", GetCombatRating(CR_LIFESTEAL), nil)
-		else
-			text = formatStat(STAT_LIFESTEAL or "Leech", nil, GetLifesteal())
-		end
-		push("lifesteal", STAT_TOKENS.lifesteal, text, db.lifesteal.color)
-	end
-
-	if db.block.enabled then
-		local text
-		if db.block.rating then
-			text = formatStat(STAT_BLOCK or "Block", GetCombatRating(CR_BLOCK), nil)
-		else
-			text = formatStat(STAT_BLOCK or "Block", nil, GetBlockChance())
-		end
-		push("block", STAT_TOKENS.block, text, db.block.color)
-	end
-
-	if db.parry.enabled then
-		local text
-		if db.parry.rating then
-			text = formatStat(STAT_PARRY or "Parry", GetCombatRating(CR_PARRY), nil)
-		else
-			text = formatStat(STAT_PARRY or "Parry", nil, GetParryChance())
-		end
-		push("parry", STAT_TOKENS.parry, text, db.parry.color)
-	end
-
-	if db.dodge.enabled then
-		local text
-		if db.dodge.rating then
-			text = formatStat(STAT_DODGE or "Dodge", GetCombatRating(CR_DODGE), nil)
-		else
-			text = formatStat(STAT_DODGE or "Dodge", nil, GetDodgeChance())
-		end
-		push("dodge", STAT_TOKENS.dodge, text, db.dodge.color)
-	end
-
-	if db.avoidance.enabled then
-		local text
-		if db.avoidance.rating then
-			text = formatStat(STAT_AVOIDANCE or "Avoidance", GetCombatRating(CR_AVOIDANCE), nil)
-		else
-			text = formatStat(STAT_AVOIDANCE or "Avoidance", nil, GetAvoidance())
-		end
-		push("avoidance", STAT_TOKENS.avoidance, text, db.avoidance.color)
-	end
-
-	if db.speed.enabled then
-		local text
-		if db.speed.rating then
-			text = formatStat(STAT_SPEED or "Speed", GetCombatRating(CR_SPEED), nil)
-		else
-			text = formatStat(STAT_SPEED or "Speed", nil, GetSpeed())
-		end
-		push("speed", STAT_TOKENS.speed, text, db.speed.color)
-	end
+	emitStat("crit", STAT_TOKENS.crit, STAT_CRITICAL_STRIKE or "Crit", GetCombatRating(CR_CRIT_MELEE), GetCritChance())
+	emitStat("lifesteal", STAT_TOKENS.lifesteal, STAT_LIFESTEAL or "Leech", GetCombatRating(CR_LIFESTEAL), GetLifesteal())
+	emitStat("block", STAT_TOKENS.block, STAT_BLOCK or "Block", GetCombatRating(CR_BLOCK), GetBlockChance())
+	emitStat("parry", STAT_TOKENS.parry, STAT_PARRY or "Parry", GetCombatRating(CR_PARRY), GetParryChance())
+	emitStat("dodge", STAT_TOKENS.dodge, STAT_DODGE or "Dodge", GetCombatRating(CR_DODGE), GetDodgeChance())
+	emitStat("avoidance", STAT_TOKENS.avoidance, STAT_AVOIDANCE or "Avoidance", GetCombatRating(CR_AVOIDANCE), GetAvoidance())
+	emitStat("speed", STAT_TOKENS.speed, STAT_SPEED or "Speed", GetCombatRating(CR_SPEED), GetSpeed())
 
 	table.sort(entries, function(a, b)
 		local aOrder = a.sort or a.fallback
@@ -412,7 +427,7 @@ end
 
 local provider = {
 	id = "stats",
-	version = 1,
+	version = 2,
 	title = PET_BATTLE_STATS_LABEL,
 	update = checkStats,
 	events = {

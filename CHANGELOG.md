@@ -4,21 +4,22 @@
 
 ### ✨ Added
 
-- More customizations to Resourcebars
-- Option to reposition the BR Tracker outside of Raid and M+
-- Import/Export Resourcebars settings
-- Copy Resourcebars settings from your other specs
+- More customizations for **Resource Bars**
+- Option to reposition the **BR Tracker** outside of Raid and M+
+- **Import/Export** for Resource Bars settings
+- Copy Resource Bars settings across your other specs
+- Data Panel stats can now show **rating** and **percent** together
 
 ### 🔄 Changed
 
-- Datapanels are now configurable in size and position with the Edit Mode
-- BR Tracker is now part of the Edit Mode
-- Container open quick button is part of the Edit Mode
+- Data Panels are now configurable in size and position via **Edit Mode**
+- **BR Tracker** is now part of **Edit Mode**
+- Quick **Open Containers** button is now part of **Edit Mode**
 
 ### 🐛 Fixed
 
-- Infinite Bazaar teleport was shown for non timerunner characters
-- Stat order in Statspanel not respects blizzard default stat order
+- **Infinite Bazaar** teleport was shown for non-**Timerunner** characters
+- Stat order in the **Stats Panel** now respects Blizzard’s default stat order
 
 ---
 
