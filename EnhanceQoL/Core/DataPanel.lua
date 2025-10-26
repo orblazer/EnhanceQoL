@@ -7,6 +7,28 @@ local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 
 local panels = {}
+local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
+local VALID_STRATA = {}
+for _, strata in ipairs(STRATA_ORDER) do
+	VALID_STRATA[strata] = true
+end
+
+local function normalizeStrata(strata, fallback)
+	if type(strata) == "string" then
+		local upper = string.upper(strata)
+		if VALID_STRATA[upper] then return upper end
+	end
+	if type(fallback) == "string" then
+		local upper = string.upper(fallback)
+		if VALID_STRATA[upper] then return upper end
+	end
+	return "MEDIUM"
+end
+
+local STRATA_DROPDOWN_VALUES = {}
+for _, strata in ipairs(STRATA_ORDER) do
+	STRATA_DROPDOWN_VALUES[#STRATA_DROPDOWN_VALUES + 1] = { text = strata, isRadio = true }
+end
 
 local function copyList(source)
 	local result = {}
@@ -63,8 +85,10 @@ local function registerEditModePanel(panel)
 		width = panel.info.width or panel.frame:GetWidth() or 200,
 		height = panel.info.height or panel.frame:GetHeight() or 20,
 		hideBorder = panel.info.noBorder or false,
+		strata = normalizeStrata(panel.info.strata, panel.frame:GetFrameStrata()),
 		streams = copyList(panel.info.streams),
 	}
+	panel.info.strata = defaults.strata
 
 	local settings
 	if SettingType then
@@ -92,6 +116,13 @@ local function registerEditModePanel(panel)
 				kind = SettingType.Checkbox,
 				field = "hideBorder",
 				default = defaults.hideBorder,
+			},
+			{
+				name = L["DataPanelStrata"],
+				kind = SettingType.Dropdown,
+				field = "strata",
+				default = defaults.strata,
+				values = STRATA_DROPDOWN_VALUES,
 			},
 			{
 				name = L["DataPanelStreams"],
@@ -192,12 +223,14 @@ local function ensureSettings(id, name)
 			streamSet = {},
 			name = name or ((L["Panel"] or "Panel") .. " " .. id),
 			noBorder = false,
+			strata = "MEDIUM",
 		}
 	else
 		info.streams = info.streams or {}
 		info.streamSet = info.streamSet or {}
 		info.name = info.name or name or ((L["Panel"] or "Panel") .. " " .. id)
 		if info.noBorder == nil then info.noBorder = false end
+		info.strata = normalizeStrata(info.strata, "MEDIUM")
 	end
 
 	addon.db.dataPanels[id] = info
@@ -260,6 +293,9 @@ function DataPanel.Create(id, name, existingOnly)
 	frame:SetMovable(true)
 	frame:SetResizable(true)
 	frame:EnableMouse(true)
+	local initialStrata = normalizeStrata(info.strata, frame:GetFrameStrata())
+	info.strata = initialStrata
+	if frame:GetFrameStrata() ~= initialStrata then frame:SetFrameStrata(initialStrata) end
 
 	local panel = { frame = frame, id = id, name = info.name, streams = {}, order = {}, info = info }
 
@@ -300,10 +336,18 @@ function DataPanel.Create(id, name, existingOnly)
 		self:SyncEditModeValue("hideBorder", i and i.noBorder or false)
 	end
 
+	function panel:ApplyStrata(strata)
+		local fallback = (self.info and self.info.strata) or (self.frame and self.frame:GetFrameStrata())
+		local normalized = normalizeStrata(strata, fallback)
+		if self.info then self.info.strata = normalized end
+		if self.frame and self.frame:GetFrameStrata() ~= normalized then self.frame:SetFrameStrata(normalized) end
+		self:SyncEditModeValue("strata", normalized)
+	end
+
 	function panel:SyncEditModeValue(field, value)
 		if not EditMode or not self.editModeId or self.suspendEditSync or self.applyingFromEditMode then return end
 		self.suspendEditSync = true
-		if field == "width" or field == "height" or field == "hideBorder" or field == "streams" then EditMode:SetValue(self.editModeId, field, value) end
+		if field == "width" or field == "height" or field == "hideBorder" or field == "streams" or field == "strata" then EditMode:SetValue(self.editModeId, field, value) end
 		self.suspendEditSync = nil
 	end
 
@@ -317,6 +361,11 @@ function DataPanel.Create(id, name, existingOnly)
 	function panel:SyncEditModeStreams()
 		if not EditMode or not self.editModeId then return end
 		self:SyncEditModeValue("streams", copyList(self.info.streams))
+	end
+
+	function panel:SyncEditModeStrata()
+		if not EditMode or not self.editModeId then return end
+		self:SyncEditModeValue("strata", self.info and self.info.strata or "MEDIUM")
 	end
 
 	function panel:UpdatePositionInfo(data)
@@ -370,6 +419,7 @@ function DataPanel.Create(id, name, existingOnly)
 			info.noBorder = data.hideBorder and true or false
 			self:ApplyBorder()
 		end
+		if data.strata then self:ApplyStrata(data.strata) end
 		if data.streams then
 			self.applyingFromEditMode = true
 			self:ApplyStreams(data.streams)
@@ -660,6 +710,7 @@ function DataPanel.Create(id, name, existingOnly)
 
 	registerEditModePanel(panel)
 	panel:SyncEditModeStreams()
+	panel:SyncEditModeStrata()
 
 	return panel
 end

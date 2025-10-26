@@ -14,6 +14,7 @@ L["Right-Click for options"] = "Right-click for options"
 L["DataPanelWidth"] = "Panel width"
 L["DataPanelHeight"] = "Panel height"
 L["DataPanelHideBorder"] = "Hide border"
+L["DataPanelStrata"] = "Frame strata"
 L["DataPanelStreams"] = "Streams"
 L["Show options tooltip hint"] = 'Show "Right-click for options" tooltip hint'
 L["Context menu modifier"] = "Context menu modifier"
