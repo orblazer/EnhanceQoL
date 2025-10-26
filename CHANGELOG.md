@@ -13,6 +13,7 @@
 - Edit Mode data panels can now pick their frame strata per panel for finer layering control.
 - Data Panels now have an Edit Mode delete button with a confirmation prompt for faster cleanup.
 - Food Reminder now appears in Edit Mode with slider, dropdown, and checkbox settings for quick tuning.
+- Simplified Food Reminder sound selection to a single dropdown with None/Default/custom choices.
 - Tooltip: target context menu can now copy NPC Wowhead links (toggle in Tooltip → Unit → NPCs).
 
 ### 🔄 Changed
