@@ -2025,30 +2025,21 @@ local function addMinimapFrame(container)
 				["1"] = L["dungeonJournalLootSpecAnchorTop"],
 				["2"] = L["dungeonJournalLootSpecAnchorBottom"],
 			}
-
-			local function createColumn()
-				local column = addon.functions.createContainer("InlineGroup", "List")
-				column:SetTitle("")
-				if column.SetRelativeWidth then column:SetRelativeWidth(0.5) end
-				column:SetFullWidth(false)
-				return column
-			end
-
-			local columnAnchor = createColumn()
-			g:AddChild(columnAnchor)
+			local anchorRow = addon.functions.createContainer("InlineGroup", "Flow")
 
 			local anchorDropdown = addon.functions.createDropdownAce(L["dungeonJournalLootSpecAnchor"], anchorOptions, { "1", "2" }, function(_, _, key)
 				addon.db["dungeonJournalLootSpecAnchor"] = tonumber(key) or 1
 				if addon.DungeonJournalLootSpec then addon.DungeonJournalLootSpec:Refresh() end
 			end)
 			anchorDropdown:SetValue(tostring(addon.db["dungeonJournalLootSpecAnchor"] or 1))
-			if anchorDropdown.SetFullWidth then anchorDropdown:SetFullWidth(true) end
+			if anchorDropdown.SetRelativeWidth then anchorDropdown:SetRelativeWidth(0.5) end
+			anchorRow:AddChild(anchorDropdown)
 
 			local sliderOffsetX = addon.functions.createSliderAce(
 				L["dungeonJournalLootSpecOffsetX"] .. ": " .. addon.db["dungeonJournalLootSpecOffsetX"],
 				addon.db["dungeonJournalLootSpecOffsetX"],
 				-200,
-				200,
+				50,
 				1,
 				function(self, _, val)
 					addon.db["dungeonJournalLootSpecOffsetX"] = val
@@ -2056,18 +2047,15 @@ local function addMinimapFrame(container)
 					if addon.DungeonJournalLootSpec then addon.DungeonJournalLootSpec:Refresh() end
 				end
 			)
-			if sliderOffsetX.SetFullWidth then sliderOffsetX:SetFullWidth(true) end
-			columnAnchor:AddChild(anchorDropdown)
-			columnAnchor:AddChild(sliderOffsetX)
-
-			local columnSpacing = createColumn()
-			g:AddChild(columnSpacing)
+			if sliderOffsetX.SetRelativeWidth then sliderOffsetX:SetRelativeWidth(0.5) end
+			anchorRow:AddChild(sliderOffsetX)
+			g:AddChild(anchorRow)
 
 			local sliderOffsetY = addon.functions.createSliderAce(
 				L["dungeonJournalLootSpecOffsetY"] .. ": " .. addon.db["dungeonJournalLootSpecOffsetY"],
 				addon.db["dungeonJournalLootSpecOffsetY"],
-				-200,
-				200,
+				-50,
+				50,
 				1,
 				function(self, _, val)
 					addon.db["dungeonJournalLootSpecOffsetY"] = val
@@ -2075,12 +2063,14 @@ local function addMinimapFrame(container)
 					if addon.DungeonJournalLootSpec then addon.DungeonJournalLootSpec:Refresh() end
 				end
 			)
-			if sliderOffsetY.SetFullWidth then sliderOffsetY:SetFullWidth(true) end
+			local offsetGroup = addon.functions.createContainer("InlineGroup", "Flow")
+			if sliderOffsetY.SetRelativeWidth then sliderOffsetY:SetRelativeWidth(0.5) end
+			offsetGroup:AddChild(sliderOffsetY)
 
 			local sliderSpacing = addon.functions.createSliderAce(
 				L["dungeonJournalLootSpecSpacing"] .. ": " .. addon.db["dungeonJournalLootSpecSpacing"],
 				addon.db["dungeonJournalLootSpecSpacing"],
-				-20,
+				0,
 				40,
 				1,
 				function(self, _, val)
@@ -2089,18 +2079,15 @@ local function addMinimapFrame(container)
 					if addon.DungeonJournalLootSpec then addon.DungeonJournalLootSpec:Refresh() end
 				end
 			)
-			if sliderSpacing.SetFullWidth then sliderSpacing:SetFullWidth(true) end
-			columnSpacing:AddChild(sliderOffsetY)
-			columnSpacing:AddChild(sliderSpacing)
-
-			local columnIcons = createColumn()
-			g:AddChild(columnIcons)
+			if sliderSpacing.SetRelativeWidth then sliderSpacing:SetRelativeWidth(0.5) end
+			offsetGroup:AddChild(sliderSpacing)
+			g:AddChild(offsetGroup)
 
 			local sliderScale = addon.functions.createSliderAce(
 				L["dungeonJournalLootSpecScale"] .. ": " .. string.format("%.2f", addon.db["dungeonJournalLootSpecScale"]),
 				addon.db["dungeonJournalLootSpecScale"],
-				0.2,
-				3,
+				0.5,
+				2,
 				0.05,
 				function(self, _, val)
 					addon.db["dungeonJournalLootSpecScale"] = val
@@ -2108,13 +2095,15 @@ local function addMinimapFrame(container)
 					if addon.DungeonJournalLootSpec then addon.DungeonJournalLootSpec:Refresh() end
 				end
 			)
-			if sliderScale.SetFullWidth then sliderScale:SetFullWidth(true) end
+			local scaleGroup = addon.functions.createContainer("InlineGroup", "Flow")
+			if sliderScale.SetRelativeWidth then sliderScale:SetRelativeWidth(0.5) end
+			scaleGroup:AddChild(sliderScale)
 
 			local sliderZoom = addon.functions.createSliderAce(
 				L["dungeonJournalLootSpecIconPadding"] .. ": " .. string.format("%.2f", addon.db["dungeonJournalLootSpecIconPadding"]),
 				addon.db["dungeonJournalLootSpecIconPadding"],
 				0,
-				0.5,
+				0.2,
 				0.01,
 				function(self, _, val)
 					addon.db["dungeonJournalLootSpecIconPadding"] = val
@@ -2122,9 +2111,9 @@ local function addMinimapFrame(container)
 					if addon.DungeonJournalLootSpec then addon.DungeonJournalLootSpec:Refresh() end
 				end
 			)
-			if sliderZoom.SetFullWidth then sliderZoom:SetFullWidth(true) end
-			columnIcons:AddChild(sliderScale)
-			columnIcons:AddChild(sliderZoom)
+			if sliderZoom.SetRelativeWidth then sliderZoom:SetRelativeWidth(0.5) end
+			scaleGroup:AddChild(sliderZoom)
+			g:AddChild(scaleGroup)
 
 			local cbCompressSpecs = addon.functions.createCheckboxAce(
 				L["dungeonJournalLootSpecCompressSpecs"],
@@ -2135,7 +2124,6 @@ local function addMinimapFrame(container)
 				end,
 				L["dungeonJournalLootSpecCompressSpecsDesc"]
 			)
-			if cbCompressSpecs.SetFullWidth then cbCompressSpecs:SetFullWidth(true) end
 			g:AddChild(cbCompressSpecs)
 
 			local cbCompressRoles = addon.functions.createCheckboxAce(
@@ -2147,7 +2135,6 @@ local function addMinimapFrame(container)
 				end,
 				L["dungeonJournalLootSpecCompressRolesDesc"]
 			)
-			if cbCompressRoles.SetFullWidth then cbCompressRoles:SetFullWidth(true) end
 			g:AddChild(cbCompressRoles)
 
 			local cbShowAll = addon.functions.createCheckboxAce(
@@ -2159,7 +2146,6 @@ local function addMinimapFrame(container)
 				end,
 				L["dungeonJournalLootSpecShowAllDesc"]
 			)
-			if cbShowAll.SetFullWidth then cbShowAll:SetFullWidth(true) end
 			g:AddChild(cbShowAll)
 		end
 
