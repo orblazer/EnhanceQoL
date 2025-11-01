@@ -110,14 +110,29 @@ function addon.functions.GetActionBarAnchor(index) return DetermineAnchorFromBar
 function addon.functions.SetActionBarAnchor(index, anchorKey) ApplyActionBarAnchor(index, anchorKey) end
 
 local function RefreshAllActionBarAnchors()
+	addon.variables.actionBarAnchorDefaults = addon.variables.actionBarAnchorDefaults or {}
+	local enabled = addon.db and addon.db.actionBarAnchorEnabled
 	for i = 1, #ACTION_BAR_FRAME_NAMES do
+		local defaultKey = "actionBarAnchorDefault" .. i
+		local storedDefault = addon.db and addon.db[defaultKey]
+		if not storedDefault or not ACTION_BAR_ANCHOR_CONFIG[storedDefault] then
+			storedDefault = addon.functions.GetActionBarAnchor(i)
+			if addon.db then addon.db[defaultKey] = storedDefault end
+		end
+		addon.variables.actionBarAnchorDefaults[i] = storedDefault
+
 		local key = "actionBarAnchor" .. i
 		local stored = addon.db and addon.db[key]
 		if not stored or not ACTION_BAR_ANCHOR_CONFIG[stored] then
-			stored = addon.functions.GetActionBarAnchor(i)
+			stored = storedDefault
 			if addon.db then addon.db[key] = stored end
 		end
-		ApplyActionBarAnchor(i, stored)
+
+		if enabled then
+			ApplyActionBarAnchor(i, stored)
+		else
+			ApplyActionBarAnchor(i, storedDefault)
+		end
 	end
 end
 
@@ -2687,33 +2702,102 @@ local function addActionBarFrame(container, d)
 
 	groupCore:AddChild(addon.functions.createSpacerAce())
 
+	local anchorGroup
+	local anchorOptions = {
+		TOPLEFT = L["topLeft"] or "Top Left",
+		TOPRIGHT = L["topRight"] or "Top Right",
+		BOTTOMLEFT = L["bottomLeft"] or "Bottom Left",
+		BOTTOMRIGHT = L["bottomRight"] or "Bottom Right",
+	}
+
+	local function rebuildAnchorDropdowns()
+		if not anchorGroup then return end
+		anchorGroup:ReleaseChildren()
+		if anchorGroup.SetLayout then anchorGroup:SetLayout("Flow") end
+		for index = 1, #ACTION_BAR_FRAME_NAMES do
+			local label = L["actionBarAnchorDropdown"] and string.format(L["actionBarAnchorDropdown"], index) or string.format("Action Bar %d button anchor", index)
+			local dropdown = addon.functions.createDropdownAce(label, anchorOptions, ACTION_BAR_ANCHOR_ORDER, function(_, _, key)
+				if not ACTION_BAR_ANCHOR_CONFIG[key] then return end
+				addon.db["actionBarAnchor" .. index] = key
+				RefreshAllActionBarAnchors()
+			end)
+			local currentValue = addon.db["actionBarAnchor" .. index]
+			if not currentValue or not ACTION_BAR_ANCHOR_CONFIG[currentValue] then currentValue = addon.db["actionBarAnchorDefault" .. index] end
+			if not currentValue or not ACTION_BAR_ANCHOR_CONFIG[currentValue] then currentValue = ACTION_BAR_ANCHOR_ORDER and ACTION_BAR_ANCHOR_ORDER[1] end
+			if currentValue then dropdown:SetValue(currentValue) end
+			dropdown:SetDisabled(not addon.db["actionBarAnchorEnabled"])
+			if dropdown.SetRelativeWidth then dropdown:SetRelativeWidth(0.5) end
+			anchorGroup:AddChild(dropdown)
+		end
+		anchorGroup:DoLayout()
+		groupCore:DoLayout()
+		if wrapper and wrapper.DoLayout then wrapper:DoLayout() end
+		if scroll and scroll.DoLayout then scroll:DoLayout() end
+	end
+
+	local anchorToggle = addon.functions.createCheckboxAce(
+		L["actionBarAnchorEnable"] or "Modify Action Bar anchor",
+		addon.db["actionBarAnchorEnabled"] == true,
+		function(_, _, value)
+			addon.db["actionBarAnchorEnabled"] = value and true or false
+			RefreshAllActionBarAnchors()
+			rebuildAnchorDropdowns()
+		end,
+		L["actionBarAnchorEnableDesc"]
+	)
+	groupCore:AddChild(anchorToggle)
+
+	anchorGroup = addon.functions.createContainer("InlineGroup", "Flow")
+	anchorGroup:SetTitle(L["actionBarAnchorSectionTitle"] or "Button growth")
+	anchorGroup:SetFullWidth(true)
+	groupCore:AddChild(anchorGroup)
+
+	rebuildAnchorDropdowns()
+
+	groupCore:AddChild(addon.functions.createSpacerAce())
+
+	local rangeOptionsGroup
+	local function rebuildRangeOptions()
+		if not rangeOptionsGroup then return end
+		rangeOptionsGroup:ReleaseChildren()
+		if addon.db["actionBarFullRangeColoring"] then
+			local colorPicker = AceGUI:Create("ColorPicker")
+			colorPicker:SetLabel(L["rangeOverlayColor"])
+			local c = addon.db["actionBarFullRangeColor"]
+			colorPicker:SetColor(c.r, c.g, c.b)
+			colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
+				addon.db["actionBarFullRangeColor"] = { r = r, g = g, b = b }
+				RefreshAllRangeOverlays()
+			end)
+			rangeOptionsGroup:AddChild(colorPicker)
+
+			local alphaPercent = math.floor((addon.db["actionBarFullRangeAlpha"] or 0.35) * 100)
+			local sliderAlpha = addon.functions.createSliderAce(L["rangeOverlayAlpha"] .. ": " .. alphaPercent .. "%", alphaPercent, 1, 100, 1, function(self, _, val)
+				addon.db["actionBarFullRangeAlpha"] = val / 100
+				self:SetLabel(L["rangeOverlayAlpha"] .. ": " .. val .. "%")
+				RefreshAllRangeOverlays()
+			end)
+			rangeOptionsGroup:AddChild(sliderAlpha)
+		end
+		if rangeOptionsGroup.DoLayout then rangeOptionsGroup:DoLayout() end
+	end
+
 	local cbRange = addon.functions.createCheckboxAce(L["fullButtonRangeColoring"], addon.db["actionBarFullRangeColoring"], function(_, _, value)
-		addon.db["actionBarFullRangeColoring"] = value
-		RefreshAllRangeOverlays()
-		container:ReleaseChildren()
-		addActionBarFrame(container)
-	end, L["fullButtonRangeColoringDesc"])
+			addon.db["actionBarFullRangeColoring"] = value
+			RefreshAllRangeOverlays()
+			rebuildRangeOptions()
+		end, L["fullButtonRangeColoringDesc"])
 	groupCore:AddChild(cbRange)
 
-	if addon.db["actionBarFullRangeColoring"] then
-		local colorPicker = AceGUI:Create("ColorPicker")
-		colorPicker:SetLabel(L["rangeOverlayColor"])
-		local c = addon.db["actionBarFullRangeColor"]
-		colorPicker:SetColor(c.r, c.g, c.b)
-		colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
-			addon.db["actionBarFullRangeColor"] = { r = r, g = g, b = b }
-			RefreshAllRangeOverlays()
-		end)
-		groupCore:AddChild(colorPicker)
+	rangeOptionsGroup = addon.functions.createContainer("SimpleGroup", "List")
+	rangeOptionsGroup:SetFullWidth(true)
+	groupCore:AddChild(rangeOptionsGroup)
 
-		local alphaPercent = math.floor((addon.db["actionBarFullRangeAlpha"] or 0.35) * 100)
-		local sliderAlpha = addon.functions.createSliderAce(L["rangeOverlayAlpha"] .. ": " .. alphaPercent .. "%", alphaPercent, 1, 100, 1, function(self, _, val)
-			addon.db["actionBarFullRangeAlpha"] = val / 100
-			self:SetLabel(L["rangeOverlayAlpha"] .. ": " .. val .. "%")
-			RefreshAllRangeOverlays()
-		end)
-		groupCore:AddChild(sliderAlpha)
-	end
+	rebuildRangeOptions()
+
+	if groupCore and groupCore.DoLayout then groupCore:DoLayout() end
+	if wrapper and wrapper.DoLayout then wrapper:DoLayout() end
+	if scroll and scroll.DoLayout then scroll:DoLayout() end
 end
 
 local function addDungeonFrame(container, d)
@@ -4005,6 +4089,39 @@ local function addLootFrame(container, d)
 		groupCore:AddChild(cbShift)
 	end
 
+	local groupRollGroup = addon.functions.createContainer("InlineGroup", "List")
+	groupRollGroup:SetTitle(L["groupLootRollFrames"] or L["groupLootAnchorLabel"] or "Group loot roll frames")
+	wrapper:AddChild(groupRollGroup)
+
+	local groupRollToggle = addon.functions.createCheckboxAce(
+		L["enableGroupLootAnchorOption"] or L["groupLootAnchorLabel"] or "Move group loot roll frames",
+		addon.db.enableGroupLootAnchor,
+		function(_, _, value)
+			addon.db.enableGroupLootAnchor = value and true or false
+			if addon.LootToast and addon.LootToast.OnGroupRollAnchorOptionChanged then addon.LootToast:OnGroupRollAnchorOptionChanged(addon.db.enableGroupLootAnchor) end
+			initLootToast()
+			container:ReleaseChildren()
+			addLootFrame(container)
+		end,
+		L["enableGroupLootAnchorDesc"]
+	)
+	groupRollGroup:AddChild(groupRollToggle)
+
+	if addon.db.enableGroupLootAnchor then
+		local layout = addon.db.groupLootLayout or {}
+		local currentScale = layout.scale or 1
+		local sliderLabel = string.format("%s: %.2f", L["groupLootScale"] or "Loot roll frame scale", currentScale)
+		local sliderScale = addon.functions.createSliderAce(sliderLabel, currentScale, 0.5, 3.0, 0.05, function(self, _, val)
+			val = math.max(0.5, math.min(3.0, val or 1))
+			val = math.floor(val * 100 + 0.5) / 100
+			layout.scale = val
+			addon.db.groupLootLayout = layout
+			self:SetLabel(string.format("%s: %.2f", L["groupLootScale"] or "Loot roll frame scale", val))
+			if addon.LootToast and addon.LootToast.ApplyGroupLootLayout then addon.LootToast:ApplyGroupLootLayout() end
+		end)
+		groupRollGroup:AddChild(sliderScale)
+	end
+
 	local lootToastGroup = addon.functions.createContainer("InlineGroup", "List")
 	lootToastGroup:SetTitle(L["lootToastSectionTitle"])
 	wrapper:AddChild(lootToastGroup)
@@ -4642,6 +4759,84 @@ local function addSocialFrame(container)
 		)
 		groupInv:AddChild(cbFriends)
 	end
+
+	local friendsDecorGroup = addon.functions.createContainer("InlineGroup", "List")
+	friendsDecorGroup:SetTitle(L["friendsListDecorGroup"] or "Friends list enhancements")
+	wrapper:AddChild(friendsDecorGroup)
+
+	local friendsOptionsGroup
+	local function rebuildFriendsDecorOptions()
+		if not friendsOptionsGroup then return end
+		friendsOptionsGroup:ReleaseChildren()
+		if addon.db["friendsListDecorEnabled"] then
+			local showLocation = addon.functions.createCheckboxAce(
+				L["friendsListDecorShowLocation"] or "Show area and realm",
+				addon.db["friendsListDecorShowLocation"] ~= false,
+				function(_, _, value)
+					addon.db["friendsListDecorShowLocation"] = value and true or false
+					if addon.FriendsListDecor and addon.FriendsListDecor.Refresh then addon.FriendsListDecor:Refresh() end
+				end
+			)
+			friendsOptionsGroup:AddChild(showLocation)
+
+			local hideRealm = addon.functions.createCheckboxAce(
+				L["friendsListDecorHideOwnRealm"] or "Hide your home realm",
+				addon.db["friendsListDecorHideOwnRealm"] ~= false,
+				function(_, _, value)
+					addon.db["friendsListDecorHideOwnRealm"] = value and true or false
+					if addon.FriendsListDecor and addon.FriendsListDecor.Refresh then addon.FriendsListDecor:Refresh() end
+				end
+			)
+			friendsOptionsGroup:AddChild(hideRealm)
+
+			local labelBase = L["friendsListDecorNameFontSize"] or "Friend name font size"
+			local function fontSizeLabel(val)
+				if val <= 0 then return DEFAULT or "Default" end
+				return tostring(val)
+			end
+			local currentValue = addon.db["friendsListDecorNameFontSize"] or 0
+			local sliderFont = addon.functions.createSliderAce(
+				string.format("%s: %s", labelBase, fontSizeLabel(currentValue)),
+				currentValue,
+				0,
+				24,
+				1,
+				function(self, _, value)
+					local rounded = math.floor((value or 0) + 0.5)
+					if rounded > 0 and rounded < 8 then rounded = 8 end
+					if rounded > 24 then rounded = 24 end
+					addon.db["friendsListDecorNameFontSize"] = rounded
+					self:SetLabel(string.format("%s: %s", labelBase, fontSizeLabel(rounded)))
+					if rounded ~= value then self:SetValue(rounded) end
+					if addon.FriendsListDecor and addon.FriendsListDecor.Refresh then addon.FriendsListDecor:Refresh() end
+				end
+			)
+			friendsOptionsGroup:AddChild(sliderFont)
+		end
+		if friendsOptionsGroup.DoLayout then friendsOptionsGroup:DoLayout() end
+		if friendsDecorGroup and friendsDecorGroup.DoLayout then friendsDecorGroup:DoLayout() end
+		if groupCore and groupCore.DoLayout then groupCore:DoLayout() end
+		if wrapper and wrapper.DoLayout then wrapper:DoLayout() end
+		if scroll and scroll.DoLayout then scroll:DoLayout() end
+	end
+
+	local friendsToggle = addon.functions.createCheckboxAce(
+		L["friendsListDecorEnabledLabel"] or L["friendsListDecorGroup"] or "Enhanced friends list styling",
+		addon.db["friendsListDecorEnabled"] == true,
+		function(_, _, value)
+			addon.db["friendsListDecorEnabled"] = value and true or false
+			if addon.FriendsListDecor and addon.FriendsListDecor.SetEnabled then addon.FriendsListDecor:SetEnabled(addon.db["friendsListDecorEnabled"]) end
+			rebuildFriendsDecorOptions()
+		end,
+		L["friendsListDecorEnabledDesc"]
+	)
+	friendsDecorGroup:AddChild(friendsToggle)
+
+	friendsOptionsGroup = addon.functions.createContainer("SimpleGroup", "List")
+	friendsOptionsGroup:SetFullWidth(true)
+	friendsDecorGroup:AddChild(friendsOptionsGroup)
+	rebuildFriendsDecorOptions()
+
 	if addon.db["ignoreTooltipNote"] then
 		local sliderMaxChars = addon.functions.createSliderAce(
 			L["IgnoreTooltipMaxChars"] .. ": " .. addon.db["ignoreTooltipMaxChars"],
@@ -5544,6 +5739,7 @@ local function initDungeon()
 end
 
 local function initActionBars()
+	addon.functions.InitDBValue("actionBarAnchorEnabled", false)
 	addon.functions.InitDBValue("actionBarFullRangeColoring", false)
 	addon.functions.InitDBValue("actionBarFullRangeColor", { r = 1, g = 0.1, b = 0.1 })
 	addon.functions.InitDBValue("actionBarFullRangeAlpha", 0.35)
@@ -5554,17 +5750,21 @@ local function initActionBars()
 		end
 	end
 	RefreshAllMacroNameVisibility()
+	addon.variables.actionBarAnchorDefaults = addon.variables.actionBarAnchorDefaults or {}
 	for index = 1, #ACTION_BAR_FRAME_NAMES do
 		local dbKey = "actionBarAnchor" .. index
 		local defaultAnchor = addon.functions.GetActionBarAnchor(index)
-		addon.functions.InitDBValue(dbKey, defaultAnchor)
+		if not addon.variables.actionBarAnchorDefaults[index] then addon.variables.actionBarAnchorDefaults[index] = defaultAnchor end
+		local defaultKey = "actionBarAnchorDefault" .. index
+		addon.functions.InitDBValue(defaultKey, addon.variables.actionBarAnchorDefaults[index])
+		addon.functions.InitDBValue(dbKey, addon.db[defaultKey])
 		local stored = addon.db[dbKey]
 		if not ACTION_BAR_ANCHOR_CONFIG[stored] then
-			stored = defaultAnchor
+			stored = addon.db[defaultKey] or defaultAnchor
 			addon.db[dbKey] = stored
 		end
-		addon.functions.SetActionBarAnchor(index, stored)
 	end
+	RefreshAllActionBarAnchors()
 end
 
 local function initParty()
