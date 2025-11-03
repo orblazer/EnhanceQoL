@@ -12,12 +12,17 @@
 - Items → _Selling & Shopping → Destroy_ queue that lets you purge junk via a secure minimap/bag button. It auto-uses the include list, skips protected items like Artifact/Heirloom/Token gear, highlights bag slots, and shows optional chat feedback.
 - Chat → Optional chat bubble font override toggle with a size slider that updates bubbles instantly and persists per profile.
 
+### 🔄 Changed
+
+- Switched from SecureActionButtonTemplate to InsecureActionButtonTemplate
+
 ### 🐛 Fixed
 
 - Resource bars with seperator were behind the bar
 - Container action button now stays disabled while a Challenge Mode run is active
 - Health macro no longer hammers cooldown checks, easing the performance hit during runs
 - Chat options now refresh inline groups instead of rebuilding the whole page, so toggling checkboxes no longer jumps the scroll position.
+- Lua taint error on in combat map opening (WorldMapDungeonPortals)
 
 ---
 

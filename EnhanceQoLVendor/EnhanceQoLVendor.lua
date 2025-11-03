@@ -374,7 +374,7 @@ local function ensureDestroyButton()
 	end
 
 	local parent = _G.BagItemSearchBox and _G.BagItemSearchBox:GetParent() or ContainerFrameCombinedBags or UIParent
-	local button = CreateFrame("Button", addonName .. "_DestroyButton", parent, "SecureActionButtonTemplate")
+	local button = CreateFrame("Button", addonName .. "_DestroyButton", parent, "InsecureActionButtonTemplate")
 	button:SetSize(28, 28)
 	button:RegisterForClicks("LeftButtonUp")
 	button:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-DE-Up")

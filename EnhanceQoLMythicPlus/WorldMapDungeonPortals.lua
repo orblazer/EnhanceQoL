@@ -321,7 +321,7 @@ local function ClearContent()
 end
 
 local function CreateSecureSpellButton(parent, entry)
-	local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+	local b = CreateFrame("Button", nil, parent, "InsecureActionButtonTemplate, UIPanelButtonTemplate")
 	b:SetSize(28, 28)
 	b.entry = entry
 
@@ -434,7 +434,7 @@ end
 
 -- MapLegend-style row button: icon left, text right, full-row highlight
 local function CreateLegendRowButton(parent, entry, width, height)
-	local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+	local b = CreateFrame("Button", nil, parent, "InsecureActionButtonTemplate")
 	b:SetSize(width, height)
 	b.entry = entry
 

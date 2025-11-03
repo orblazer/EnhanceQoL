@@ -353,7 +353,7 @@ L["PlayerHealthText"] = "Player health text"
 L["TargetHealthText"] = "Target health text"
 L["HealthTextExplain"] = "%s follows Blizzard 'Status Text'. Any other mode shows your chosen format for Player, Target, and Boss frames."
 
-L["ActionbarHideExplain"] = 'Set the action bar to hidden and show on mouseover. This works only when your Action Bar is set to "%s" and "%s" in %s'
+L["ActionbarVisibilityExplain"] = 'Set the action bar to "%s" in %s to use the options below. You can combine mouseover, in-combat, and out-of-combat visibility.'
 L["ActionBarVisibilityLabel"] = "Visibility"
 L["ActionBarVisibilityMouseover"] = "Mouseover"
 L["ActionBarVisibilityInCombat"] = "Always in combat"

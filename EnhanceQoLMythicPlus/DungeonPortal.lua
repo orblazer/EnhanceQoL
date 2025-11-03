@@ -335,7 +335,7 @@ local function CreatePortalButtonsWithCooldown(frame, spells)
 
 		if spellInfo then
 			-- Button erstellen
-			local button = CreateFrame("Button", "PortalButton" .. index, frame, "SecureActionButtonTemplate")
+			local button = CreateFrame("Button", "PortalButton" .. index, frame, "InsecureActionButtonTemplate")
 			button:SetSize(buttonSize, buttonSize)
 			button.spellID = spellID
 
@@ -1293,7 +1293,7 @@ local function updateKeystoneInfo()
 					frame:Show()
 
 					-- Button erstellen
-					local button = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate")
+					local button = CreateFrame("Button", nil, frame, "InsecureActionButtonTemplate")
 					button:SetSize(buttonSize, buttonSize)
 					button:SetPoint("LEFT", frame, "LEFT", 10, 0)
 					if mapData.spellId then button.spellID = mapData.spellId end

@@ -2908,7 +2908,7 @@ local function addActionBarFrame(container, d)
 
 	local labelHeadline = addon.functions.createLabelAce(
 		"|cffffd700"
-			.. L["ActionbarHideExplain"]:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_SETTING_ACTION_BAR_ALWAYS_SHOW_BUTTONS"], _G["HUD_EDIT_MODE_MENU"])
+			.. L["ActionbarVisibilityExplain"]:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_MENU"])
 			.. "|r",
 		nil,
 		nil,
