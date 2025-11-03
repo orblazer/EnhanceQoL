@@ -353,7 +353,7 @@ L["PlayerHealthText"] = "Player health text"
 L["TargetHealthText"] = "Target health text"
 L["HealthTextExplain"] = "%s follows Blizzard 'Status Text'. Any other mode shows your chosen format for Player, Target, and Boss frames."
 
-L["ActionbarHideExplain"] = 'Set the action bar to hidden and show on mouseover. This works only when your Action Bar is set to "%s" and "%s" in %s'
+L["ActionbarVisibilityExplain"] = 'Set the action bar to "%s" in %s to use the options below. You can combine mouseover, in-combat, and out-of-combat visibility.'
 L["ActionBarVisibilityLabel"] = "Visibility"
 L["ActionBarVisibilityMouseover"] = "Mouseover"
 L["ActionBarVisibilityInCombat"] = "Always in combat"
@@ -393,6 +393,9 @@ L["UnitFrameHideExplain"] = "Adjust the visibility behavior for these frames"
 L["chatFrameFadeEnabled"] = "Enable chat fading"
 L["chatFrameFadeTimeVisibleText"] = "Text remains visible for"
 L["chatFrameFadeDurationText"] = "Fade animation duration"
+L["chatBubbleFontOverride"] = "Override chat bubble font"
+L["chatBubbleFontOverrideDesc"] = "Enable to change the font size used for chat bubbles."
+L["chatBubbleFontSize"] = "Chat bubble font size"
 
 -- Merchant
 L["enableExtendedMerchant"] = "Expand merchant frame (20 items per page)"

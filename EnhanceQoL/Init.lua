@@ -779,6 +779,7 @@ addon.variables.actionBarNames = {
 	{ name = "MultiBar6", var = "mouseoverActionBar7", text = BINDING_HEADER_ACTIONBAR7 },
 	{ name = "MultiBar7", var = "mouseoverActionBar8", text = BINDING_HEADER_ACTIONBAR8 },
 	{ name = "PetActionBar", var = "mouseoverActionBarPet", text = TUTORIAL_TITLE61_HUNTER },
+	{ name = "StanceBar", var = "mouseoverActionBarStanceBar", text = HUD_EDIT_MODE_STANCE_BAR_LABEL },
 }
 if _G.MainMenuBar then table.insert(addon.variables.actionBarNames, { name = "MainMenuBar", var = "mouseoverActionBar1", text = BINDING_HEADER_ACTIONBAR }) end
 if _G.MainActionBar then table.insert(addon.variables.actionBarNames, { name = "MainActionBar", var = "mouseoverActionBar1", text = BINDING_HEADER_ACTIONBAR }) end
@@ -792,6 +793,29 @@ addon.variables.unitFrameNames = {
 		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
 	},
 	{ name = "TargetFrame", var = "unitframeSettingTargetFrame", text = HUD_EDIT_MODE_TARGET_FRAME_LABEL },
+	{
+		name = "PetFrame",
+		var = "unitframeSettingPetFrame",
+		text = HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
+		children = { PetFrameManaBar, PetFrameHealthBar },
+		revealAllChilds = true,
+	},
+	{
+		name = "MicroMenu",
+		var = "unitframeSettingMicroMenu",
+		text = addon.L["MicroMenu"],
+		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
+		children = { MicroMenu:GetChildren() },
+		revealAllChilds = true,
+	},
+	{
+		name = "BagsBar",
+		var = "unitframeSettingBagsBar",
+		text = addon.L["BagsBar"],
+		allowedVisibility = { "NONE", "MOUSEOVER", "HIDE" },
+		children = { BagsBar:GetChildren() },
+		revealAllChilds = true,
+	},
 }
 
 table.sort(addon.variables.actionBarNames, function(a, b) return a.text < b.text end)
