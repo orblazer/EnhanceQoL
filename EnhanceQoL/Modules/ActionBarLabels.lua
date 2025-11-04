@@ -367,3 +367,18 @@ hooksecurefunc("ActionButton_UpdateRangeIndicator", function(self, checksRange, 
 		ShowRangeOverlay(self, false)
 	end
 end)
+
+local function OnPlayerLogin(self, event)
+	if event ~= "PLAYER_LOGIN" then return end
+	if Labels.RefreshAllMacroNameVisibility then Labels.RefreshAllMacroNameVisibility() end
+	if Labels.RefreshAllHotkeyStyles then Labels.RefreshAllHotkeyStyles() end
+	if Labels.RefreshAllRangeOverlays then Labels.RefreshAllRangeOverlays() end
+	if self then
+		self:UnregisterEvent("PLAYER_LOGIN")
+		self:SetScript("OnEvent", nil)
+	end
+end
+
+local initFrame = CreateFrame("Frame")
+initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:SetScript("OnEvent", OnPlayerLogin)
