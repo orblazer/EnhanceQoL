@@ -556,7 +556,7 @@ local function addVisibilityHub(container)
 		local disableOthers = config.ALWAYS_HIDDEN == true
 		for _, rule in ipairs(rules) do
 			local value = config and config[rule.key] == true
-			local cb = addon.functions.createCheckboxAce(rule.label or rule.key, value, function(_, _, checked)
+			local cb = addon.functions.createCheckboxAce(rule.label or rule.key or "", value, function(_, _, checked)
 				updateRuleSelection(rule.key, checked)
 			end, rule.description)
 			cb:SetRelativeWidth(0.5)

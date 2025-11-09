@@ -86,6 +86,7 @@ local IsControlKeyDown = IsControlKeyDown
 local IsAltKeyDown = IsAltKeyDown
 local math = math
 local TooltipUtil = _G.TooltipUtil
+local GetTime = GetTime
 
 local EQOL = select(2, ...)
 EQOL.C = {}
@@ -491,6 +492,8 @@ local UpdateUnitFrameMouseover -- forward declaration
 local frameVisibilityContext = { inCombat = false, playerHealthMissing = false }
 local frameVisibilityStates = {}
 local hookedUnitFrames = {}
+local frameVisibilityHealthEnabled = false
+local FRAME_VISIBILITY_HEALTH_THROTTLE = 0.1
 local ApplyFrameVisibilityState -- forward declaration
 
 local function UpdateFrameVisibilityContext()
@@ -502,15 +505,48 @@ local function UpdateFrameVisibilityContext()
 	end
 	frameVisibilityContext.inCombat = inCombat
 
-	local maxHP = UnitHealthMax and UnitHealthMax('player') or 0
-	local currentHP = UnitHealth and UnitHealth('player') or 0
-	frameVisibilityContext.playerHealthMissing = maxHP > 0 and currentHP < maxHP
+	if frameVisibilityHealthEnabled then
+		local maxHP = UnitHealthMax and UnitHealthMax('player') or 0
+		local currentHP = UnitHealth and UnitHealth('player') or 0
+		frameVisibilityContext.playerHealthMissing = maxHP > 0 and currentHP < maxHP
+	else
+		frameVisibilityContext.playerHealthMissing = false
+	end
 end
 
 local function SafeRegisterUnitEvent(frame, event, ...)
 	if not frame or not frame.RegisterUnitEvent or type(event) ~= "string" then return false end
 	local ok = pcall(frame.RegisterUnitEvent, frame, event, ...)
 	return ok
+end
+
+local function FrameVisibilityNeedsHealthRule()
+	for _, state in pairs(frameVisibilityStates) do
+		if state.config and state.config.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule then return true end
+	end
+	return false
+end
+
+local function UpdateFrameVisibilityHealthRegistration()
+	local needs = FrameVisibilityNeedsHealthRule()
+	frameVisibilityHealthEnabled = needs
+	local watcher = addon.variables and addon.variables.frameVisibilityWatcher
+	if not watcher then return end
+
+	if needs then
+		if watcher._eqol_healthRegistered then return end
+		SafeRegisterUnitEvent(watcher, 'UNIT_HEALTH', 'player')
+		SafeRegisterUnitEvent(watcher, 'UNIT_HEALTH_FREQUENT', 'player')
+		SafeRegisterUnitEvent(watcher, 'UNIT_MAXHEALTH', 'player')
+		watcher._eqol_healthRegistered = true
+	else
+		if not watcher._eqol_healthRegistered then return end
+		watcher:UnregisterEvent('UNIT_HEALTH')
+		watcher:UnregisterEvent('UNIT_HEALTH_FREQUENT')
+		watcher:UnregisterEvent('UNIT_MAXHEALTH')
+		watcher._eqol_healthRegistered = false
+		watcher._eqol_lastHealthEvent = nil
+	end
 end
 
 local function RefreshAllFrameVisibilities()
@@ -524,13 +560,14 @@ local function EnsureFrameVisibilityWatcher()
 	if addon.variables.frameVisibilityWatcher then return end
 
 	local watcher = CreateFrame('Frame')
-	watcher:SetScript('OnEvent', function(_, event, unit)
-		if
-			event == 'UNIT_HEALTH'
-			or event == 'UNIT_HEALTH_FREQUENT'
-			or event == 'UNIT_MAXHEALTH'
-		then
-			if unit ~= 'player' then return end
+	watcher:SetScript('OnEvent', function(self, event, unit)
+		local isHealthEvent = event == 'UNIT_HEALTH' or event == 'UNIT_HEALTH_FREQUENT' or event == 'UNIT_MAXHEALTH'
+		if isHealthEvent then
+			if not frameVisibilityHealthEnabled or unit ~= 'player' then return end
+			local now = GetTime()
+			local last = self._eqol_lastHealthEvent or 0
+			if (now - last) < FRAME_VISIBILITY_HEALTH_THROTTLE then return end
+			self._eqol_lastHealthEvent = now
 		end
 		UpdateFrameVisibilityContext()
 		RefreshAllFrameVisibilities()
@@ -538,11 +575,9 @@ local function EnsureFrameVisibilityWatcher()
 	watcher:RegisterEvent('PLAYER_ENTERING_WORLD')
 	watcher:RegisterEvent('PLAYER_REGEN_DISABLED')
 	watcher:RegisterEvent('PLAYER_REGEN_ENABLED')
-	SafeRegisterUnitEvent(watcher, 'UNIT_HEALTH', 'player')
-	SafeRegisterUnitEvent(watcher, 'UNIT_HEALTH_FREQUENT', 'player')
-	SafeRegisterUnitEvent(watcher, 'UNIT_MAXHEALTH', 'player')
 	addon.variables.frameVisibilityWatcher = watcher
 	UpdateFrameVisibilityContext()
+	UpdateFrameVisibilityHealthRegistration()
 end
 
 local function EvaluateFrameVisibility(state)
@@ -620,6 +655,7 @@ ApplyFrameVisibilityState = function(state)
 	if not cfg or not next(cfg) then
 		if state.visible ~= nil then RestoreUnitFrameVisibility(state.frame, state.cbData) end
 		frameVisibilityStates[state.frame] = nil
+		UpdateFrameVisibilityHealthRegistration()
 		return
 	end
 
@@ -634,6 +670,7 @@ ApplyFrameVisibilityState = function(state)
 		ApplyToFrameAndChildren(state, 0)
 		state.visible = false
 	end
+	UpdateFrameVisibilityHealthRegistration()
 end
 
 local function HookFrameForMouseover(frame, cbData)
@@ -708,6 +745,7 @@ UpdateUnitFrameMouseover = function(barName, cbData)
 	if not config then
 		RestoreUnitFrameVisibility(frame, cbData)
 		frameVisibilityStates[frame] = nil
+		UpdateFrameVisibilityHealthRegistration()
 		return
 	end
 

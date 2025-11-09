@@ -16,6 +16,9 @@ local L = LibStub("AceLocale-3.0"):GetLocale(PARENT_ADDON)
 local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 
+local REWARD_LABEL = REWARD or "Reward"
+local REWARD_LABEL_PLURAL = REWARDS or REWARD_LABEL
+
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 local STRATA_VALUES = {}
 for _, strata in ipairs(STRATA_ORDER) do
@@ -770,6 +773,15 @@ local CATEGORY_DATA = {
 		label = TRANSMOG_SOURCE_5,
 		groups = {
 			{
+				type = "bronze_achievement",
+				cost = 0,
+				items = {
+					42666,
+					42549,
+					{ id = 42583, rewardItems = { 253285 } },
+				},
+			},
+			{
 				type = "set_achievement",
 				cost = 0,
 				items = { 177, 185, 181, 173, 5278, 5280, 5279, 5286, 5281 },
@@ -783,22 +795,6 @@ local CATEGORY_DATA = {
 					[5280] = 42690,
 					[5281] = 61070,
 					[5286] = 42605,
-				},
-			},
-			{
-				type = "set_achievement_item",
-				cost = 0,
-				items = {
-					253285,
-					--293195,
-					253229,
-					253220,
-				},
-				requirements = {
-					[253285] = 42583,
-					[253229] = 42666,
-					[253220] = 42549,
-					-- [293195] = 42582 -- actually not implemented?
 				},
 			},
 			{
@@ -1026,6 +1022,8 @@ LegionRemix.cache.names = LegionRemix.cache.names or {}
 LegionRemix.cache.achievements = LegionRemix.cache.achievements or {}
 LegionRemix.cache.achievementInfo = LegionRemix.cache.achievementInfo or {}
 LegionRemix.cache.titles = LegionRemix.cache.titles or {}
+LegionRemix.cache.rewardItems = LegionRemix.cache.rewardItems or {}
+LegionRemix.pendingRewardItems = LegionRemix.pendingRewardItems or {}
 LegionRemix.rows = LegionRemix.rows or {}
 
 local function clearTable(tbl)
@@ -1046,6 +1044,8 @@ function LegionRemix:InvalidateAllCaches()
 	self.cache.slotGrid = {}
 	self.cache.achievements = {}
 	self.cache.achievementInfo = {}
+	self.cache.rewardItems = {}
+	self.pendingRewardItems = {}
 	self.cachedPhases = nil
 end
 
@@ -1853,6 +1853,49 @@ local function addItemResult(result, owned, cost, entry)
 	end
 end
 
+local function normalizeRewardItemId(value)
+	if type(value) == "table" then
+		value = value.itemId or value.itemID or value.id or value.reward or value.item
+	end
+	if value == nil or value == "" then return nil end
+	return tonumber(value) or value
+end
+
+local function normalizeRewardItemsList(source)
+	if not source then return nil end
+	local normalized = {}
+	local function push(itemValue)
+		local itemId = normalizeRewardItemId(itemValue)
+		if itemId then normalized[#normalized + 1] = itemId end
+	end
+	if type(source) == "table" then
+		if #source == 0 and (source.itemId or source.itemID or source.id or source.reward or source.item) then
+			push(source)
+		else
+			for _, itemValue in ipairs(source) do
+				push(itemValue)
+			end
+		end
+	else
+		push(source)
+	end
+	if #normalized > 0 then return normalized end
+	return nil
+end
+
+local function resolveRewardItems(group, entryOptions, achievementId)
+	local rewards = nil
+	if entryOptions then
+		rewards = normalizeRewardItemsList(entryOptions.rewardItems or entryOptions.rewards or entryOptions.rewardItem)
+	end
+	if rewards then return rewards end
+	if not (group and achievementId) then return nil end
+	local groupLookup = group.rewardItems or group.rewards or group.rewardItem
+	if type(groupLookup) ~= "table" then return nil end
+	local value = groupLookup[achievementId] or groupLookup[tostring(achievementId)]
+	return normalizeRewardItemsList(value)
+end
+
 function LegionRemix:ProcessSetList(result, list, cost, requirements)
 	if not list or #list == 0 then return end
 	for _, setId in ipairs(list) do
@@ -1895,62 +1938,80 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 	if group.type == "ik_achievement" or group.type == "bronze_achievement" then
 		local cost = group.cost or 0
 		local requirementsLookup = type(group.requirements) == "table" and group.requirements or nil
-		for _, itemId in ipairs(group.items) do
-			local entry = { kind = "achievement", id = itemId }
-			entry.requiredAchievement = itemId
-			entry.requirementComplete = self:PlayerHasAchievement(itemId)
-			entry.requirementAvailable = true
-			local worldQuestRequirements
-			if requirementsLookup then
-				local requirementKey = itemId
-				local requirementData = requirementsLookup[requirementKey]
-				if requirementData == nil then requirementData = requirementsLookup[tostring(requirementKey)] end
-				if type(requirementData) == "number" or type(requirementData) == "string" then
-					local questId = tonumber(requirementData)
-					if questId then
-						local questIsActive = true
-						if C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(questId) and true or false end
-						entry.requiredWorldQuest = questId
-						entry.worldQuestActive = questIsActive
-						entry.requirementAvailable = questIsActive
-						worldQuestRequirements = {
-							{ questId = questId, active = questIsActive, completed = entry.requirementComplete },
-						}
-					end
-				elseif type(requirementData) == "table" then
-					worldQuestRequirements = {}
-					local keys = {}
-					for subKey in pairs(requirementData) do
-						keys[#keys + 1] = subKey
-					end
-					table.sort(keys, function(a, b)
-						local numA, numB = tonumber(a), tonumber(b)
-						if numA and numB then return numA < numB end
-						return tostring(a) < tostring(b)
-					end)
-					local allActive = true
-					for _, subKey in ipairs(keys) do
-						local subAchievementId = tonumber(subKey) or subKey
-						local questValue = requirementData[subKey]
-						local questId = tonumber(questValue) or questValue
-						local subCompleted = subAchievementId and self:PlayerHasAchievement(subAchievementId) or false
-						local questIsActive = true
-						if questId and C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(questId) and true or false end
-						if not subCompleted and not questIsActive then allActive = false end
-						worldQuestRequirements[#worldQuestRequirements + 1] = {
-							achievementId = subAchievementId,
-							questId = questId,
-							active = questIsActive,
-							completed = subCompleted,
-						}
-					end
-					entry.requirementAvailable = allActive
-				end
+		for _, achievementData in ipairs(group.items) do
+			local entryOptions
+			local achievementId = achievementData
+			if type(achievementData) == "table" then
+				entryOptions = achievementData
+				achievementId = achievementData.id or achievementData.achievementId or achievementData.achievementID or achievementData.achievement
 			end
-			if worldQuestRequirements and #worldQuestRequirements > 0 then entry.worldQuestRequirements = worldQuestRequirements end
-			if entry.requirementAvailable == nil then entry.requirementAvailable = true end
-			applyCategoryPhaseKind(entry, categoryResult, group)
-			addItemResult(categoryResult, entry.requirementComplete, cost, entry)
+			achievementId = tonumber(achievementId) or achievementId
+			if achievementId then
+				local entry = { kind = "achievement", id = achievementId }
+				if entryOptions then
+					if entryOptions.phaseKind then entry.phaseKind = entryOptions.phaseKind end
+					if entryOptions.phaseId ~= nil then
+						local phaseValue = tonumber(entryOptions.phaseId) or entryOptions.phaseId
+						entry.phaseId = phaseValue
+					end
+				end
+				local rewardItems = resolveRewardItems(group, entryOptions, achievementId)
+				if rewardItems then entry.rewardItems = rewardItems end
+				entry.requiredAchievement = achievementId
+				entry.requirementComplete = self:PlayerHasAchievement(achievementId)
+				entry.requirementAvailable = true
+				local worldQuestRequirements
+				if requirementsLookup then
+					local requirementKey = achievementId
+					local requirementData = requirementsLookup[requirementKey]
+					if requirementData == nil then requirementData = requirementsLookup[tostring(requirementKey)] end
+					if type(requirementData) == "number" or type(requirementData) == "string" then
+						local questId = tonumber(requirementData)
+						if questId then
+							local questIsActive = true
+							if C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(questId) and true or false end
+							entry.requiredWorldQuest = questId
+							entry.worldQuestActive = questIsActive
+							entry.requirementAvailable = questIsActive
+							worldQuestRequirements = {
+								{ questId = questId, active = questIsActive, completed = entry.requirementComplete },
+							}
+						end
+					elseif type(requirementData) == "table" then
+						worldQuestRequirements = {}
+						local keys = {}
+						for subKey in pairs(requirementData) do
+							keys[#keys + 1] = subKey
+						end
+						table.sort(keys, function(a, b)
+							local numA, numB = tonumber(a), tonumber(b)
+							if numA and numB then return numA < numB end
+							return tostring(a) < tostring(b)
+						end)
+						local allActive = true
+						for _, subKey in ipairs(keys) do
+							local subAchievementId = tonumber(subKey) or subKey
+							local questValue = requirementData[subKey]
+							local questId = tonumber(questValue) or questValue
+							local subCompleted = subAchievementId and self:PlayerHasAchievement(subAchievementId) or false
+							local questIsActive = true
+							if questId and C_TaskQuest and C_TaskQuest.IsActive then questIsActive = C_TaskQuest.IsActive(questId) and true or false end
+							if not subCompleted and not questIsActive then allActive = false end
+							worldQuestRequirements[#worldQuestRequirements + 1] = {
+								achievementId = subAchievementId,
+								questId = questId,
+								active = questIsActive,
+								completed = subCompleted,
+							}
+						end
+						entry.requirementAvailable = allActive
+					end
+				end
+				if worldQuestRequirements and #worldQuestRequirements > 0 then entry.worldQuestRequirements = worldQuestRequirements end
+				if entry.requirementAvailable == nil then entry.requirementAvailable = true end
+				applyCategoryPhaseKind(entry, categoryResult, group)
+				addItemResult(categoryResult, entry.requirementComplete, cost, entry)
+			end
 		end
 		return
 	end
@@ -2583,6 +2644,103 @@ function LegionRemix:HideUnusedRows(fromIndex)
 	end
 end
 
+function LegionRemix:EnsureRewardItemLoad(itemId)
+	if not itemId then return end
+	self.pendingRewardItems = self.pendingRewardItems or {}
+	if self.pendingRewardItems[itemId] then return end
+	if Item and Item.CreateFromItemID then
+		local mixinItem = Item:CreateFromItemID(itemId)
+		if not mixinItem or mixinItem:IsItemEmpty() then return end
+		self.pendingRewardItems[itemId] = true
+		mixinItem:ContinueOnItemLoad(function()
+			self.pendingRewardItems[itemId] = nil
+			local name = mixinItem:GetItemName()
+			local link = mixinItem:GetItemLink()
+			local quality = mixinItem:GetItemQuality()
+			if not quality and C_Item and C_Item.GetItemQualityByID then
+				local fetchedQuality = C_Item.GetItemQualityByID(itemId)
+				if fetchedQuality ~= nil then quality = fetchedQuality end
+			end
+			if quality == nil then
+				if Enum and Enum.ItemQuality and Enum.ItemQuality.Common then
+					quality = Enum.ItemQuality.Common
+				else
+					quality = 1
+				end
+			end
+			self.cache.rewardItems = self.cache.rewardItems or {}
+			local info = self.cache.rewardItems[itemId] or {}
+			if name and name ~= "" then info.name = name end
+			info.link = link and link ~= "" and link or info.link
+			info.quality = quality
+			info.pending = nil
+			if not info.name or info.name == "" then info.name = string.format("Item #%s", tostring(itemId or "?")) end
+			self.cache.rewardItems[itemId] = info
+			if info.name and info.name ~= "" then self:SetCachedItemName("reward_item", itemId, info.name) end
+			if GameTooltip and GameTooltip:IsShown() then
+				local owner = GameTooltip:GetOwner()
+				if owner and owner.displayData then self:ShowCategoryTooltip(owner) end
+			end
+		end)
+	else
+		if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(itemId) end
+	end
+end
+
+function LegionRemix:GetRewardItemInfo(itemId)
+	if not itemId then return nil end
+	self.cache.rewardItems = self.cache.rewardItems or {}
+	local cached = self.cache.rewardItems[itemId]
+	if cached and cached.name and cached.link and cached.quality and not cached.pending then return cached end
+
+	local name, link, quality = GetItemInfo(itemId)
+	if name and name ~= "" then
+		if quality == nil and C_Item and C_Item.GetItemQualityByID then
+			local fetchedQuality = C_Item.GetItemQualityByID(itemId)
+			if fetchedQuality ~= nil then quality = fetchedQuality end
+		end
+		if quality == nil then
+			if Enum and Enum.ItemQuality and Enum.ItemQuality.Common then
+				quality = Enum.ItemQuality.Common
+			else
+				quality = 1
+			end
+		end
+		local info = self.cache.rewardItems[itemId] or {}
+		info.name = name
+		info.link = link
+		info.quality = quality
+		info.pending = nil
+		self.cache.rewardItems[itemId] = info
+		self:SetCachedItemName("reward_item", itemId, name)
+		if not info.link or info.link == "" then self:EnsureRewardItemLoad(itemId) end
+		return info
+	end
+
+	local fallbackName = (cached and cached.name)
+	if (not fallbackName or fallbackName == "") and C_Item and C_Item.GetItemNameByID then
+		local fetchedName = C_Item.GetItemNameByID(itemId)
+		if fetchedName and fetchedName ~= "" then fallbackName = fetchedName end
+	end
+	if not fallbackName or fallbackName == "" then fallbackName = self:GetCachedItemName("reward_item", itemId) end
+	if not fallbackName or fallbackName == "" then fallbackName = string.format("Item #%s", tostring(itemId or "?")) end
+	local fallbackQuality = (cached and cached.quality) or (C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(itemId))
+	if fallbackQuality == nil then
+		if Enum and Enum.ItemQuality and Enum.ItemQuality.Common then
+			fallbackQuality = Enum.ItemQuality.Common
+		else
+			fallbackQuality = 1
+		end
+	end
+	local info = cached or {}
+	info.name = fallbackName
+	info.quality = fallbackQuality
+	info.pending = true
+	self.cache.rewardItems[itemId] = info
+	self:EnsureRewardItemLoad(itemId)
+	return info
+end
+
 function LegionRemix:GetItemName(entry)
 	if not entry then return UNKNOWN end
 	local kind = entry.kind
@@ -2743,6 +2901,34 @@ function LegionRemix:ShowCategoryTooltip(row)
 							end
 							GameTooltip:AddLine("  " .. requirementLabel, statusR, statusG, statusB)
 						end
+					end
+				end
+			end
+			if entry.rewardItems and #entry.rewardItems > 0 then
+				local headerLabel = (#entry.rewardItems > 1) and REWARD_LABEL_PLURAL or REWARD_LABEL
+				GameTooltip:AddLine("  " .. headerLabel .. ":", 0.7, 0.85, 1)
+				for _, rewardId in ipairs(entry.rewardItems) do
+					local normalizedId = tonumber(rewardId) or rewardId
+					if normalizedId then
+						local rewardInfo = self:GetRewardItemInfo(normalizedId)
+						local displayName = rewardInfo and rewardInfo.name or string.format("Item #%s", tostring(normalizedId))
+						local displayLink = rewardInfo and rewardInfo.link
+						local quality = rewardInfo and rewardInfo.quality or (Enum and Enum.ItemQuality and Enum.ItemQuality.Common) or 1
+						local r, g, b = 1, 1, 1
+						if not displayLink then
+							local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+							if color then
+								r = color.r or r
+								g = color.g or g
+								b = color.b or b
+							elseif NORMAL_FONT_COLOR then
+								r = NORMAL_FONT_COLOR.r or r
+								g = NORMAL_FONT_COLOR.g or g
+								b = NORMAL_FONT_COLOR.b or b
+							end
+						end
+						local lineText = "    " .. (displayLink and displayLink or displayName)
+						GameTooltip:AddLine(lineText, r, g, b)
 					end
 				end
 			end

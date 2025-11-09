@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.15.0] – 2025-11-10
+
+### ✨ Added
+
+- **Visibility Hub** (UI → Action Bar) lets you pick any Blizzard action bar or frame, then mix-and-match mouseover, combat, and the new “Player health below 100%” triggers with a single dropdown workflow. Action bars still expose their anchor/keybind extras when selected.
+- Legion Remix achievements can now list their reward items directly in the missing-items tooltip, complete with item-quality coloring.
+
+### 🔄 Changed
+
+- Unit frame visibility now uses the same scenario model as action bars, enabling multiple states per frame while keeping legacy “always hide” support.
+- Health-triggered frame fades only register the relevant unit events when a frame actually uses that rule, and updates are throttled to avoid `UNIT_HEALTH_FREQUENT` spam.
+
+---
+
 ## [5.14.0] – 2025-11-07
 
 ### ✨ Added

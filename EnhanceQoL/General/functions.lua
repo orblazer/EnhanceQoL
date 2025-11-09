@@ -111,7 +111,7 @@ function addon.functions.createCheckboxAce(text, value, callBack, description)
 	checkbox:SetValue(value)
 	checkbox:SetCallback("OnValueChanged", callBack)
 	checkbox:SetFullWidth(true)
-	if description then checkbox:SetDescription(string.format("|cffffd700" .. description .. "|r ")) end
+	if description then checkbox:SetDescription("|cffffd700" .. tostring(description) .. "|r ") end
 
 	return checkbox
 end
