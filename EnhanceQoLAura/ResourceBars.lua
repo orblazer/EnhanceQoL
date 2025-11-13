@@ -2367,31 +2367,43 @@ function updateHealthBar(evt)
 		elseif settings.useClassColor then
 			baseR, baseG, baseB, baseA = getPlayerClassColor()
 		else
-			if percent >= 60 then
-				baseR, baseG, baseB, baseA = 0, 0.7, 0, 1
-			elseif percent >= 40 then
-				baseR, baseG, baseB, baseA = 0.7, 0.7, 0, 1
-			else
-				baseR, baseG, baseB, baseA = 0.7, 0, 0, 1
+			if not addon.variables.isMidnight then
+				if percent >= 60 then
+					baseR, baseG, baseB, baseA = 0, 0.7, 0, 1
+				elseif percent >= 40 then
+					baseR, baseG, baseB, baseA = 0.7, 0.7, 0, 1
+				else
+					baseR, baseG, baseB, baseA = 0.7, 0, 0, 1
+				end
 			end
 		end
 		healthBar._baseColor = healthBar._baseColor or {}
 		healthBar._baseColor[1], healthBar._baseColor[2], healthBar._baseColor[3], healthBar._baseColor[4] = baseR, baseG, baseB, baseA
 
-		local reachedCap = maxHealth > 0 and curHealth >= maxHealth
-		local useMaxColor = settings.useMaxColor == true
-		local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
-		if useMaxColor and reachedCap then
-			local maxCol = settings.maxColor or WHITE
-			finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
-		end
+		if not addon.variables.isMidnight then
+			local reachedCap = maxHealth > 0 and curHealth >= maxHealth
+			local useMaxColor = settings.useMaxColor == true
+			local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
+			if useMaxColor and reachedCap then
+				local maxCol = settings.maxColor or WHITE
+				finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
+			end
 
-		local lc = healthBar._lastColor or {}
-		local fa = finalA or 1
-		if lc[1] ~= finalR or lc[2] ~= finalG or lc[3] ~= finalB or lc[4] ~= fa then
-			lc[1], lc[2], lc[3], lc[4] = finalR, finalG, finalB, fa
-			healthBar._lastColor = lc
-			healthBar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+			local lc = healthBar._lastColor or {}
+			local fa = finalA or 1
+			if lc[1] ~= finalR or lc[2] ~= finalG or lc[3] ~= finalB or lc[4] ~= fa then
+				lc[1], lc[2], lc[3], lc[4] = finalR, finalG, finalB, fa
+				healthBar._lastColor = lc
+				healthBar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+			end
+		else
+			local lc = healthBar._lastColor or {}
+			if lc[1] ~= baseR or lc[2] ~= baseG or lc[3] ~= baseB or lc[4] ~= baseA then
+				if (settings.useBarColor or settings.useClassColor) and not settings.useMaxColor then
+					healthBar._lastColor = lc
+					healthBar:SetStatusBarColor(baseR, baseG, baseB, baseA)
+				end
+			end
 		end
 		setBarDesaturated(healthBar, settings.useClassColor == true and settings.useBarColor ~= true)
 
