@@ -12,7 +12,7 @@
   - Cloak Upgrade button in inventory for midnight beta
   - feature to hide buffs on raid frames in midnight beta (disabled until a fix is found)
   - account moneyframe feature because of a bug with tooltip handling in midnight beta
-
+  - Module CombatMeter
 
 ### 🐛 Fixed
 
