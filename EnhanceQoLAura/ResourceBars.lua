@@ -106,6 +106,18 @@ local COSMETIC_BAR_KEYS = {
 	"backdrop",
 }
 
+local curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+if curve then
+	curve:SetType(Enum.LuaCurveType.Cosine)
+	-- 1.0 = 100% = Grün
+	curve:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
+	curve:AddPoint(0.8, CreateColor(0.6, 0.85, 0.0, 1)) -- Gelbgrün
+	curve:AddPoint(0.6, CreateColor(0.9, 0.9, 0.0, 1)) -- Knallgelb
+	curve:AddPoint(0.4, CreateColor(0.95, 0.6, 0.0, 1)) -- Orange
+	curve:AddPoint(0.2, CreateColor(0.95, 0.25, 0.0, 1)) -- Rot-Orange
+	curve:AddPoint(0.0, CreateColor(0.9, 0.0, 0.0, 1)) -- Rot
+end
+
 local function getPlayerClassColor()
 	local class = addon and addon.variables and addon.variables.unitClass
 	if not class then return 0, 0.7, 0, 1 end
@@ -2402,6 +2414,9 @@ function updateHealthBar(evt)
 				if (settings.useBarColor or settings.useClassColor) and not settings.useMaxColor then
 					healthBar._lastColor = lc
 					healthBar:SetStatusBarColor(baseR, baseG, baseB, baseA)
+				else
+					local color = UnitHealthPercentColor("player", curve)
+					healthBar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
 				end
 			end
 		end
