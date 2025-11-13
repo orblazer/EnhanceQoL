@@ -34,6 +34,7 @@
 - Error while hovering option menu of EQOL
 - Removed UNIT_HEALTH_FREQUENT as this is deprecated
 - Contextmenu hardening for NPC-ID checks
+- Healthmacro combat checks protected
 
 ---
 
