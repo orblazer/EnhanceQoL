@@ -106,6 +106,39 @@ local COSMETIC_BAR_KEYS = {
 	"backdrop",
 }
 
+local wasMax = false
+local wasMaxPower = {}
+local curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+local curvePower = {}
+local function SetColorCurvePoints(maxColor)
+	if curve then
+		curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+		curve:SetType(Enum.LuaCurveType.Cosine)
+		if maxColor then
+			curve:AddPoint(1.0, CreateColor(maxColor[1], maxColor[2], maxColor[3], maxColor[4])) -- sattes Grün
+		else
+			curve:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
+		end
+		curve:AddPoint(0.8, CreateColor(0.6, 0.85, 0.0, 1)) -- Gelbgrün
+		curve:AddPoint(0.6, CreateColor(0.9, 0.9, 0.0, 1)) -- Knallgelb
+		curve:AddPoint(0.4, CreateColor(0.95, 0.6, 0.0, 1)) -- Orange
+		curve:AddPoint(0.2, CreateColor(0.95, 0.25, 0.0, 1)) -- Rot-Orange
+		curve:AddPoint(0.0, CreateColor(0.9, 0.0, 0.0, 1)) -- Rot
+	end
+end
+local function SetColorCurvePointsPower(pType, maxColor, defColor)
+	if curve then
+		curvePower[pType] = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+		curvePower[pType]:SetType(Enum.LuaCurveType.Cosine)
+		if maxColor then
+			curvePower[pType]:AddPoint(1.0, CreateColor(maxColor[1], maxColor[2], maxColor[3], maxColor[4])) -- sattes Grün
+		else
+			curvePower[pType]:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
+		end
+	end
+end
+SetColorCurvePoints()
+
 local function getPlayerClassColor()
 	local class = addon and addon.variables and addon.variables.unitClass
 	if not class then return 0, 0.7, 0, 1 end
@@ -184,6 +217,7 @@ tryActivateSmooth = function(bar)
 		stopSmoothUpdater(bar)
 		return
 	end
+	if addon.variables.isMidnight then return end
 	ensureSmoothUpdater(bar)
 	ensureSmoothVisibilityHooks(bar)
 	bar._smoothSpeed = bar._smoothSpeed or SMOOTH_SPEED
@@ -1291,11 +1325,11 @@ function addon.Aura.functions.addResourceFrame(container)
 			-- Ensure DB defaults
 			for pType in pairs(available) do
 				if pType ~= "HEALTH" then
-			dbSpec[pType] = dbSpec[pType]
-				or {
-					enabled = false,
-					width = DEFAULT_POWER_WIDTH,
-					height = DEFAULT_POWER_HEIGHT,
+					dbSpec[pType] = dbSpec[pType]
+						or {
+							enabled = false,
+							width = DEFAULT_POWER_WIDTH,
+							height = DEFAULT_POWER_HEIGHT,
 							textStyle = pType == "MANA" and "PERCENT" or "CURMAX",
 							fontSize = 16,
 							fontFace = addon.variables.defaultFont,
@@ -1318,11 +1352,11 @@ function addon.Aura.functions.addResourceFrame(container)
 							showSeparator = false,
 							separatorColor = { 1, 1, 1, 0.5 },
 							separatorThickness = SEPARATOR_THICKNESS,
-					showCooldownText = false,
-					cooldownTextFontSize = 16,
-					reverseFill = false,
-					verticalFill = false,
-					smoothFill = false,
+							showCooldownText = false,
+							cooldownTextFontSize = 16,
+							reverseFill = false,
+							verticalFill = false,
+							smoothFill = false,
 						}
 					dbSpec[pType].anchor = dbSpec[pType].anchor or {}
 				end
@@ -1669,28 +1703,33 @@ function addon.Aura.functions.addResourceFrame(container)
 					group:AddChild(classColorCheckbox)
 				end
 
-				maxColorCheckbox = addon.functions.createCheckboxAce(L["Use max color"] or "Use max color at maximum", cfg.useMaxColor == true, function(_, _, val)
-					cfg.useMaxColor = val and true or false
+				if not addon.variables.isMidnight then
+					maxColorCheckbox = addon.functions.createCheckboxAce(L["Use max color"] or "Use max color at maximum", cfg.useMaxColor == true, function(_, _, val)
+						cfg.useMaxColor = val and true or false
+						wasMax = nil
+						refreshMaxColorControls()
+						notifyRefresh()
+					end)
+					maxColorCheckbox:SetFullWidth(true)
+					group:AddChild(maxColorCheckbox)
+
+					maxColorPicker = AceGUI:Create("ColorPicker")
+					maxColorPicker:SetLabel(L["Max color"] or "Max color")
+					maxColorPicker:SetHasAlpha(true)
+					local mc = cfg.maxColor or { 1, 1, 1, 1 }
+					maxColorPicker:SetColor(mc[1] or 1, mc[2] or 1, mc[3] or 1, mc[4] or 1)
+					maxColorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
+						cfg.maxColor = { r, g, b, a }
+						notifyRefresh()
+					end)
+					maxColorPicker:SetFullWidth(false)
+					maxColorPicker:SetRelativeWidth(0.5)
+					group:AddChild(maxColorPicker)
+
 					refreshMaxColorControls()
-					notifyRefresh()
-				end)
-				maxColorCheckbox:SetFullWidth(true)
-				group:AddChild(maxColorCheckbox)
-
-				maxColorPicker = AceGUI:Create("ColorPicker")
-				maxColorPicker:SetLabel(L["Max color"] or "Max color")
-				maxColorPicker:SetHasAlpha(true)
-				local mc = cfg.maxColor or { 1, 1, 1, 1 }
-				maxColorPicker:SetColor(mc[1] or 1, mc[2] or 1, mc[3] or 1, mc[4] or 1)
-				maxColorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-					cfg.maxColor = { r, g, b, a }
-					notifyRefresh()
-				end)
-				maxColorPicker:SetFullWidth(false)
-				maxColorPicker:SetRelativeWidth(0.5)
-				group:AddChild(maxColorPicker)
-
-				refreshMaxColorControls()
+				else
+					cfg.useMaxColor = false
+				end
 				refreshColorPickerState()
 			end
 
@@ -1906,14 +1945,19 @@ function addon.Aura.functions.addResourceFrame(container)
 				if lastSpecCopyBar[specKey] then dropBar:SetValue(lastSpecCopyBar[specKey]) end
 				optionsRow:AddChild(dropBar)
 
-				local cbCosmetic = addon.functions.createCheckboxAce(L["Appearance only"] or "Appearance only", lastSpecCopyCosmetic[specKey] == true, function(_, _, val) lastSpecCopyCosmetic[specKey] = val and true or false end)
+				local cbCosmetic = addon.functions.createCheckboxAce(
+					L["Appearance only"] or "Appearance only",
+					lastSpecCopyCosmetic[specKey] == true,
+					function(_, _, val) lastSpecCopyCosmetic[specKey] = val and true or false end
+				)
 				cbCosmetic:SetFullWidth(false)
 				cbCosmetic:SetRelativeWidth(0.4)
 				optionsRow:AddChild(cbCosmetic)
 
 				updateDropBarState()
 
-				local info = addon.functions.createLabelAce(L["Copy settings info"] or "Copies settings from the selected specialization. Use scope and appearance options above to control what is copied.")
+				local info =
+					addon.functions.createLabelAce(L["Copy settings info"] or "Copies settings from the selected specialization. Use scope and appearance options above to control what is copied.")
 				info:SetFullWidth(true)
 				copyGroup:AddChild(info)
 			end
@@ -2269,21 +2313,26 @@ function updateHealthBar(evt)
 	if healthBar and healthBar:IsShown() then
 		local previousMax = healthBar._lastMax or 0
 		local newMax = UnitHealthMax("player") or previousMax or 1
+
 		if previousMax ~= newMax then
 			healthBar._lastMax = newMax
 			healthBar:SetMinMaxValues(0, newMax)
-			local currentValue = healthBar:GetValue() or 0
-			if currentValue > newMax then healthBar:SetValue(newMax) end
-			if healthBar._smoothTarget and healthBar._smoothTarget > newMax then
-				healthBar._smoothTarget = newMax
-				if healthBar._smoothEnabled then tryActivateSmooth(healthBar) end
+			if not addon.variables.isMidnight then
+				local currentValue = healthBar:GetValue() or 0
+				if currentValue > newMax then healthBar:SetValue(newMax) end
+				if healthBar._smoothTarget and healthBar._smoothTarget > newMax then
+					healthBar._smoothTarget = newMax
+					if healthBar._smoothEnabled then tryActivateSmooth(healthBar) end
+				end
+			else
+				healthBar:SetValue(newMax)
 			end
 		end
 		local maxHealth = healthBar._lastMax or newMax or 1
 		local curHealth = UnitHealth("player")
 		local settings = getBarSettings("HEALTH") or {}
 		local smooth = settings.smoothFill == true
-		if smooth then
+		if not addon.variables.isMidnight and smooth then
 			healthBar._smoothTarget = curHealth
 			healthBar._smoothDeadzone = settings.smoothDeadzone or healthBar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
 			healthBar._smoothSpeed = SMOOTH_SPEED
@@ -2297,15 +2346,25 @@ function updateHealthBar(evt)
 			healthBar._smoothTarget = nil
 			healthBar._smoothDeadzone = settings.smoothDeadzone or healthBar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
 			healthBar._smoothSpeed = SMOOTH_SPEED
-			if healthBar._lastVal ~= curHealth then healthBar:SetValue(curHealth) end
+			if not addon.variables.isMidnight and healthBar._lastVal ~= curHealth then
+				healthBar:SetValue(curHealth)
+			else
+				healthBar:SetValue(curHealth)
+			end
 			healthBar._smoothInitialized = nil
 			healthBar._smoothEnabled = false
 			stopSmoothUpdater(healthBar)
 		end
 		healthBar._lastVal = curHealth
 
-		local percent = (curHealth / max(maxHealth, 1)) * 100
-		local percentStr = tostring(floor(percent + 0.5))
+		local percent, percentStr
+		if addon.variables.isMidnight then
+			percent = AbbreviateLargeNumbers(UnitHealthPercent("player", true, true) or 0)
+			percentStr = string.format("%s%%", percent)
+		else
+			percent = (curHealth / max(maxHealth, 1)) * 100
+			percentStr = tostring(floor(percent + 0.5))
+		end
 		if healthBar.text then
 			local style = settings and settings.textStyle or "PERCENT"
 			if style == "NONE" then
@@ -2323,13 +2382,15 @@ function updateHealthBar(evt)
 				if style == "PERCENT" then
 					text = percentStr
 				elseif style == "CURRENT" then
-					text = tostring(curHealth)
+					text = AbbreviateLargeNumbers(curHealth)
 				else -- CURMAX
-					text = curHealth .. " / " .. maxHealth
+					text = AbbreviateLargeNumbers(curHealth) .. " / " .. (AbbreviateLargeNumbers(maxHealth))
 				end
-				if healthBar._lastText ~= text then
+				if not addon.variables.isMidnight and healthBar._lastText ~= text then
 					healthBar.text:SetText(text)
 					healthBar._lastText = text
+				else
+					healthBar.text:SetText(text)
 				end
 				if not healthBar._textShown then
 					healthBar.text:Show()
@@ -2344,51 +2405,84 @@ function updateHealthBar(evt)
 		elseif settings.useClassColor then
 			baseR, baseG, baseB, baseA = getPlayerClassColor()
 		else
-			if percent >= 60 then
-				baseR, baseG, baseB, baseA = 0, 0.7, 0, 1
-			elseif percent >= 40 then
-				baseR, baseG, baseB, baseA = 0.7, 0.7, 0, 1
-			else
-				baseR, baseG, baseB, baseA = 0.7, 0, 0, 1
+			if not addon.variables.isMidnight then
+				if percent >= 60 then
+					baseR, baseG, baseB, baseA = 0, 0.7, 0, 1
+				elseif percent >= 40 then
+					baseR, baseG, baseB, baseA = 0.7, 0.7, 0, 1
+				else
+					baseR, baseG, baseB, baseA = 0.7, 0, 0, 1
+				end
 			end
 		end
 		healthBar._baseColor = healthBar._baseColor or {}
 		healthBar._baseColor[1], healthBar._baseColor[2], healthBar._baseColor[3], healthBar._baseColor[4] = baseR, baseG, baseB, baseA
 
-		local reachedCap = maxHealth > 0 and curHealth >= maxHealth
-		local useMaxColor = settings.useMaxColor == true
-		local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
-		if useMaxColor and reachedCap then
-			local maxCol = settings.maxColor or WHITE
-			finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
-		end
+		if not addon.variables.isMidnight then
+			local reachedCap = maxHealth > 0 and curHealth >= maxHealth
+			local useMaxColor = settings.useMaxColor == true
+			local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
+			if useMaxColor and reachedCap then
+				local maxCol = settings.maxColor or WHITE
+				finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
+			end
 
-		local lc = healthBar._lastColor or {}
-		local fa = finalA or 1
-		if lc[1] ~= finalR or lc[2] ~= finalG or lc[3] ~= finalB or lc[4] ~= fa then
-			lc[1], lc[2], lc[3], lc[4] = finalR, finalG, finalB, fa
-			healthBar._lastColor = lc
-			healthBar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+			local lc = healthBar._lastColor or {}
+			local fa = finalA or 1
+			if lc[1] ~= finalR or lc[2] ~= finalG or lc[3] ~= finalB or lc[4] ~= fa then
+				lc[1], lc[2], lc[3], lc[4] = finalR, finalG, finalB, fa
+				healthBar._lastColor = lc
+				healthBar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+			end
+		else
+			local lc = healthBar._lastColor or {}
+			if lc[1] ~= baseR or lc[2] ~= baseG or lc[3] ~= baseB or lc[4] ~= baseA then
+				if (settings.useBarColor or settings.useClassColor) and not settings.useMaxColor then
+					healthBar._lastColor = lc
+					healthBar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1)
+					healthBar:SetStatusBarColor(baseR, baseG, baseB, baseA)
+				else
+					if wasMax ~= settings.useMaxColor then
+						wasMax = settings.useMaxColor
+						if settings.useMaxColor then
+							SetColorCurvePoints(settings.maxColor or WHITE)
+						else
+							SetColorCurvePoints()
+						end
+					end
+					local color = UnitHealthPercentColor("player", curve)
+					healthBar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
+				end
+			end
 		end
-		setBarDesaturated(healthBar, settings.useClassColor == true and settings.useBarColor ~= true)
+		setBarDesaturated(healthBar, true)
 
 		local absorbBar = healthBar.absorbBar
 		if absorbBar then
 			if not absorbBar:IsShown() or maxHealth <= 0 then
-				if absorbBar._lastVal and absorbBar._lastVal ~= 0 then
+				if addon.variables.isMidnight then
 					absorbBar:SetValue(0)
-					absorbBar._lastVal = 0
+				else
+					if absorbBar._lastVal and absorbBar._lastVal ~= 0 then
+						absorbBar:SetValue(0)
+						absorbBar._lastVal = 0
+					end
 				end
 			else
 				local abs = UnitGetTotalAbsorbs("player") or 0
-				if abs > maxHealth then abs = maxHealth end
-				if absorbBar._lastMax ~= maxHealth then
-					absorbBar:SetMinMaxValues(0, maxHealth)
-					absorbBar._lastMax = maxHealth
-				end
-				if absorbBar._lastVal ~= abs then
+				if addon.variables.isMidnight then
 					absorbBar:SetValue(abs)
-					absorbBar._lastVal = abs
+					absorbBar:SetMinMaxValues(0, maxHealth)
+				else
+					if abs > maxHealth then abs = maxHealth end
+					if absorbBar._lastMax ~= maxHealth then
+						absorbBar:SetMinMaxValues(0, maxHealth)
+						absorbBar._lastMax = maxHealth
+					end
+					if absorbBar._lastVal ~= abs then
+						absorbBar:SetValue(abs)
+						absorbBar._lastVal = abs
+					end
 				end
 			end
 		end
@@ -2927,7 +3021,7 @@ function updatePowerBar(type, runeSlot)
 
 	local style = bar._style or ((type == "MANA") and "PERCENT" or "CURMAX")
 	local smooth = cfg.smoothFill == true
-	if smooth then
+	if not addon.variables.isMidnight and smooth then
 		bar._smoothTarget = curPower
 		bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
 		bar._smoothSpeed = SMOOTH_SPEED
@@ -2941,12 +3035,24 @@ function updatePowerBar(type, runeSlot)
 		bar._smoothTarget = nil
 		bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
 		bar._smoothSpeed = SMOOTH_SPEED
-		if bar._lastVal ~= curPower then bar:SetValue(curPower) end
+		if (not addon.variables.isMidnight and bar._lastVal ~= curPower) or (issecretvalue and not issecretvalue(curPower) and bar._lastVal ~= curPower) then
+			bar:SetValue(curPower)
+		else
+			bar:SetValue(curPower)
+		end
 		bar._smoothInitialized = nil
 		bar._smoothEnabled = false
 		stopSmoothUpdater(bar)
 	end
 	bar._lastVal = curPower
+	local percent, percentStr
+	if addon.variables.isMidnight then
+		percent = AbbreviateLargeNumbers(UnitPowerPercent("player", pType, true, true) or 0)
+		percentStr = string.format("%s%%", percent)
+	else
+		percent = (curPower / max(maxPower, 1)) * 100
+		percentStr = tostring(floor(percent + 0.5))
+	end
 	if bar.text then
 		if style == "NONE" then
 			if bar._textShown then
@@ -2961,15 +3067,18 @@ function updatePowerBar(type, runeSlot)
 		else
 			local text
 			if style == "PERCENT" then
-				text = tostring(floor(((curPower / max(maxPower, 1)) * 100) + 0.5))
+				text = percentStr
 			elseif style == "CURRENT" then
+				text = AbbreviateLargeNumbers(curPower)
 				text = tostring(curPower)
 			else -- CURMAX
-				text = curPower .. " / " .. maxPower
+				text = AbbreviateLargeNumbers(curPower) .. " / " .. (AbbreviateLargeNumbers(maxPower))
 			end
-			if bar._lastText ~= text then
+			if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then
 				bar.text:SetText(text)
 				bar._lastText = text
+			else
+				bar.text:SetText(text)
 			end
 			if not bar._textShown then
 				bar.text:Show()
@@ -2977,36 +3086,56 @@ function updatePowerBar(type, runeSlot)
 			end
 		end
 	end
+
 	bar._baseColor = bar._baseColor or {}
 	if bar._baseColor[1] == nil then
 		local br, bg, bb, ba = bar:GetStatusBarColor()
 		bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = br, bg, bb, ba or 1
 	end
+	if cfg.useBarColor then
+		local custom = cfg.barColor or WHITE
+		bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = custom[1] or 1, custom[2] or 1, custom[3] or 1, custom[4] or 1
+	end
 
-	local reachedCap = curPower >= max(maxPower, 1)
-	local useMaxColor = cfg.useMaxColor == true
-	if useMaxColor and reachedCap then
-		local maxCol = cfg.maxColor or WHITE
-		local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
-		local lc = bar._lastColor or {}
-		if bar._usingMaxColor ~= true or lc[1] ~= mr or lc[2] ~= mg or lc[3] ~= mb or lc[4] ~= ma then
-			lc[1], lc[2], lc[3], lc[4] = mr, mg, mb, ma
-			bar._lastColor = lc
-			bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
-			bar._usingMaxColor = true
-		end
-	else
-		local base = bar._baseColor
-		if base then
+	if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(curPower) and not issecretvalue(maxPower)) then
+		local reachedCap = curPower >= max(maxPower, 1)
+		local useMaxColor = cfg.useMaxColor == true
+		if useMaxColor and reachedCap then
+			local maxCol = cfg.maxColor or WHITE
+			local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
 			local lc = bar._lastColor or {}
-			local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
-			if bar._usingMaxColor == true or lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
-				lc[1], lc[2], lc[3], lc[4] = br, bgc, bb, ba
+			if bar._usingMaxColor ~= true or lc[1] ~= mr or lc[2] ~= mg or lc[3] ~= mb or lc[4] ~= ma then
+				lc[1], lc[2], lc[3], lc[4] = mr, mg, mb, ma
 				bar._lastColor = lc
 				bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+				bar._usingMaxColor = true
+			end
+		else
+			local base = bar._baseColor
+			if base then
+				local lc = bar._lastColor or {}
+				local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
+				if bar._usingMaxColor == true or lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
+					lc[1], lc[2], lc[3], lc[4] = br, bgc, bb, ba
+					bar._lastColor = lc
+					bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+				end
+			end
+			bar._usingMaxColor = false
+		end
+	else
+		local lc = bar._lastColor or {}
+		local base = bar._baseColor
+		if base then
+			local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
+			if lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
+				if cfg.useBarColor and not cfg.useMaxColor then
+					bar._lastColor = lc
+					bar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1)
+					bar:SetStatusBarColor(br, bgc, bb, ba)
+				end
 			end
 		end
-		bar._usingMaxColor = false
 	end
 
 	configureSpecialTexture(bar, type, cfg)
@@ -3535,14 +3664,10 @@ local function setPowerbars()
 		end
 	end
 
-	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then
-		addon.Aura.ResourceBars.ApplyVisibilityPreference("fromSetPowerbars")
-	end
+	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference("fromSetPowerbars") end
 end
 
-local function shouldHideResourceBarsOutOfCombat()
-	return addon and addon.db and addon.db.resourceBarsHideOutOfCombat == true
-end
+local function shouldHideResourceBarsOutOfCombat() return addon and addon.db and addon.db.resourceBarsHideOutOfCombat == true end
 
 local function forEachResourceBarFrame(callback)
 	if type(callback) ~= "function" then return end
@@ -3645,9 +3770,7 @@ function ResourceBars.ApplyVisibilityPreference(context)
 			applyVisibilityDriverToFrame(frame, nil)
 		end
 	end)
-	if not hideOutOfCombat and context ~= "fromSetPowerbars" and frameAnchor then
-		setPowerbars()
-	end
+	if not hideOutOfCombat and context ~= "fromSetPowerbars" and frameAnchor then setPowerbars() end
 end
 
 local resourceBarsLoaded = addon.Aura.ResourceBars ~= nil
