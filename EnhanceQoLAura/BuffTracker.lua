@@ -1056,18 +1056,20 @@ function updateBuff(catId, id, changedId, firstScan)
 
 	local aura
 	local triggeredId = id
-	if changedId and (changedId == id or (buff and buff.altHash and buff.altHash[changedId])) then
-		aura = C_UnitAuras.GetPlayerAuraBySpellID(changedId)
-		triggeredId = changedId
-	else
-		aura = C_UnitAuras.GetPlayerAuraBySpellID(id)
-		triggeredId = id
-		if not aura and buff and buff.altHash then
-			for altId in pairs(buff.altHash) do
-				aura = C_UnitAuras.GetPlayerAuraBySpellID(altId)
-				if aura then
-					triggeredId = altId
-					break
+	if not addon.variables.isMidnight or (addon.variables.isMidnight and not InCombatLockdown()) then
+		if changedId and (changedId == id or (buff and buff.altHash and buff.altHash[changedId])) then
+			aura = C_UnitAuras.GetPlayerAuraBySpellID(changedId)
+			triggeredId = changedId
+		else
+			aura = C_UnitAuras.GetPlayerAuraBySpellID(id)
+			triggeredId = id
+			if not aura and buff and buff.altHash then
+				for altId in pairs(buff.altHash) do
+					aura = C_UnitAuras.GetPlayerAuraBySpellID(altId)
+					if aura then
+						triggeredId = altId
+						break
+					end
 				end
 			end
 		end
@@ -1477,21 +1479,29 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		if eventInfo then
 			local changed = {}
 			for _, aura in ipairs(eventInfo.addedAuras or {}) do
-				local base = altToBase[aura.spellId] or aura.spellId
-				changed[base] = aura.spellId
+				if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(aura.spellId)) then
+					local base = altToBase[aura.spellId] or aura.spellId
+					changed[base] = aura.spellId
+				end
 			end
 			for _, inst in ipairs(eventInfo.updatedAuraInstanceIDs or {}) do
-				local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
-				if data then
-					local base = altToBase[data.spellId] or data.spellId
-					changed[base] = data.spellId
-				elseif auraInstanceMap[inst] then
-					changed[auraInstanceMap[inst].buffId] = true
+				if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(inst)) then
+					local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
+					if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(data.spellId)) then
+						if data then
+							local base = altToBase[data.spellId] or data.spellId
+							changed[base] = data.spellId
+						elseif auraInstanceMap[inst] then
+							changed[auraInstanceMap[inst].buffId] = true
+						end
+					end
 				end
 			end
 			for _, inst in ipairs(eventInfo.removedAuraInstanceIDs or {}) do
-				if auraInstanceMap[inst] then changed[auraInstanceMap[inst].buffId] = true end
-				auraInstanceMap[inst] = nil
+				if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(inst)) then
+					if auraInstanceMap[inst] then changed[auraInstanceMap[inst].buffId] = true end
+					auraInstanceMap[inst] = nil
+				end
 			end
 
 			local needsLayout = {}
@@ -2723,6 +2733,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 	wrapper:AddChild(left)
 
 	treeGroup = AceGUI:Create("EQOL_DragTreeGroup")
+	treeGroup.enabletooltips = false
 	treeGroup:SetFullHeight(true)
 	treeGroup:SetFullWidth(true)
 	treeGroup:SetTreeWidth(200, true)
