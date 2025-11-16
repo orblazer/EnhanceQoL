@@ -490,16 +490,86 @@ local function MigrateLegacyVisibilityFlags()
 	MigrateLegacyVisibilityFlag("hideBagsBar", "unitframeSettingBagsBar")
 end
 
+local FRAME_VISIBILITY_FADE_DURATION = 0.15
+local FRAME_VISIBILITY_FADE_THRESHOLD = 0.01
+
+local function StopFrameFade(target)
+	local group = target and target.EQOL_FadeGroup
+	if group and group.Stop then group:Stop() end
+	if group then group.targetAlpha = nil end
+end
+
+local function ApplyAlphaToRegion(target, alpha, useFade)
+	if not target or not target.SetAlpha then return end
+	if not useFade or not target.CreateAnimationGroup then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	local current = target:GetAlpha()
+	if issecretvalue and issecretvalue(current) or current == nil then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	if math.abs(current - alpha) < FRAME_VISIBILITY_FADE_THRESHOLD then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	local group = target.EQOL_FadeGroup
+		if not group or not group.fade then
+			if not target.CreateAnimationGroup then
+				target:SetAlpha(alpha)
+				return
+			end
+			group = target:CreateAnimationGroup()
+			if not group then
+				target:SetAlpha(alpha)
+				return
+			end
+			local anim = group:CreateAnimation("Alpha")
+			if anim and anim.SetSmoothing then anim:SetSmoothing("IN_OUT") end
+		group.fade = anim
+		group:SetScript("OnFinished", function(self)
+			local desired = self.targetAlpha
+			local owner = self:GetParent()
+			if owner and owner.SetAlpha and desired ~= nil then
+				owner:SetAlpha(desired)
+			end
+			self.targetAlpha = nil
+		end)
+		target.EQOL_FadeGroup = group
+	end
+
+	local anim = group.fade
+	if not anim or not anim.SetFromAlpha or not anim.SetToAlpha or not anim.SetDuration then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	if group:IsPlaying() then group:Stop() end
+	anim:SetFromAlpha(current)
+	anim:SetToAlpha(alpha)
+	anim:SetDuration(FRAME_VISIBILITY_FADE_DURATION)
+	group.targetAlpha = alpha
+	group:Play()
+end
+
 local function RestoreUnitFrameVisibility(frame, cbData)
-	if frame and frame.SetAlpha then frame:SetAlpha(1) end
+	ApplyAlphaToRegion(frame, 1, false)
 	if cbData and cbData.children then
 		for _, child in pairs(cbData.children) do
-			if child and child.SetAlpha then child:SetAlpha(1) end
+			ApplyAlphaToRegion(child, 1, false)
 		end
 	end
 	if cbData and cbData.hideChildren then
 		for _, child in pairs(cbData.hideChildren) do
-			if child and child.SetAlpha then child:SetAlpha(1) end
+			ApplyAlphaToRegion(child, 1, false)
 		end
 	end
 end
@@ -703,21 +773,19 @@ local function EvaluateFrameVisibility(state)
 	return false
 end
 
-local function ApplyToFrameAndChildren(state, alpha)
+local function ApplyToFrameAndChildren(state, alpha, useFade)
 	local frame = state.frame
-	if frame then
-		if frame.SetAlpha then frame:SetAlpha(alpha) end
-	end
+	if frame then ApplyAlphaToRegion(frame, alpha, useFade) end
 
 	if state.cbData and state.cbData.children then
 		for _, child in pairs(state.cbData.children) do
-			if child and child.SetAlpha then child:SetAlpha(alpha) end
+			ApplyAlphaToRegion(child, alpha, useFade)
 		end
 	end
 
 	if state.cbData and state.cbData.hideChildren then
 		for _, child in pairs(state.cbData.hideChildren) do
-			if child and child.SetAlpha then child:SetAlpha(alpha) end
+			ApplyAlphaToRegion(child, alpha, useFade)
 		end
 	end
 end
@@ -788,7 +856,7 @@ ApplyFrameVisibilityState = function(state)
 		end
 	end
 
-	ApplyToFrameAndChildren(state, targetAlpha)
+	ApplyToFrameAndChildren(state, targetAlpha, not applyMidnightAlpha)
 	state.visible = shouldShow
 	UpdateFrameVisibilityHealthRegistration()
 end
@@ -885,17 +953,7 @@ local function ApplyVisibilityToUnitFrame(frameName, cbData, config)
 	if useDriver then
 		state.driverActive = true
 		ApplyUnitFrameStateDriver(frame, driverExpression)
-		if frame.SetAlpha then frame:SetAlpha(1) end
-		if cbData.children then
-			for _, child in ipairs(cbData.children) do
-				if child and child.SetAlpha then child:SetAlpha(1) end
-			end
-		end
-		if cbData.hideChildren then
-			for _, child in pairs(cbData.hideChildren) do
-				if child and child.SetAlpha then child:SetAlpha(1) end
-			end
-		end
+		ApplyToFrameAndChildren(state, 1, false)
 		return true
 	end
 
