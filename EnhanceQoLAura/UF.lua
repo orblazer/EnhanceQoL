@@ -87,7 +87,9 @@ local defaults = {
 			textLeft = "PERCENT",
 			textRight = "CURMAX",
 			fontSize = 14,
-			font = nil, -- fallback to default font
+			font = nil,
+			fontOutline = "OUTLINE", -- fallback to default font
+			fontOutline = "OUTLINE",
 			offsetLeft = { x = 6, y = 0 },
 			offsetRight = { x = -6, y = 0 },
 			useShortNumbers = true,
@@ -314,9 +316,9 @@ local function updatePower(cfg)
 	if state.powerTextRight then state.powerTextRight:SetText(formatText(pcfg.textRight or "CURMAX", cur, maxv, pcfg.useShortNumbers ~= false, percentVal)) end
 end
 
-local function applyFont(fs, fontPath, size)
+local function applyFont(fs, fontPath, size, outline)
 	if not fs then return end
-	fs:SetFont(getFont(fontPath), size or 14, "OUTLINE")
+	fs:SetFont(getFont(fontPath), size or 14, outline or "OUTLINE")
 	fs:SetShadowColor(0, 0, 0, 0.5)
 	fs:SetShadowOffset(0.5, -0.5)
 end
@@ -341,7 +343,7 @@ local function updateStatus(cfg)
 	state.status:SetHeight((cfg.status and cfg.status.enabled) and (cfg.statusHeight or defaults.player.statusHeight) or 0.001)
 	state.status:SetShown(scfg.enabled ~= false)
 	if state.nameText then
-		applyFont(state.nameText, scfg.font, scfg.fontSize or 14)
+	applyFont(state.nameText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
 		local class = select(2, UnitClass(PLAYER_UNIT))
 		local nc
 		if scfg.nameColorMode == "CLASS" then
@@ -356,7 +358,7 @@ local function updateStatus(cfg)
 		state.nameText:SetShown(scfg.enabled ~= false)
 	end
 	if state.levelText then
-		applyFont(state.levelText, scfg.font, scfg.fontSize or 14)
+	applyFont(state.levelText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
 		local lc = scfg.levelColor or { 1, 0.85, 0, 1 }
 		state.levelText:SetText(UnitLevel(PLAYER_UNIT) or "")
 		state.levelText:SetTextColor(lc[1] or 1, lc[2] or 0.85, lc[3] or 0, lc[4] or 1)
@@ -393,6 +395,7 @@ local function layoutFrame(cfg)
 	state.power:SetSize(width, powerHeight)
 
 	state.status:ClearAllPoints()
+	if state.barGroup then state.barGroup:ClearAllPoints() end
 	state.health:ClearAllPoints()
 	state.power:ClearAllPoints()
 
@@ -410,19 +413,28 @@ local function layoutFrame(cfg)
 		state.status:SetPoint("TOPLEFT", state.frame, "TOPLEFT", 0, 0)
 		state.status:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", 0, 0)
 	end
+	-- Bars container sits below status; border applied here, not on status
+	local barsHeight = healthHeight + powerHeight + barGap + borderInset * 2
+	if state.barGroup then
+		state.barGroup:SetWidth(width + borderInset * 2)
+		state.barGroup:SetHeight(barsHeight)
+		state.barGroup:SetPoint("TOPLEFT", state.frame, "TOPLEFT", 0, y)
+		state.barGroup:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", 0, y)
+	end
 
-	state.health:SetPoint("TOPLEFT", state.frame, "TOPLEFT", borderInset, y - borderInset)
-	state.health:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", -borderInset, y - borderInset)
+	state.health:SetPoint("TOPLEFT", state.barGroup or state.frame, "TOPLEFT", borderInset, -borderInset)
+	state.health:SetPoint("TOPRIGHT", state.barGroup or state.frame, "TOPRIGHT", -borderInset, -borderInset)
 	state.power:SetPoint("TOPLEFT", state.health, "BOTTOMLEFT", 0, -barGap)
 	state.power:SetPoint("TOPRIGHT", state.health, "BOTTOMRIGHT", 0, -barGap)
 
-	local totalHeight = statusHeight + healthHeight + powerHeight + barGap + borderInset * 2
+	local totalHeight = statusHeight + barsHeight
 	state.frame:SetHeight(totalHeight)
 
 	layoutTexts(state.health, state.healthTextLeft, state.healthTextRight, cfg.health, width)
 	layoutTexts(state.power, state.powerTextLeft, state.powerTextRight, cfg.power, width)
 
-	setBackdrop(state.frame, cfg.border)
+	-- Apply border only around the bar region wrapper
+	if state.barGroup then setBackdrop(state.barGroup, cfg.border) end
 end
 
 local function ensureFrames()
@@ -436,8 +448,9 @@ local function ensureFrames()
 	state.frame.menu = function(self) ToggleDropDownMenu(1, nil, PlayerFrameDropDown, self, 0, 0) end
 	state.frame:SetClampedToScreen(true)
 	state.status = _G[STATUS_NAME] or CreateFrame("Frame", STATUS_NAME, state.frame)
-	state.health = _G[HEALTH_NAME] or CreateFrame("StatusBar", HEALTH_NAME, state.frame, "BackdropTemplate")
-	state.power = _G[POWER_NAME] or CreateFrame("StatusBar", POWER_NAME, state.frame, "BackdropTemplate")
+	state.barGroup = state.barGroup or CreateFrame("Frame", nil, state.frame, "BackdropTemplate")
+	state.health = _G[HEALTH_NAME] or CreateFrame("StatusBar", HEALTH_NAME, state.barGroup, "BackdropTemplate")
+	state.power = _G[POWER_NAME] or CreateFrame("StatusBar", POWER_NAME, state.barGroup, "BackdropTemplate")
 	state.absorb = CreateFrame("StatusBar", HEALTH_NAME .. "Absorb", state.health, "BackdropTemplate")
 
 	state.healthTextLeft = state.health:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -489,8 +502,8 @@ local function applyBars(cfg)
 	applyFont(state.healthTextRight, hc.font, hc.fontSize or 14)
 	applyFont(state.powerTextLeft, pcfg.font, pcfg.fontSize or 14)
 	applyFont(state.powerTextRight, pcfg.font, pcfg.fontSize or 14)
-	applyFont(state.nameText, cfg.status.font, cfg.status.fontSize or 14)
-	applyFont(state.levelText, cfg.status.font, cfg.status.fontSize or 14)
+	applyFont(state.nameText, cfg.status.font, cfg.status.fontSize or 14, cfg.status.fontOutline)
+	applyFont(state.levelText, cfg.status.font, cfg.status.fontSize or 14, cfg.status.fontOutline)
 end
 
 local function updateNameAndLevel(cfg)
@@ -937,6 +950,41 @@ local function addOptions(container, skipClear)
 	end)
 	sFont:SetFullWidth(true)
 	statusGroup:AddChild(sFont)
+
+	local fontRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	fontRow:SetFullWidth(true)
+	statusGroup:AddChild(fontRow)
+	local fontList = {}
+	local fontOrder = {}
+	for name, path in pairs(LSM and LSM:HashTable("font") or {}) do
+		if type(path) == "string" and path ~= "" then
+			fontList[path] = name
+			table.insert(fontOrder, path)
+		end
+	end
+	table.sort(fontOrder, function(a, b) return tostring(fontList[a]) < tostring(fontList[b]) end)
+	local fdd = addon.functions.createDropdownAce(L["Font"] or "Font", fontList, fontOrder, function(_, _, key)
+		cfg.status.font = key
+		UF.Refresh()
+	end)
+	fdd:SetRelativeWidth(0.5)
+	fdd:SetValue(cfg.status.font or "")
+	fontRow:AddChild(fdd)
+
+	local outlineMap = {
+		NONE = L["None"] or "None",
+		OUTLINE = L["Outline"] or "Outline",
+		THICKOUTLINE = L["Thick Outline"] or "Thick Outline",
+		MONOCHROMEOUTLINE = L["Monochrome Outline"] or "Monochrome Outline",
+	}
+	local outlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE" }
+	local fdo = addon.functions.createDropdownAce(L["Font outline"] or "Font outline", outlineMap, outlineOrder, function(_, _, key)
+		cfg.status.fontOutline = key
+		UF.Refresh()
+	end)
+	fdo:SetRelativeWidth(0.5)
+	fdo:SetValue(cfg.status.fontOutline or "OUTLINE")
+	fontRow:AddChild(fdo)
 
 	local statusOffsets = addon.functions.createContainer("SimpleGroup", "Flow")
 	statusOffsets:SetFullWidth(true)
