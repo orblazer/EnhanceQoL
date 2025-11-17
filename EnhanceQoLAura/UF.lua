@@ -862,7 +862,9 @@ local function addOptions(container, skipClear)
 		end)
 		cbBd:SetRelativeWidth(0.5)
 		bdRow:AddChild(cbBd)
-		local bdColor = addColorPicker(bdRow, L["UFBarBackdropColor"] or "Backdrop color", (sec.backdrop and sec.backdrop.color) or { 0, 0, 0, 0.6 }, function() UF.Refresh() end)
+		sec.backdrop = sec.backdrop or {}
+		sec.backdrop.color = sec.backdrop.color or { 0, 0, 0, 0.6 }
+		local bdColor = addColorPicker(bdRow, L["UFBarBackdropColor"] or "Backdrop color", sec.backdrop.color, function() UF.Refresh() end)
 		bdColor:SetRelativeWidth(0.5)
 
 		textureDropdown(group, sec)
