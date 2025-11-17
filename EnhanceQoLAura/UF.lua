@@ -54,6 +54,8 @@ local abs = math.abs
 local wipe = wipe or (table and table.wipe)
 
 local PLAYER_UNIT = "player"
+local TARGET_UNIT = "target"
+local TARGET_TARGET_UNIT = "targettarget"
 local FRAME_NAME = "EQOLUFPlayerFrame"
 local HEALTH_NAME = "EQOLUFPlayerHealth"
 local POWER_NAME = "EQOLUFPlayerPower"
@@ -62,6 +64,10 @@ local TARGET_FRAME_NAME = "EQOLUFTargetFrame"
 local TARGET_HEALTH_NAME = "EQOLUFTargetHealth"
 local TARGET_POWER_NAME = "EQOLUFTargetPower"
 local TARGET_STATUS_NAME = "EQOLUFTargetStatus"
+local TARGET_TARGET_FRAME_NAME = "EQOLUFToTFrame"
+local TARGET_TARGET_HEALTH_NAME = "EQOLUFToTHealth"
+local TARGET_TARGET_POWER_NAME = "EQOLUFToTPower"
+local TARGET_TARGET_STATUS_NAME = "EQOLUFToTStatus"
 local MIN_WIDTH = 50
 
 local function getFont(path)
@@ -83,6 +89,14 @@ local UNITS = {
 		healthName = TARGET_HEALTH_NAME,
 		powerName = TARGET_POWER_NAME,
 		statusName = TARGET_STATUS_NAME,
+		dropdown = function(self) ToggleDropDownMenu(1, nil, TargetFrameDropDown, self, 0, 0) end,
+	},
+	targettarget = {
+		unit = "targettarget",
+		frameName = TARGET_TARGET_FRAME_NAME,
+		healthName = TARGET_TARGET_HEALTH_NAME,
+		powerName = TARGET_TARGET_POWER_NAME,
+		statusName = TARGET_TARGET_STATUS_NAME,
 		dropdown = function(self) ToggleDropDownMenu(1, nil, TargetFrameDropDown, self, 0, 0) end,
 	},
 }
@@ -142,6 +156,14 @@ local defaults = {
 	target = {
 		enabled = false,
 		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true },
+	},
+	targettarget = {
+		enabled = false,
+		width = 180,
+		healthHeight = 20,
+		powerHeight = 12,
+		statusHeight = 16,
+		anchor = { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 520, y = -200 },
 	},
 }
 
@@ -414,6 +436,17 @@ do
 	targetDefaults.anchor.x = (targetDefaults.anchor.x or 0) + 260
 	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true }
 	defaults.target = targetDefaults
+
+	local totDefaults = CopyTable(targetDefaults)
+	totDefaults.enabled = false
+	totDefaults.auraIcons = nil
+	totDefaults.width = 180
+	totDefaults.healthHeight = 20
+	totDefaults.powerHeight = 12
+	totDefaults.statusHeight = 16
+	totDefaults.anchor = totDefaults.anchor and CopyTable(totDefaults.anchor) or { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 0, y = -200 }
+	totDefaults.anchor.x = (totDefaults.anchor.x or 0) + 260
+	defaults.targettarget = totDefaults
 end
 
 local function setBackdrop(frame, borderCfg)
@@ -905,6 +938,7 @@ local unitEvents = {
 	"UNIT_DISPLAYPOWER",
 	"UNIT_NAME_UPDATE",
 	"UNIT_AURA",
+	"UNIT_TARGET",
 }
 local unitEventsMap = {}
 for _, evt in ipairs(unitEvents) do
@@ -926,16 +960,41 @@ local eventFrame
 local allowedEventUnit = {
 	["target"] = true,
 	["player"] = true,
+	["targettarget"] = true,
 }
+
+local function updateTargetTargetFrame(cfg)
+	cfg = cfg or ensureDB(TARGET_TARGET_UNIT)
+	local st = states[TARGET_TARGET_UNIT]
+	if not cfg.enabled then
+		if st and st.frame then st.frame:Hide() end
+		return
+	end
+	if UnitExists(TARGET_TARGET_UNIT) then
+		applyConfig(TARGET_TARGET_UNIT)
+		st = states[TARGET_TARGET_UNIT]
+		if st and st.frame then
+			st.barGroup:Show()
+			st.status:Show()
+		end
+	else
+		if st and st.frame then
+			if st.barGroup then st.barGroup:Hide() end
+			if st.status then st.status:Hide() end
+		end
+	end
+end
 
 local function onEvent(self, event, unit, arg1)
 	if unitEventsMap[event] and unit and not allowedEventUnit[unit] then return end
 	local playerCfg = ensureDB("player")
 	local targetCfg = ensureDB("target")
+	local totCfg = ensureDB(TARGET_TARGET_UNIT)
 	if event == "PLAYER_ENTERING_WORLD" then
 		refreshMainPower(PLAYER_UNIT)
 		applyConfig("player")
 		applyConfig("target")
+		updateTargetTargetFrame(totCfg)
 		hideBlizzardPlayerFrame()
 	elseif event == "PLAYER_DEAD" then
 		if states.player and states.player.health then states.player.health:SetValue(0) end
@@ -953,6 +1012,7 @@ local function onEvent(self, event, unit, arg1)
 				states["target"].barGroup:Show()
 				states["target"].status:Show()
 			end
+			if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 		else
 			resetTargetAuras()
 			updateTargetAuraIcons()
@@ -960,6 +1020,7 @@ local function onEvent(self, event, unit, arg1)
 				states["target"].barGroup:Hide()
 				states["target"].status:Hide()
 			end
+			updateTargetTargetFrame(totCfg)
 		end
 	elseif event == "UNIT_AURA" and unit == "target" then
 		local eventInfo = arg1
@@ -998,25 +1059,34 @@ local function onEvent(self, event, unit, arg1)
 	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		if unit == PLAYER_UNIT then updateHealth(playerCfg, "player") end
 		if unit == "target" then updateHealth(targetCfg, "target") end
+		if unit == TARGET_TARGET_UNIT then updateHealth(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_MAXPOWER" then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
+		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_DISPLAYPOWER" then
 		if unit == PLAYER_UNIT then
 			refreshMainPower()
 			updatePower(playerCfg, "player")
 		elseif unit == "target" then
 			updatePower(targetCfg, "target")
+		elseif unit == TARGET_TARGET_UNIT then
+			updatePower(totCfg, TARGET_TARGET_UNIT)
 		end
 	elseif event == "UNIT_POWER_UPDATE" and not FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
+		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_POWER_FREQUENT" and FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
+		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_NAME_UPDATE" or event == "PLAYER_LEVEL_UP" then
 		if unit == PLAYER_UNIT or event == "PLAYER_LEVEL_UP" then updateNameAndLevel(playerCfg, "player") end
 		if unit == "target" then updateNameAndLevel(targetCfg, "target") end
+		if unit == TARGET_TARGET_UNIT then updateNameAndLevel(totCfg, TARGET_TARGET_UNIT) end
+	elseif event == "UNIT_TARGET" and unit == TARGET_UNIT then
+		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 	end
 end
 
@@ -1038,6 +1108,8 @@ function UF.Enable()
 	ensureEventHandling()
 	applyConfig("player")
 	if ensureDB("target").enabled then applyConfig("target") end
+	local totCfg = ensureDB(TARGET_TARGET_UNIT)
+	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 	hideBlizzardPlayerFrame()
 end
 
@@ -1053,13 +1125,23 @@ function UF.Refresh()
 	ensureEventHandling()
 	applyConfig("player")
 	applyConfig("target")
+	applyConfig(TARGET_TARGET_UNIT)
+	local targetCfg = ensureDB("target")
+	if targetCfg.enabled and UnitExists and UnitExists(TARGET_UNIT) and states[TARGET_UNIT] and states[TARGET_UNIT].frame then
+		states[TARGET_UNIT].barGroup:Show()
+		states[TARGET_UNIT].status:Show()
+	end
+	local totCfg = ensureDB(TARGET_TARGET_UNIT)
+	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 end
 
 local function addOptions(container, skipClear, unit)
-	unit = unit or "player"
+	unit = unit or PLAYER_UNIT
 	local cfg = ensureDB(unit)
 	local def = defaults[unit] or defaults.player or {}
-	local isPlayer = unit == "player"
+	local isPlayer = unit == PLAYER_UNIT
+	local isTarget = unit == TARGET_UNIT
+	local isToT = unit == TARGET_TARGET_UNIT
 	if not skipClear and container and container.ReleaseChildren then container:ReleaseChildren() end
 
 	local parent = container
@@ -1084,8 +1166,25 @@ local function addOptions(container, skipClear, unit)
 		parent:AddChild(cp)
 		return cp
 	end
-	local function refresh() UF.Refresh() end
-	local enableLabel = isPlayer and (L["UFPlayerEnable"] or "Enable custom player frame") or (L["UFTargetEnable"] or "Enable custom target frame")
+	local function refresh()
+		UF.Refresh()
+		if cfg.enabled then
+			if isToT then
+				updateTargetTargetFrame(cfg)
+			elseif isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
+				states[unit].barGroup:Show()
+				states[unit].status:Show()
+			end
+		end
+	end
+	local enableLabel
+	if isPlayer then
+		enableLabel = L["UFPlayerEnable"] or "Enable custom player frame"
+	elseif isTarget then
+		enableLabel = L["UFTargetEnable"] or "Enable custom target frame"
+	else
+		enableLabel = L["UFToTEnable"] or "Enable target-of-target frame"
+	end
 	local enableCB = addon.functions.createCheckboxAce(enableLabel, cfg.enabled == true, function(_, _, val)
 		cfg.enabled = val and true or false
 		if isPlayer then
@@ -1097,12 +1196,28 @@ local function addOptions(container, skipClear, unit)
 		else
 			ensureEventHandling()
 			if cfg.enabled then
-				applyConfig(unit)
+				if isToT then
+					updateTargetTargetFrame(cfg)
+				else
+					applyConfig(unit)
+					if isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
+						states[unit].barGroup:Show()
+						states[unit].status:Show()
+					end
+				end
 			elseif states[unit] and states[unit].frame then
 				states[unit].frame:Hide()
 			end
 		end
 		UF.Refresh()
+		if cfg.enabled then
+			if isToT then
+				updateTargetTargetFrame(cfg)
+			elseif isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
+				states[unit].barGroup:Show()
+				states[unit].status:Show()
+			end
+		end
 	end)
 	enableCB:SetFullWidth(true)
 	parent:AddChild(enableCB)
@@ -1548,6 +1663,7 @@ if addon.functions and addon.functions.RegisterOptionsPage then
 		container:AddChild(lbl)
 		local playerCfg = ensureDB("player")
 		local targetCfg = ensureDB("target")
+		local totCfg = ensureDB(TARGET_TARGET_UNIT)
 		local cbPlayer = addon.functions.createCheckboxAce(L["UFPlayerEnable"] or "Enable custom player frame", playerCfg.enabled == true, function(_, _, val)
 			playerCfg.enabled = val and true or false
 			if playerCfg.enabled then
@@ -1572,12 +1688,29 @@ if addon.functions and addon.functions.RegisterOptionsPage then
 		end)
 		cbTarget:SetFullWidth(true)
 		container:AddChild(cbTarget)
+
+		local cbToT = addon.functions.createCheckboxAce(L["UFToTEnable"] or "Enable target-of-target frame", totCfg.enabled == true, function(_, _, val)
+			totCfg.enabled = val and true or false
+			if totCfg.enabled then
+				ensureRootNode()
+				addTreeNode("ufplus\001targettarget", { value = "targettarget", text = L["UFToTFrame"] or "Target of Target" }, "ufplus")
+				ensureEventHandling()
+				applyConfig(TARGET_TARGET_UNIT)
+				updateTargetTargetFrame(totCfg)
+			elseif states[TARGET_TARGET_UNIT] and states[TARGET_TARGET_UNIT].frame then
+				states[TARGET_TARGET_UNIT].frame:Hide()
+			end
+		end)
+		cbToT:SetFullWidth(true)
+		container:AddChild(cbToT)
 	end)
 	addon.functions.RegisterOptionsPage("ufplus\001player", function(container) addOptions(container, false, "player") end)
 	addon.functions.RegisterOptionsPage("ufplus\001target", function(container) addOptions(container, false, "target") end)
+	addon.functions.RegisterOptionsPage("ufplus\001targettarget", function(container) addOptions(container, false, TARGET_TARGET_UNIT) end)
 	ensureRootNode()
 	addTreeNode("ufplus\001player", { value = "player", text = L["UFPlayerFrame"] or PLAYER }, "ufplus")
 	addTreeNode("ufplus\001target", { value = "target", text = L["UFTargetFrame"] or TARGET }, "ufplus")
+	addTreeNode("ufplus\001targettarget", { value = "targettarget", text = L["UFToTFrame"] or "Target of Target" }, "ufplus")
 end
 
 function UF.treeCallback(container, group)
@@ -1589,6 +1722,8 @@ function UF.treeCallback(container, group)
 		addOptions(container, false, "player")
 	elseif group == "ufplus\001target" then
 		addOptions(container, false, "target")
+	elseif group == "ufplus\001targettarget" then
+		addOptions(container, false, TARGET_TARGET_UNIT)
 	end
 end
 
@@ -1598,12 +1733,19 @@ if not addon.Aura.UFInitialized then
 	ensureRootNode()
 	addTreeNode("ufplus\001player", { value = "player", text = L["UFPlayerFrame"] or PLAYER }, "ufplus")
 	addTreeNode("ufplus\001target", { value = "target", text = L["UFTargetFrame"] or TARGET }, "ufplus")
+	addTreeNode("ufplus\001targettarget", { value = "targettarget", text = L["UFToTFrame"] or "Target of Target" }, "ufplus")
 	local cfg = ensureDB("player")
 	if cfg.enabled then After(0.1, function() UF.Enable() end) end
 	local tc = ensureDB("target")
 	if tc.enabled then
 		ensureEventHandling()
 		applyConfig("target")
+	end
+	local ttc = ensureDB(TARGET_TARGET_UNIT)
+	if ttc.enabled then
+		ensureEventHandling()
+		applyConfig(TARGET_TARGET_UNIT)
+		updateTargetTargetFrame(ttc)
 	end
 end
 

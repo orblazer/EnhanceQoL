@@ -390,6 +390,45 @@ local function buildActionBarExtras(parent)
 	end, L["actionBarShortHotkeysDesc"])
 	labelGroup:AddChild(shortHotkeys)
 
+	local rangeOptionsGroup
+	local function rebuildRangeOptions()
+		if not rangeOptionsGroup then return end
+		rangeOptionsGroup:ReleaseChildren()
+		if addon.db["actionBarFullRangeColoring"] then
+			local colorPicker = AceGUI:Create("ColorPicker")
+			colorPicker:SetLabel(L["rangeOverlayColor"])
+			local c = addon.db["actionBarFullRangeColor"]
+			colorPicker:SetColor(c.r, c.g, c.b)
+			colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
+				addon.db["actionBarFullRangeColor"] = { r = r, g = g, b = b }
+				if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
+			end)
+			rangeOptionsGroup:AddChild(colorPicker)
+
+			local alphaPercent = math.floor((addon.db["actionBarFullRangeAlpha"] or 0.35) * 100)
+			local sliderAlpha = addon.functions.createSliderAce(L["rangeOverlayAlpha"] .. ": " .. alphaPercent .. "%", alphaPercent, 1, 100, 1, function(self, _, val)
+				addon.db["actionBarFullRangeAlpha"] = val / 100
+				self:SetLabel(L["rangeOverlayAlpha"] .. ": " .. val .. "%")
+				if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
+			end)
+			rangeOptionsGroup:AddChild(sliderAlpha)
+		end
+		if rangeOptionsGroup.DoLayout then rangeOptionsGroup:DoLayout() end
+	end
+
+	local cbRange = addon.functions.createCheckboxAce(L["fullButtonRangeColoring"], addon.db["actionBarFullRangeColoring"], function(_, _, value)
+		addon.db["actionBarFullRangeColoring"] = value
+		if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
+		rebuildRangeOptions()
+	end, L["fullButtonRangeColoringDesc"])
+	labelGroup:AddChild(cbRange)
+
+	rangeOptionsGroup = addon.functions.createContainer("SimpleGroup", "List")
+	rangeOptionsGroup:SetFullWidth(true)
+	labelGroup:AddChild(rangeOptionsGroup)
+
+	rebuildRangeOptions()
+
 	local perBarGroup = addon.functions.createContainer("InlineGroup", "Flow")
 	perBarGroup:SetTitle(L["actionBarHideHotkeysGroup"] or "Hide keybinds per bar")
 	perBarGroup:SetFullWidth(true)
