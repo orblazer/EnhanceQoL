@@ -1,4 +1,4 @@
-local MINOR = 10
+local MINOR = 9
 local lib = LibStub:NewLibrary('LibEditMode', MINOR)
 if not lib then
 	-- this or a newer version is already loaded
@@ -7,25 +7,6 @@ end
 
 lib.internal = {} -- internal methods, do not use directly
 local internal = lib.internal
-
-local layoutNames = setmetatable({'Modern', 'Classic'}, {
-	__index = function(t, key)
-		if key > 2 then
-			-- the first 2 indices are reserved for 'Modern' and 'Classic' layouts, and anything
-			-- else are custom ones, although GetLayouts() doesn't return data for the 'Modern'
-			-- and 'Classic' layouts, so we'll have to substract and check
-			local layouts = C_EditMode.GetLayouts().layouts
-			if (key - 2) > #layouts then
-				error('index is out of bounds')
-			else
-				return layouts[key - 2].layoutName
-			end
-		else
-			-- also work for 'Modern' and 'Classic'
-			rawget(t, key)
-		end
-	end
-})
 
 lib.frameSelections = lib.frameSelections or {}
 lib.frameCallbacks = lib.frameCallbacks or {}
@@ -36,10 +17,43 @@ lib.frameButtons = lib.frameButtons or {}
 lib.anonCallbacksEnter = lib.anonCallbacksEnter or {}
 lib.anonCallbacksExit = lib.anonCallbacksExit or {}
 lib.anonCallbacksLayout = lib.anonCallbacksLayout or {}
+lib.anonCallbacksCreate = lib.anonCallbacksCreate or {}
+lib.anonCallbacksRename = lib.anonCallbacksRename or {}
+lib.anonCallbacksDelete = lib.anonCallbacksDelete or {}
+
+lib.systemSettings = lib.systemSettings or {}
+lib.systemButtons = lib.systemButtons or {}
+
+lib.layoutCache = lib.layoutCache or {}
+
+local layoutNames = setmetatable({'Modern', 'Classic'}, {
+	__index = function(t, key)
+		if key > 2 then
+			-- the first 2 indices are reserved for 'Modern' and 'Classic' layouts, and anything
+			-- else are custom ones, although GetLayouts() doesn't return data for the 'Modern'
+			-- and 'Classic' layouts, so we'll have to substract and check
+			local layouts = lib.layoutCache
+			if (key - 2) <= #layouts then
+				return layouts[key - 2].layoutName
+			end
+		else
+			-- also work for 'Modern' and 'Classic'
+			rawget(t, key)
+		end
+	end
+})
+
+local function resetDialogs()
+	if internal.dialog then
+		internal.dialog:Hide()
+	end
+
+	if internal.extension then
+		internal.extension:Hide()
+	end
+end
 
 local function resetSelection()
-	internal.dialog:Hide()
-
 	for frame, selection in next, lib.frameSelections do
 		if selection.isSelected then
 			frame:SetMovable(false)
@@ -55,6 +69,12 @@ local function resetSelection()
 end
 
 local function onDragStart(self)
+	if InCombatLockdown() then
+		-- TODO: maybe add a warning?
+		return
+	end
+
+	self:RegisterEvent('PLAYER_REGEN_DISABLED')
 	self.parent:StartMoving()
 end
 
@@ -107,27 +127,58 @@ local function normalizePosition(frame)
 	return point, x / scale, y / scale
 end
 
-local function onDragStop(self)
-	local parent = self.parent
-	parent:StopMovingOrSizing()
+local function updatePosition(selection, xDelta, yDelta)
+	if InCombatLockdown() then
+		-- TODO: maybe add a warning?
+		return
+	end
 
-	-- TODO: snap position to grid
-	-- FrameXML/EditModeUtil.lua
-
+	local parent = selection.parent
 	local point, x, y = normalizePosition(parent)
+	x, y = x + (xDelta or 0), y + (yDelta or 0)
 	parent:ClearAllPoints()
 	parent:SetPoint(point, x, y)
 
 	internal:TriggerCallback(parent, point, x, y)
+
+	if selection.isSelected then
+		internal.dialog:Update(selection)
+	end
+end
+
+local function onDragStop(self)
+	if InCombatLockdown() then
+		return
+	end
+
+	local parent = self.parent
+	parent:StopMovingOrSizing()
+	self:UnregisterEvent('PLAYER_REGEN_DISABLED')
+
+	-- TODO: snap position to grid
+	-- FrameXML/EditModeUtil.lua
+
+	updatePosition(self)
 end
 
 local function onMouseDown(self) -- replacement for EditModeSystemMixin:SelectSystem()
+	if InCombatLockdown() then
+		-- TODO: maybe add a warning?
+		return
+	end
+
+	resetDialogs()
 	resetSelection()
 	EditModeManagerFrame:ClearSelectedSystem() -- possible taint
 
 	if not self.isSelected then
 		self.parent:SetMovable(true)
 		self:ShowSelected(true)
+
+		if internal.dialog.selection ~= self then
+			internal.dialog:Reset()
+		end
+
 		internal.dialog:Update(self)
 	end
 end
@@ -135,6 +186,7 @@ end
 local function onEditModeEnter()
 	lib.isEditing = true
 
+	resetDialogs()
 	resetSelection()
 
 	for _, callback in next, lib.anonCallbacksEnter do
@@ -145,6 +197,7 @@ end
 local function onEditModeExit()
 	lib.isEditing = false
 
+	resetDialogs()
 	resetSelection()
 
 	for _, callback in next, lib.anonCallbacksExit do
@@ -153,24 +206,101 @@ local function onEditModeExit()
 end
 
 local function onEditModeChanged(_, layoutInfo)
-	local layoutName = layoutNames[layoutInfo.activeLayout]
-	if layoutName ~= lib.activeLayoutName then
-		lib.activeLayoutName = layoutName
+	local activeLayout = layoutInfo.activeLayout
+	if activeLayout ~= lib.activeLayout then
+		lib.activeLayout = activeLayout
+
+		-- update cache
+		lib.layoutCache = C_EditMode.GetLayouts().layouts
 
 		for _, callback in next, lib.anonCallbacksLayout do
-			securecallfunction(callback, layoutName)
+			securecallfunction(callback, layoutNames[activeLayout], activeLayout)
 		end
 
 		-- TODO: we should update the position of the button here, let the user not deal with that
 	end
 end
 
---[[ LibEditMode:AddFrame(_frame, callback, default_)
+local function onSpecChanged(_, unit)
+	if unit ~= 'player' then
+		return
+	end
+
+	onEditModeChanged(nil, C_EditMode.GetLayouts())
+end
+
+local function onEditModeLayoutChanged()
+	local layouts = C_EditMode.GetLayouts().layouts
+
+	for index = #layouts, 1, -1 do
+		if lib.layoutCache[index] then
+			local layout = layouts[index]
+			if lib.layoutCache[index].layoutName ~= layout.layoutName then
+				for _, callback in next, lib.anonCallbacksRename do
+					securecallfunction(callback, lib.layoutCache[index].layoutName, layout.layoutName, index)
+				end
+			end
+
+			table.remove(lib.layoutCache, index)
+		else
+			for _, callback in next, lib.anonCallbacksCreate do
+				securecallfunction(callback, layouts[index].layoutName, index)
+			end
+		end
+	end
+
+	for _, layout in next, lib.layoutCache do
+		for _, callback in next, lib.anonCallbacksDelete do
+			securecallfunction(callback, layout.layoutName)
+		end
+	end
+
+	lib.layoutCache = layouts
+end
+
+local isManagerHooked = false
+
+local function hookManager()
+	-- listen for layout changes
+	EventRegistry:RegisterFrameEventAndCallback('EDIT_MODE_LAYOUTS_UPDATED', onEditModeChanged)
+	EventRegistry:RegisterFrameEventAndCallback('PLAYER_SPECIALIZATION_CHANGED', onSpecChanged)
+	EventRegistry:RegisterCallback('EditMode.SavedLayouts', onEditModeLayoutChanged)
+
+	-- hook EditMode shown state, since QuickKeybindMode will hide/show EditMode
+	EditModeManagerFrame:HookScript('OnShow', onEditModeEnter)
+	EditModeManagerFrame:HookScript('OnHide', onEditModeExit)
+
+	-- we don't want any custom frames dangling around
+	EditModeSystemSettingsDialog:HookScript('OnHide', resetDialogs)
+
+	-- unselect our selections whenever a system is selected and try to add an extension
+	hooksecurefunc(EditModeManagerFrame, 'SelectSystem', function(_, systemFrame)
+		resetDialogs()
+		resetSelection()
+
+		internal.dialog:Reset()
+
+		local systemID = systemFrame.system
+		if lib.systemSettings[systemID] or lib.systemButtons[systemID] then
+			internal.extension:Update(systemID)
+		end
+	end)
+
+	-- fetch layout info in case EDIT_MODE_LAYOUTS_UPDATED already fired
+	if lib.layoutCache then
+		onEditModeChanged(nil, C_EditMode.GetLayouts()) -- introduces a little latency
+	end
+
+	isManagerHooked = true
+end
+
+--[[ LibEditMode:AddFrame(_frame, callback, default_) ![](https://img.shields.io/badge/function-blue)
 Register a frame to be controlled by the Edit Mode.
 
 * `frame`: frame widget to be controlled
 * `callback`: callback that triggers whenever the frame has been repositioned
 * `default`: table containing the default position of the frame
+* `name`: name of the system, if nil, the frame's name will be used
 
 The `default` table must contain the following entries:
 
@@ -178,23 +308,21 @@ The `default` table must contain the following entries:
 * `x`: horizontal offset from the anchor point _(number)_
 * `y`: vertical offset from the anchor point _(number)_
 --]]
-function lib:AddFrame(frame, callback, default)
+function lib:AddFrame(frame, callback, default, name)
 	local selection = CreateFrame('Frame', nil, frame, 'EditModeSystemSelectionTemplate')
 	selection:SetAllPoints()
 	selection:SetScript('OnMouseDown', onMouseDown)
 	selection:SetScript('OnDragStart', onDragStart)
 	selection:SetScript('OnDragStop', onDragStop)
+	selection:SetScript('OnEvent', onDragStop)
 	selection:Hide()
 
-	if select(4, GetBuildInfo()) >= 110200 then
-		-- 11.2 requires a system name to work correctly, we'll fake it
-		selection.system = {}
-		selection.system.GetSystemName = function()
-			return frame.editModeName or frame:GetName()
+	-- as of 11.2 the template requires a system name to work correctly
+	selection.system = {
+		GetSystemName = function()
+			return name or frame.editModeName or frame:GetName()
 		end
-	else
-		selection.Label:SetText(frame.editModeName or frame:GetName())
-	end
+	}
 
 	lib.frameSelections[frame] = selection
 	lib.frameCallbacks[frame] = callback
@@ -206,21 +334,13 @@ function lib:AddFrame(frame, callback, default)
 			resetSelection()
 		end)
 
-		-- listen for layout changes
-		EventRegistry:RegisterFrameEventAndCallback('EDIT_MODE_LAYOUTS_UPDATED', onEditModeChanged)
-
-		-- hook EditMode shown state, since QuickKeybindMode will hide/show EditMode
-		EditModeManagerFrame:HookScript('OnShow', onEditModeEnter)
-		EditModeManagerFrame:HookScript('OnHide', onEditModeExit)
-
-		-- unselect our selections whenever a system is selected
-		hooksecurefunc(EditModeManagerFrame, 'SelectSystem', function()
-			resetSelection()
-		end)
+		if not isManagerHooked then
+			hookManager()
+		end
 	end
 end
 
---[[ LibEditMode:AddFrameSettings(_frame, settings_)
+--[[ LibEditMode:AddFrameSettings(_frame, settings_) ![](https://img.shields.io/badge/function-blue)
 Register extra settings that will be displayed in a dialog attached to the frame in the Edit Mode.
 
 * `frame`: frame widget already registered with [AddFrame](#libeditmodeaddframeframe-callback-default)
@@ -234,11 +354,14 @@ function lib:AddFrameSettings(frame, settings)
 	lib.frameSettings[frame] = settings
 end
 
---[[ LibEditMode:AddFrameSettingsButton(_frame, data_)
-Register extra buttons that will be displayed in a dialog attached to the frame in the Edit Mode.
+--[[ LibEditMode:AddFrameSettingsButton(_frame, data_) ![](https://img.shields.io/badge/function-blue)
+
+> :warning: Deprecated. Please use [`LibEditMode:AddFrameSettingsButtons(frame, buttons)`](#libeditmodeaddframesettingsbuttonsframe-buttons-) instead.
+
+Register extra button that will be displayed in a dialog attached to the frame in the Edit Mode.
 
 * `frame`: frame widget already registered with [AddFrame](#libeditmodeaddframeframe-callback-default)
-* `data`: table containing [ButtonObject](Types#buttonobject) entries _(table, number indexed)_
+* `data`: [ButtonObject](Types#buttonobject) _(table)_
 --]]
 function lib:AddFrameSettingsButton(frame, data)
 	if not lib.frameButtons[frame] then
@@ -248,7 +371,72 @@ function lib:AddFrameSettingsButton(frame, data)
 	table.insert(lib.frameButtons[frame], data)
 end
 
---[[ LibEditMode:RegisterCallback(_event, callback_)
+--[[ LibEditMode:AddFrameSettingsButtons(_frame, buttons_) ![](https://img.shields.io/badge/function-blue)
+Register extra buttons that will be displayed in a dialog attached to the frame in the Edit Mode.
+
+* `frame`: frame widget already registered with [AddFrame](#libeditmodeaddframeframe-callback-default)
+* `buttons`: table containing [ButtonObject](Types#buttonobject) entries _(table, number indexed)_
+--]]
+function lib:AddFrameSettingsButtons(frame, buttons)
+	if not lib.frameButtons[frame] then
+		lib.frameButtons[frame] = {}
+	end
+
+	for _, button in next, buttons do
+		table.insert(lib.frameButtons[frame], button)
+	end
+end
+
+--[[ LibEditMode:AddSystemSettings(_systemID, settings_) ![](https://img.shields.io/badge/function-blue)
+Register extra settings for a Blizzard system, it will be displayed in an dialog attached to the system's dialog in the Edit Mode.
+
+* `systemID`: the ID of a system registered with the Edit Mode. See `Enum.EditModeSystem`.
+* `settings`: table containing [SettingObject](Types#settingobject) entries _(table, number indexed)_
+--]]
+function lib:AddSystemSettings(systemID, settings)
+	if not lib.systemSettings[systemID] then
+		lib.systemSettings[systemID] = {}
+	end
+
+	-- while not ideal allow multiple addons to add their settings
+	for _, setting in next, settings do
+		table.insert(lib.systemSettings[systemID], setting)
+	end
+
+	if not internal.extension then
+		internal.extension = internal:CreateExtension()
+	end
+
+	if not isManagerHooked then
+		hookManager()
+	end
+end
+
+--[[ LibEditMode:AddSystemSettingsButtons(_systemID, buttons_) ![](https://img.shields.io/badge/function-blue)
+Register extra buttons for a Blizzard system, it will be displayed in a dialog attached to the system's dialog in the Edit Mode.
+
+* `systemID`: the ID of a system registered with the Edit Mode. See `Enum.EditModeSystem`.
+* `buttons`: table containing [ButtonObject](Types#buttonobject) entries _(table, number indexed)_
+--]]
+function lib:AddSystemSettingsButtons(systemID, buttons)
+	if not lib.systemButtons[systemID] then
+		lib.systemButtons[systemID] = {}
+	end
+
+	for _, button in next, buttons do
+		table.insert(lib.systemButtons[systemID], button)
+	end
+
+	if not internal.extension then
+		internal.extension = internal:CreateExtension()
+	end
+
+	if not isManagerHooked then
+		hookManager()
+	end
+end
+
+--[[ LibEditMode:RegisterCallback(_event, callback_) ![](https://img.shields.io/badge/function-blue)
 Register extra callbacks whenever an event within the Edit Mode triggers.
 
 * `event`: event name _(string)_
@@ -260,7 +448,20 @@ Possible events:
 * `exit`: triggered when the Edit Mode is exited
 * `layout`: triggered when the Edit Mode layout is changed (which also occurs at login)
     * signature:
+        * `layoutName`: name of the layout
+        * `layoutIndex`: index of the layout
+* `create`: triggered when a Edit Mode layout has been created
+    * signature:
         * `layoutName`: name of the new layout
+        * `layoutIndex`: index of the layout
+* `rename`: triggered when a Edit Mode layout has been renamed
+    * signature:
+        * `oldLayoutName`: name of the layout that got renamed
+        * `newLayoutName`: new name of the layout
+        * `layoutIndex`: index of the layout
+* `delete`: triggered when a Edit Mode layout has been deleted
+    * signature:
+        *`layoutName`: name of the layout that got deleted
 --]]
 function lib:RegisterCallback(event, callback)
 	assert(event and type(event) == 'string', 'event must be a string')
@@ -272,29 +473,50 @@ function lib:RegisterCallback(event, callback)
 		table.insert(lib.anonCallbacksExit, callback)
 	elseif event == 'layout' then
 		table.insert(lib.anonCallbacksLayout, callback)
+
+		-- if there's none, then onEditModeChanged will take care of it
+		if lib.activeLayout then
+			securecallfunction(callback, layoutNames[lib.activeLayout], lib.activeLayout)
+		end
+	elseif event == 'create' then
+		table.insert(lib.anonCallbacksCreate, callback)
+	elseif event == 'rename' then
+		table.insert(lib.anonCallbacksRename, callback)
+	elseif event == 'delete' then
+		table.insert(lib.anonCallbacksDelete, callback)
 	else
 		error('invalid callback event "' .. event .. '"')
 	end
 end
 
---[[ LibEditMode:GetActiveLayoutName()
+--[[ LibEditMode:GetActiveLayout() ![](https://img.shields.io/badge/function-blue)
+Returns the active Edit Mode layout.
+
+This will not return valid data until after the layout has been loaded from the server.  
+Data will be available for the ["layout" callback](#libeditmoderegistercallbackevent-callback).
+--]]
+function lib:GetActiveLayout()
+	return lib.activeLayout
+end
+
+--[[ LibEditMode:GetActiveLayoutName() ![](https://img.shields.io/badge/function-blue)
 Returns the active Edit Mode layout name.
 
 This will not return valid data until after the layout has been loaded from the server.  
 Data will be available for the ["layout" callback](#libeditmoderegistercallbackevent-callback).
 --]]
 function lib:GetActiveLayoutName()
-	return lib.activeLayoutName
+	return lib.activeLayout and layoutNames[lib.activeLayout]
 end
 
---[[ LibEditMode:IsInEditMode()
+--[[ LibEditMode:IsInEditMode() ![](https://img.shields.io/badge/function-blue)
 Returns whether the Edit Mode is currently active.
 --]]
 function lib:IsInEditMode()
 	return not not lib.isEditing
 end
 
---[[ LibEditMode:GetFrameDefaultPosition(_frame_)
+--[[ LibEditMode:GetFrameDefaultPosition(_frame_) ![](https://img.shields.io/badge/function-blue)
 Returns the default position table registered with the frame.
 
 * `frame`: registered frame to return positions for
@@ -309,7 +531,7 @@ end
 
 function internal:TriggerCallback(frame, ...)
 	if lib.frameCallbacks[frame] then
-		securecallfunction(lib.frameCallbacks[frame], frame, lib.activeLayoutName, ...)
+		securecallfunction(lib.frameCallbacks[frame], frame, layoutNames[lib.activeLayout], ...)
 	end
 end
 
@@ -329,9 +551,29 @@ function internal:GetFrameButtons(frame)
 	end
 end
 
+function internal:MoveParent(selection, x, y)
+	updatePosition(selection, x, y)
+end
+
+function internal:GetSystemSettings(systemID)
+	if lib.systemSettings[systemID] then
+		return lib.systemSettings[systemID], #lib.systemSettings[systemID]
+	else
+		return nil, 0
+	end
+end
+
+function internal:GetSystemSettingsButtons(systemID)
+	if lib.systemButtons[systemID] then
+		return lib.systemButtons[systemID], #lib.systemButtons[systemID]
+	else
+		return nil, 0
+	end
+end
+
 --[[ Types:header
 
-## SettingObject
+## SettingObject ![](https://img.shields.io/badge/object-teal)
 
 Table containing the following entries:
 
@@ -348,7 +590,7 @@ Table containing the following entries:
 
 Depending on the setting type there are additional required and optional entries:
 
-### Dropdown
+### Dropdown ![](https://img.shields.io/badge/object-teal)
 
 | key       | value                                                                                                                 | type     | required |
 |:----------|:----------------------------------------------------------------------------------------------------------------------|:---------|:---------|
@@ -361,7 +603,17 @@ Depending on the setting type there are additional required and optional entries
 - `generator` signature is `(dropdown, rootDescription, settingObject)` - `settingObject` being the addition to the default arguments.
 	- getters and setters are not handled using `generator`, and must be handled by the layout
 
-### Slider
+## DropdownOption ![](https://img.shields.io/badge/object-teal)
+
+Table containing the following entries:
+
+| key     | value                                                              | type    | required |
+|:--------|:-------------------------------------------------------------------|---------|:---------|
+| text    | text rendered in the dropdown                                      | string  | yes      |
+| value   | value the text represents, defaults to the text if not provided    | any     | no       |
+| isRadio | turns the dropdown entry into a Radio button, otherwise a Checkbox | boolean | no       |
+
+### Slider ![](https://img.shields.io/badge/object-teal)
 
 | key       | value                             | type     | required | default |
 |:----------|:----------------------------------|:---------|:---------|:--------|
@@ -372,7 +624,7 @@ Depending on the setting type there are additional required and optional entries
 
 - The formatter passes `value` as the sole argument and expects a number value in return.
 
-## ButtonObject
+## ButtonObject ![](https://img.shields.io/badge/object-teal)
 
 Table containing the following entries:
 
@@ -381,21 +633,13 @@ Table containing the following entries:
 | text  | text rendered on the button     | string   | yes      |
 | click | callback when button is clicked | function | yes      |
 
-## DropdownOption
-
-Table containing the following entries:
-
-| key     | value                                                              | type    | required |
-|:--------|:-------------------------------------------------------------------|---------|:---------|
-| text    | text rendered in the dropdown                                      | string  | yes      |
-| isRadio | turns the dropdown entry into a Radio button, otherwise a Checkbox | boolean | no       |
-
-## SettingType
-Convenient shorthand for `Enum.EditModeSettingDisplayType`.
+## SettingType ![](https://img.shields.io/badge/object-teal)
+Table containing available setting types.
 
 One of:
 - `Dropdown`
 - `Checkbox`
 - `Slider`
+- `Divider`
 --]]
 lib.SettingType = CopyTable(Enum.EditModeSettingDisplayType)
