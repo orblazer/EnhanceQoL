@@ -84,6 +84,7 @@ local StaticPopup_Visible = StaticPopup_Visible
 local IsShiftKeyDown = IsShiftKeyDown
 local IsControlKeyDown = IsControlKeyDown
 local IsAltKeyDown = IsAltKeyDown
+local IsInGroup = IsInGroup
 local math = math
 local TooltipUtil = _G.TooltipUtil
 local GetTime = GetTime
@@ -399,6 +400,23 @@ local visibilityRuleMetadata = {
 		unitRequirement = "player",
 		order = 40,
 	},
+	PLAYER_HAS_TARGET = {
+		key = "PLAYER_HAS_TARGET",
+		label = L["visibilityRule_playerHasTarget"] or "When I have a target",
+		description = L["visibilityRule_playerHasTarget_desc"],
+		appliesTo = { frame = true },
+		unitRequirement = "player",
+		order = 45,
+	},
+	ALWAYS_HIDE_IN_GROUP = {
+		key = "ALWAYS_HIDE_IN_GROUP",
+		label = L["visibilityRule_groupedHide"] or "Always hide in party/raid",
+		description = L["visibilityRule_groupedHide_desc"]
+			or "Hides the player frame whenever you are in a party or raid. While grouped, only this rule (and Mouseover, if enabled) is evaluated; other visibility rules are ignored.",
+		appliesTo = { frame = true },
+		unitRequirement = "player",
+		order = 47,
+	},
 	SKYRIDING_ACTIVE = {
 		key = "SKYRIDING_ACTIVE",
 		label = L["visibilityRule_skyriding"] or "While skyriding",
@@ -482,23 +500,130 @@ local function MigrateLegacyVisibilityFlags()
 	MigrateLegacyVisibilityFlag("hideBagsBar", "unitframeSettingBagsBar")
 end
 
+local FRAME_VISIBILITY_FADE_DURATION = 0.15
+local FRAME_VISIBILITY_FADE_THRESHOLD = 0.01
+
+local function StopFrameFade(target)
+	local group = target and target.EQOL_FadeGroup
+	if group and group.Stop then group:Stop() end
+	if group then group.targetAlpha = nil end
+end
+
+local function ApplyAlphaToRegion(target, alpha, useFade)
+	if not target or not target.SetAlpha then return end
+	if not useFade or not target.CreateAnimationGroup then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	-- TODO disable for midnight for now until a fix is found:
+	--[[
+		6x ...aceBlizzard_UnitFrame/Mainline/UnitFrame.lua:256: attempt to compare local 'myCurrentHealAbsorb' (a secret value)
+		[Blizzard_UnitFrame/Mainline/UnitFrame.lua]:256: in function 'UnitFrameHealPredictionBars_Update'
+		[Blizzard_UnitFrame/Mainline/UnitFrame.lua]:230: in function 'UnitFrameHealPredictionBars_UpdateSize'
+		[Blizzard_UnitFrame/Mainline/PetFrame.lua]:221: in function <...faceBlizzard_UnitFrame/Mainline/PetFrame.lua:220>
+		[C]: in function 'Play'
+		[EnhanceQoL/EnhanceQoL.lua]:581: in function <EnhanceQoL/EnhanceQoL.lua:512>
+		[EnhanceQoL/EnhanceQoL.lua]:814: in function <EnhanceQoL/EnhanceQoL.lua:812>
+		[EnhanceQoL/EnhanceQoL.lua]:895: in function <EnhanceQoL/EnhanceQoL.lua:858>
+		[EnhanceQoL/EnhanceQoL.lua]:907: in function <EnhanceQoL/EnhanceQoL.lua:903>
+	--]]
+	if addon.variables.isMidnight then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	if issecretvalue and issecretvalue(alpha) then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	local current = target:GetAlpha()
+	if issecretvalue and issecretvalue(current) then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	local delta = current - alpha
+	if issecretvalue and issecretvalue(delta) then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	if math.abs(delta) < FRAME_VISIBILITY_FADE_THRESHOLD then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	local group = target.EQOL_FadeGroup
+	if not group or not group.fade then
+		if not target.CreateAnimationGroup then
+			target:SetAlpha(alpha)
+			return
+		end
+		group = target:CreateAnimationGroup()
+		if not group then
+			target:SetAlpha(alpha)
+			return
+		end
+		local anim = group:CreateAnimation("Alpha")
+		if anim and anim.SetSmoothing then anim:SetSmoothing("IN_OUT") end
+		group.fade = anim
+		group:SetScript("OnFinished", function(self)
+			local desired = self.targetAlpha
+			local owner = self:GetParent()
+			if owner and owner.SetAlpha and desired ~= nil then owner:SetAlpha(desired) end
+			self.targetAlpha = nil
+		end)
+		target.EQOL_FadeGroup = group
+	end
+
+	local anim = group.fade
+	if not anim or not anim.SetFromAlpha or not anim.SetToAlpha or not anim.SetDuration then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
+	if group:IsPlaying() then group:Stop() end
+	anim:SetFromAlpha(current)
+	anim:SetToAlpha(alpha)
+	anim:SetDuration(FRAME_VISIBILITY_FADE_DURATION)
+	group.targetAlpha = alpha
+
+	print(target:GetName())
+	group:Play()
+end
+
 local function RestoreUnitFrameVisibility(frame, cbData)
-	if frame and frame.SetAlpha then frame:SetAlpha(1) end
+	ApplyAlphaToRegion(frame, 1, false)
 	if cbData and cbData.children then
 		for _, child in pairs(cbData.children) do
-			if child and child.SetAlpha then child:SetAlpha(1) end
+			ApplyAlphaToRegion(child, 1, false)
 		end
 	end
 	if cbData and cbData.hideChildren then
 		for _, child in pairs(cbData.hideChildren) do
-			if child and child.SetAlpha then child:SetAlpha(1) end
+			ApplyAlphaToRegion(child, 1, false)
 		end
 	end
 end
 
 local UpdateUnitFrameMouseover -- forward declaration
 
-local frameVisibilityContext = { inCombat = false, playerHealthMissing = false, playerHealthAlpha = 0 }
+local frameVisibilityContext = {
+	inCombat = false,
+	playerHealthMissing = false,
+	playerHealthAlpha = 0,
+	hasTarget = false,
+	inGroup = false,
+}
 local frameVisibilityStates = {}
 local hookedUnitFrames = {}
 local frameVisibilityHealthEnabled = false
@@ -536,12 +661,17 @@ local function UpdateFrameVisibilityContext()
 	end
 	frameVisibilityContext.inCombat = inCombat
 
+	local hasTarget = UnitExists and UnitExists("target") and true or false
+	frameVisibilityContext.hasTarget = hasTarget
+	frameVisibilityContext.inGroup = (IsInGroup and IsInGroup()) and true or false
+
 	if frameVisibilityHealthEnabled then
 		local isMidnight = addon and addon.variables and addon.variables.isMidnight
 		if isMidnight then
 			local alpha = GetMidnightPlayerHealthAlpha()
+			if type(alpha) ~= "number" then alpha = 0 end
 			frameVisibilityContext.playerHealthAlpha = alpha
-			frameVisibilityContext.playerHealthMissing = alpha ~= nil
+			frameVisibilityContext.playerHealthMissing = true
 		else
 			local maxHP = UnitHealthMax and UnitHealthMax("player") or 0
 			local currentHP = UnitHealth and UnitHealth("player") or 0
@@ -571,6 +701,7 @@ end
 local function BuildUnitFrameDriverExpression(config)
 	if not config then return nil end
 	if config.ALWAYS_HIDDEN then return "hide" end
+	if config.ALWAYS_HIDE_IN_GROUP then return nil end
 	local inCombat = config.ALWAYS_IN_COMBAT == true
 	local outCombat = config.ALWAYS_OUT_OF_COMBAT == true
 	if inCombat and outCombat then return "show" end
@@ -670,6 +801,8 @@ local function EnsureFrameVisibilityWatcher()
 	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+	watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
+	watcher:RegisterEvent("GROUP_ROSTER_UPDATE")
 	addon.variables.frameVisibilityWatcher = watcher
 	UpdateFrameVisibilityContext()
 	UpdateFrameVisibilityHealthRegistration()
@@ -677,34 +810,38 @@ end
 
 local function EvaluateFrameVisibility(state)
 	local cfg = state.config
-	if not cfg or not next(cfg) then return nil end
+	if not cfg or not next(cfg) then return false, nil end
 
-	if cfg.ALWAYS_HIDDEN then return false end
+	if cfg.ALWAYS_HIDDEN then return false, "ALWAYS_HIDDEN" end
 	local context = frameVisibilityContext
 
-	if cfg.ALWAYS_IN_COMBAT and context.inCombat then return true end
-	if cfg.ALWAYS_OUT_OF_COMBAT and not context.inCombat then return true end
-	if cfg.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule and context.playerHealthMissing then return true end
-	if cfg.MOUSEOVER and state.isMouseOver then return true end
+	if cfg.ALWAYS_HIDE_IN_GROUP and state.supportsGroupRule and context.inGroup then
+		if cfg.MOUSEOVER and state.isMouseOver then return true, "MOUSEOVER" end
+		return false, "ALWAYS_HIDE_IN_GROUP"
+	end
 
-	return false
+	if cfg.ALWAYS_IN_COMBAT and context.inCombat then return true, "ALWAYS_IN_COMBAT" end
+	if cfg.ALWAYS_OUT_OF_COMBAT and not context.inCombat then return true, "ALWAYS_OUT_OF_COMBAT" end
+	if cfg.PLAYER_HAS_TARGET and state.supportsPlayerTargetRule and context.hasTarget then return true, "PLAYER_HAS_TARGET" end
+	if cfg.MOUSEOVER and state.isMouseOver then return true, "MOUSEOVER" end
+	if cfg.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule and context.playerHealthMissing then return true, "PLAYER_HEALTH_NOT_FULL" end
+
+	return false, nil
 end
 
-local function ApplyToFrameAndChildren(state, alpha)
+local function ApplyToFrameAndChildren(state, alpha, useFade)
 	local frame = state.frame
-	if frame then
-		if frame.SetAlpha then frame:SetAlpha(alpha) end
-	end
+	if frame then ApplyAlphaToRegion(frame, alpha, useFade) end
 
 	if state.cbData and state.cbData.children then
 		for _, child in pairs(state.cbData.children) do
-			if child and child.SetAlpha then child:SetAlpha(alpha) end
+			ApplyAlphaToRegion(child, alpha, useFade)
 		end
 	end
 
 	if state.cbData and state.cbData.hideChildren then
 		for _, child in pairs(state.cbData.hideChildren) do
-			if child and child.SetAlpha then child:SetAlpha(alpha) end
+			ApplyAlphaToRegion(child, alpha, useFade)
 		end
 	end
 end
@@ -751,11 +888,10 @@ ApplyFrameVisibilityState = function(state)
 
 	EnsureFrameVisibilityWatcher()
 	local context = frameVisibilityContext
-	local shouldShow = EvaluateFrameVisibility(state)
+	local shouldShow, activeRule = EvaluateFrameVisibility(state)
 	local targetAlpha = shouldShow and 1 or 0
-	local healthActive = context and state.supportsPlayerHealthRule and state.config and state.config.PLAYER_HEALTH_NOT_FULL and context.playerHealthMissing
 	local isMidnightPlayerFrame = addon and addon.variables and addon.variables.isMidnight and state.frame == _G.PlayerFrame
-	local applyMidnightAlpha = shouldShow and healthActive and isMidnightPlayerFrame
+	local applyMidnightAlpha = shouldShow and activeRule == "PLAYER_HEALTH_NOT_FULL" and isMidnightPlayerFrame
 
 	if applyMidnightAlpha then
 		local midnightAlpha = context.playerHealthAlpha
@@ -766,6 +902,7 @@ ApplyFrameVisibilityState = function(state)
 	if shouldShow then
 		if state.visible == true and not applyMidnightAlpha then
 			UpdateFrameVisibilityHealthRegistration()
+			if addon.variables.isMidnight then ApplyToFrameAndChildren(state, targetAlpha, not applyMidnightAlpha) end
 			return
 		end
 	else
@@ -775,7 +912,7 @@ ApplyFrameVisibilityState = function(state)
 		end
 	end
 
-	ApplyToFrameAndChildren(state, targetAlpha)
+	ApplyToFrameAndChildren(state, targetAlpha, not applyMidnightAlpha)
 	state.visible = shouldShow
 	UpdateFrameVisibilityHealthRegistration()
 end
@@ -861,7 +998,10 @@ local function ApplyVisibilityToUnitFrame(frameName, cbData, config)
 
 	local state = EnsureFrameState(frame, cbData)
 	state.config = config
-	state.supportsPlayerHealthRule = (cbData.unitToken == "player")
+	local isPlayerUnit = (cbData.unitToken == "player")
+	state.supportsPlayerHealthRule = isPlayerUnit
+	state.supportsPlayerTargetRule = isPlayerUnit
+	state.supportsGroupRule = isPlayerUnit
 
 	local driverExpression = BuildUnitFrameDriverExpression(config)
 	local needsHealth = config and config.PLAYER_HEALTH_NOT_FULL and state.supportsPlayerHealthRule
@@ -870,17 +1010,7 @@ local function ApplyVisibilityToUnitFrame(frameName, cbData, config)
 	if useDriver then
 		state.driverActive = true
 		ApplyUnitFrameStateDriver(frame, driverExpression)
-		if frame.SetAlpha then frame:SetAlpha(1) end
-		if cbData.children then
-			for _, child in ipairs(cbData.children) do
-				if child and child.SetAlpha then child:SetAlpha(1) end
-			end
-		end
-		if cbData.hideChildren then
-			for _, child in pairs(cbData.hideChildren) do
-				if child and child.SetAlpha then child:SetAlpha(1) end
-			end
-		end
+		ApplyToFrameAndChildren(state, 1, false)
 		return true
 	end
 
@@ -1027,17 +1157,17 @@ local function ApplyActionBarAlpha(bar, variable, config, combatOverride)
 	end
 	if not cfg then return end
 	if ActionBarShouldForceShowByConfig(cfg, combatOverride) then
-		bar:SetAlpha(1)
+		ApplyAlphaToRegion(bar, 1, true)
 		return
 	end
 	if cfg.MOUSEOVER then
 		if MouseIsOver(bar) or EQOL_ShouldKeepVisibleByFlyout() then
-			bar:SetAlpha(1)
+			ApplyAlphaToRegion(bar, 1, true)
 		else
-			bar:SetAlpha(0)
+			ApplyAlphaToRegion(bar, 0, true)
 		end
 	else
-		bar:SetAlpha(0)
+		ApplyAlphaToRegion(bar, 0, true)
 	end
 end
 
@@ -1048,18 +1178,18 @@ local function EQOL_HideBarIfNotHovered(bar, variable)
 		local current = GetActionBarVisibilityConfig(variable)
 		if not current then return end
 		if ActionBarShouldForceShowByConfig(current) then
-			bar:SetAlpha(1)
+			ApplyAlphaToRegion(bar, 1, true)
 			return
 		end
 		if not current.MOUSEOVER then
-			bar:SetAlpha(0)
+			ApplyAlphaToRegion(bar, 0, true)
 			return
 		end
 		-- Only hide if neither the bar nor the spell flyout is under the mouse
 		if not MouseIsOver(bar) and not EQOL_ShouldKeepVisibleByFlyout() then
-			bar:SetAlpha(0)
+			ApplyAlphaToRegion(bar, 0, true)
 		else
-			bar:SetAlpha(1)
+			ApplyAlphaToRegion(bar, 1, true)
 		end
 	end)
 end
@@ -2795,6 +2925,45 @@ local function addQuestFrame(container, d)
 		groupCore:AddChild(cbautoChooseQuest)
 	end
 
+	local trackerGroup = addon.functions.createContainer("InlineGroup", "List")
+	trackerGroup:SetTitle(L["questTrackerOptions"] or QUESTS_LABEL)
+	wrapper:AddChild(trackerGroup)
+
+	local function refreshTrackerControls()
+		local enabled = addon.db.questTrackerShowQuestCount == true
+		if trackerGroup._sliderX then trackerGroup._sliderX:SetDisabled(not enabled) end
+		if trackerGroup._sliderY then trackerGroup._sliderY:SetDisabled(not enabled) end
+	end
+
+	local questCountCheckbox = addon.functions.createCheckboxAce(L["questTrackerShowQuestCount"] or "Show quest count under tracker", addon.db.questTrackerShowQuestCount, function(self, _, value)
+		addon.db.questTrackerShowQuestCount = value and true or false
+		refreshTrackerControls()
+		addon.functions.UpdateQuestTrackerQuestCount()
+	end, L["questTrackerShowQuestCount_desc"])
+	trackerGroup:AddChild(questCountCheckbox)
+
+	local function sliderLabelX(val) return string.format("%s: %d", L["questTrackerQuestCountOffsetX"] or (L["instanceDifficultyOffsetX"] or "Horizontal offset"), val) end
+	local function sliderLabelY(val) return string.format("%s: %d", L["questTrackerQuestCountOffsetY"] or (L["instanceDifficultyOffsetY"] or "Vertical offset"), val) end
+
+	local sliderX = addon.functions.createSliderAce(sliderLabelX(addon.db.questTrackerQuestCountOffsetX or 0), addon.db.questTrackerQuestCountOffsetX or 0, -200, 200, 1, function(self, _, value)
+		local rounded = math.floor((value or 0) + 0.5)
+		addon.db.questTrackerQuestCountOffsetX = rounded
+		self:SetLabel(sliderLabelX(rounded))
+		addon.functions.UpdateQuestTrackerQuestCountPosition()
+	end)
+	trackerGroup._sliderX = sliderX
+	trackerGroup:AddChild(sliderX)
+
+	local sliderY = addon.functions.createSliderAce(sliderLabelY(addon.db.questTrackerQuestCountOffsetY or 0), addon.db.questTrackerQuestCountOffsetY or 0, -200, 200, 1, function(self, _, value)
+		local rounded = math.floor((value or 0) + 0.5)
+		addon.db.questTrackerQuestCountOffsetY = rounded
+		self:SetLabel(sliderLabelY(rounded))
+		addon.functions.UpdateQuestTrackerQuestCountPosition()
+	end)
+	trackerGroup._sliderY = sliderY
+	trackerGroup:AddChild(sliderY)
+	refreshTrackerControls()
+
 	local groupNPC = addon.functions.createContainer("InlineGroup", "List")
 	groupNPC:SetTitle(L["questAddNPCToExclude"])
 	wrapper:AddChild(groupNPC)
@@ -2852,6 +3021,108 @@ local function addQuestFrame(container, d)
 	groupNPC:AddChild(dropIncludeList)
 	groupNPC:AddChild(btnRemoveNPC)
 	scroll:DoLayout()
+end
+
+local QUEST_TRACKER_QUEST_COUNT_COLOR = { r = 1, g = 210 / 255, b = 0 }
+local questTrackerQuestCountFrame
+local questTrackerQuestCountText
+local questTrackerQuestCountWatcher
+
+local function GetQuestTrackerQuestCountText()
+	if not C_QuestLog or not C_QuestLog.GetNumQuestLogEntries then return "" end
+	local _, numQuests = C_QuestLog.GetNumQuestLogEntries()
+	if not numQuests then numQuests = 0 end
+	local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept()
+	if not maxQuests or maxQuests <= 0 then
+		if numQuests <= 0 then return "" end
+		return tostring(numQuests)
+	end
+	return string.format("%d/%d", numQuests, maxQuests)
+end
+
+local function PositionQuestTrackerQuestCount()
+	if not questTrackerQuestCountFrame or not addon or not addon.db then return end
+	local header = _G.QuestObjectiveTracker and _G.QuestObjectiveTracker.Header
+	if not header then return end
+	questTrackerQuestCountFrame:ClearAllPoints()
+	local x = addon.db.questTrackerQuestCountOffsetX or 0
+	local y = addon.db.questTrackerQuestCountOffsetY or 0
+	questTrackerQuestCountFrame:SetPoint("CENTER", header, "CENTER", x, y)
+end
+
+local function EnsureQuestTrackerQuestCountFrame()
+	local header = _G.QuestObjectiveTracker and _G.QuestObjectiveTracker.Header
+	if not header then return nil end
+	if not questTrackerQuestCountFrame then
+		questTrackerQuestCountFrame = CreateFrame("Frame", nil, header)
+		questTrackerQuestCountFrame:SetSize(1, 1)
+	end
+	questTrackerQuestCountFrame:SetParent(header)
+	if not questTrackerQuestCountText then
+		questTrackerQuestCountText = questTrackerQuestCountFrame:CreateFontString(nil, "OVERLAY")
+		questTrackerQuestCountText:SetPoint("TOPLEFT")
+		questTrackerQuestCountText:SetJustifyH("LEFT")
+		questTrackerQuestCountText:SetJustifyV("TOP")
+	end
+	local referenceFont = header.Text and header.Text:GetFontObject()
+	if referenceFont then
+		questTrackerQuestCountText:SetFontObject(referenceFont)
+	else
+		questTrackerQuestCountText:SetFont(addon.variables.defaultFont or "Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+	end
+	questTrackerQuestCountText:SetTextColor(QUEST_TRACKER_QUEST_COUNT_COLOR.r, QUEST_TRACKER_QUEST_COUNT_COLOR.g, QUEST_TRACKER_QUEST_COUNT_COLOR.b)
+	return questTrackerQuestCountFrame
+end
+
+local function UpdateQuestTrackerQuestCountPosition()
+	if not addon or not addon.db then return end
+	if not questTrackerQuestCountFrame or not questTrackerQuestCountFrame:IsShown() then
+		if addon.db.questTrackerShowQuestCount then addon.functions.UpdateQuestTrackerQuestCount() end
+		return
+	end
+	PositionQuestTrackerQuestCount()
+end
+addon.functions.UpdateQuestTrackerQuestCountPosition = UpdateQuestTrackerQuestCountPosition
+
+local function UpdateQuestTrackerQuestCount()
+	if not addon or not addon.db or not addon.db.questTrackerShowQuestCount then
+		if questTrackerQuestCountFrame then questTrackerQuestCountFrame:Hide() end
+		return
+	end
+	local header = _G.QuestObjectiveTracker and _G.QuestObjectiveTracker.Header
+	if not header then
+		if questTrackerQuestCountFrame then questTrackerQuestCountFrame:Hide() end
+		return
+	end
+	local container = EnsureQuestTrackerQuestCountFrame()
+	if not container or not questTrackerQuestCountText then return end
+	PositionQuestTrackerQuestCount()
+	local textValue = GetQuestTrackerQuestCountText()
+	if textValue == "" then
+		questTrackerQuestCountFrame:Hide()
+		return
+	end
+	questTrackerQuestCountText:SetText(textValue)
+	questTrackerQuestCountFrame:SetSize(math.max(1, questTrackerQuestCountText:GetStringWidth()), math.max(1, questTrackerQuestCountText:GetStringHeight()))
+	questTrackerQuestCountFrame:Show()
+	questTrackerQuestCountText:Show()
+end
+addon.functions.UpdateQuestTrackerQuestCount = UpdateQuestTrackerQuestCount
+
+local function EnsureQuestTrackerQuestCountWatcher()
+	if questTrackerQuestCountWatcher then return end
+	questTrackerQuestCountWatcher = CreateFrame("Frame")
+	local events = { "PLAYER_ENTERING_WORLD", "QUEST_ACCEPTED", "QUEST_REMOVED" }
+	for _, evt in ipairs(events) do
+		questTrackerQuestCountWatcher:RegisterEvent(evt)
+	end
+	questTrackerQuestCountWatcher:SetScript("OnEvent", function(_, event)
+		if event == "PLAYER_ENTERING_WORLD" then
+			C_Timer.After(0.5, UpdateQuestTrackerQuestCount)
+		else
+			UpdateQuestTrackerQuestCount()
+		end
+	end)
 end
 
 local function merchantItemIsKnown(itemIndex)
@@ -3418,7 +3689,10 @@ local function updateFlyoutButtonInfo(button)
 		-- TODO 12.0: EquipmentManager_UnpackLocation will change once Void Storage is removed
 		local itemLink, _, _, bags, _, slot, bag
 		if type(button.location) == "number" then
-			_, _, bags, _, slot, bag = EquipmentManager_UnpackLocation(location)
+			local locationData = EquipmentManager_GetLocationData(location)
+			bags = locationData.isBags or false
+			slot = locationData.slot
+			bag = locationData.bag
 
 			if bags then
 				itemLink = C_Container.GetContainerItemLink(bag, slot)
@@ -3735,40 +4009,46 @@ local function initParty()
 	local pending_update = false
 	local updateFrame = CreateFrame("Frame")
 
-	local function manage_raid_frame()
-		if not addon.db["showPartyFrameInSoloContent"] then return end
-		if InCombatLockdown() then
-			if not pending_update then
-				pending_update = true
-				updateFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+	-- TODO throws many errors in midnight in group content for now - maybe later in beta it works
+	if not addon.variables.isMidnight then
+		local function manage_raid_frame()
+			if not addon.db["showPartyFrameInSoloContent"] then return end
+			if InCombatLockdown() then
+				if not pending_update then
+					pending_update = true
+					updateFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+				end
+				return
 			end
-			return
+
+			local solo = 1
+			if IsInGroup() or IsInRaid() then solo = 0 end
+
+			if solo == 0 and last_solo == 0 then return end
+
+			CompactPartyFrame:SetShown(solo)
+			last_solo = solo
 		end
 
-		local solo = 1
-		if IsInGroup() or IsInRaid() then solo = 0 end
+		updateFrame:SetScript("OnEvent", function(self, event)
+			if event == "PLAYER_REGEN_ENABLED" and pending_update then
+				self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+				pending_update = false
+				manage_raid_frame()
+			end
+		end)
 
-		if solo == 0 and last_solo == 0 then return end
-
-		CompactPartyFrame:SetShown(solo)
-		last_solo = solo
+		hooksecurefunc(CompactPartyFrame, "UpdateVisibility", manage_raid_frame)
 	end
-
-	updateFrame:SetScript("OnEvent", function(self, event)
-		if event == "PLAYER_REGEN_ENABLED" and pending_update then
-			self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-			pending_update = false
-			manage_raid_frame()
-		end
-	end)
-
-	hooksecurefunc(CompactPartyFrame, "UpdateVisibility", manage_raid_frame)
 end
 
 local function initQuest()
 	addon.functions.InitDBValue("autoChooseQuest", false)
 	addon.functions.InitDBValue("ignoreTrivialQuests", false)
 	addon.functions.InitDBValue("ignoreDailyQuests", false)
+	addon.functions.InitDBValue("questTrackerShowQuestCount", false)
+	addon.functions.InitDBValue("questTrackerQuestCountOffsetX", 0)
+	addon.functions.InitDBValue("questTrackerQuestCountOffsetY", 0)
 	addon.functions.InitDBValue("questWowheadLink", false)
 	addon.functions.InitDBValue("ignoredQuestNPC", {})
 	addon.functions.InitDBValue("autogossipID", {})
@@ -3848,6 +4128,9 @@ local function initQuest()
 		Menu.ModifyMenu("MENU_QUEST_MAP_LOG_TITLE", EQOL_AddQuestWowheadEntry)
 		Menu.ModifyMenu("MENU_QUEST_OBJECTIVE_TRACKER", EQOL_AddQuestWowheadEntry)
 	end
+
+	EnsureQuestTrackerQuestCountWatcher()
+	UpdateQuestTrackerQuestCount()
 end
 
 local function initMisc()
@@ -4079,7 +4362,6 @@ local function initUnitFrame()
 	addon.functions.InitDBValue("hideHitIndicatorPet", false)
 	-- Player resting visuals (ZZZ + glow)
 	addon.functions.InitDBValue("hideRestingGlow", false)
-	addon.functions.InitDBValue("hideRaidFrameBuffs", false)
 	addon.functions.InitDBValue("hidePartyFrameTitle", false)
 	addon.functions.InitDBValue("unitFrameTruncateNames", false)
 	addon.functions.InitDBValue("unitFrameMaxNameLength", addon.variables.unitFrameMaxNameLength)
@@ -4165,36 +4447,11 @@ local function initUnitFrame()
 	end) end
 	addon.functions.togglePartyFrameTitle(addon.db["hidePartyFrameTitle"])
 
-	if not addon.variables.isMidnight then
-		-- TODO actually no workaround for auras on raid frames so disabling this feature for now
-		local function DisableBlizzBuffs(cuf)
-			if addon.db["hideRaidFrameBuffs"] then
-				if not cuf.optionTable then return end
-				if cuf.optionTable.displayBuffs then
-					cuf.optionTable.displayBuffs = false
-					CompactUnitFrame_UpdateAuras(cuf) -- entfernt sofort bestehende Buff-Buttons
-				end
-			end
-		end
-		hooksecurefunc("CompactUnitFrame_SetUpFrame", DisableBlizzBuffs)
-
-		function addon.functions.updateRaidFrameBuffs()
-			if addon.variables.isMidnight then return end
-			for i = 1, 5 do
-				local f = _G["CompactPartyFrameMember" .. i]
-				if f then DisableBlizzBuffs(f) end
-			end
-			for i = 1, 40 do
-				local f = _G["CompactRaidFrame" .. i]
-				if f then DisableBlizzBuffs(f) end
-			end
-		end
-	end
-
 	local function TruncateFrameName(cuf)
 		if not addon.db["unitFrameTruncateNames"] then return end
 		if not addon.db["unitFrameMaxNameLength"] then return end
 		if not cuf then return end
+		if issecretvalue and issecretvalue(cuf.unit) then return end
 
 		if cuf.unit and cuf.unit:match("^nameplate") then return end
 
@@ -4206,6 +4463,8 @@ local function initUnitFrame()
 		elseif cuf.name and type(cuf.name.GetText) == "function" then
 			name = cuf.name:GetText()
 		end
+
+		if issecretvalue and issecretvalue(name) then return end
 
 		if name and cuf.name and type(cuf.name.SetText) == "function" then
 			-- Remove server names before truncation
@@ -4271,7 +4530,6 @@ local function initUnitFrame()
 		end
 	end
 
-	if addon.db["hideRaidFrameBuffs"] then addon.functions.updateRaidFrameBuffs() end
 	if addon.db["unitFrameTruncateNames"] then addon.functions.updateUnitFrameNames() end
 	if addon.db["unitFrameScaleEnabled"] then addon.functions.updatePartyFrameScale() end
 	-- Apply resting visuals if option is enabled
@@ -5501,7 +5759,12 @@ end
 
 function addon.functions.checkReloadFrame()
 	if addon.variables.requireReload == false then return end
-	if ReloadUIPopup and ReloadUIPopup:IsShown() then return end
+	if _G["ReloadUIPopup"] and _G["ReloadUIPopup"]:IsShown() then return end
+
+	if _G["ReloadUIPopup"] then
+		_G["ReloadUIPopup"]:Show()
+		return
+	end
 	local reloadFrame = CreateFrame("Frame", "ReloadUIPopup", UIParent, "BasicFrameTemplateWithInset")
 	reloadFrame:SetFrameStrata("TOOLTIP")
 	reloadFrame:SetSize(500, 120) -- Breite und Höhe
@@ -5677,6 +5940,9 @@ local function CreateUI()
 			addon.Mouse.functions.treeCallback(container, "mouse")
 		elseif group == "ui\001tooltip" then
 			addon.Tooltip.functions.treeCallback(container, group:sub(4)) -- pass "tooltip..."
+		-- UF Plus
+		elseif string.match(group, "^ufplus") then
+			if addon.Aura and addon.Aura.UF and addon.Aura.UF.treeCallback then addon.Aura.UF.treeCallback(container, group) end
 		-- Quests under Map & Navigation
 		elseif group == "nav\001quest" then
 			addQuestFrame(container, true)
@@ -6507,12 +6773,14 @@ local eventHandlers = {
 			addon.variables.unitSpecId = specId
 		end
 
-		addon.db["moneyTracker"][UnitGUID("player")] = {
-			name = UnitName("player"),
-			realm = GetRealmName(),
-			money = GetMoney(),
-			class = select(2, UnitClass("player")),
-		}
+		if addon.db["moneyTracker"] then
+			addon.db["moneyTracker"][UnitGUID("player")] = {
+				name = UnitName("player"),
+				realm = GetRealmName(),
+				money = GetMoney(),
+				class = select(2, UnitClass("player")),
+			}
+		end
 		addon.db["warbandGold"] = C_Bank.FetchDepositedMoney(Enum.BankType.Account)
 		if addon.ChatIM then addon.ChatIM:BuildSoundTable() end
 
@@ -6534,7 +6802,9 @@ local eventHandlers = {
 	end,
 	["PLAYER_MONEY"] = function()
 		if addon.db["showDurabilityOnCharframe"] then calculateDurability() end
-		if addon.db["moneyTracker"][UnitGUID("player")]["money"] then addon.db["moneyTracker"][UnitGUID("player")]["money"] = GetMoney() end
+		if addon.db["moneyTracker"] and addon.db["moneyTracker"][UnitGUID("player")] and addon.db["moneyTracker"][UnitGUID("player")]["money"] then
+			addon.db["moneyTracker"][UnitGUID("player")]["money"] = GetMoney()
+		end
 	end,
 	["ACCOUNT_MONEY"] = function() addon.db["warbandGold"] = C_Bank.FetchDepositedMoney(Enum.BankType.Account) end,
 	["PLAYER_REGEN_ENABLED"] = function()

@@ -225,7 +225,24 @@ local function setBRInfo(info)
 		local current = info.currentCharges
 		local max = info.maxCharges
 
-		if current < max then
+		if issecretvalue and issecretvalue(current) then
+			brButton.cooldownFrame:SetCooldown(info.cooldownStartTime, info.cooldownDuration, info.chargeModRate)
+			brButton.cooldownFrame.startTime = info.cooldownStartTime
+			brButton.cooldownFrame.charges = current
+
+			-- TODO actually no way to do saturation stuff in m+/raid in midnight
+			-- if current > 0 then
+				brButton.charges:SetTextColor(0, 1, 0)
+				brButton.icon:SetDesaturated(false)
+				brButton.cooldownFrame:SetSwipeColor(0, 0, 0, 0.3)
+				brButton.charges:Show()
+			-- else
+			-- 	brButton.cooldownFrame:SetSwipeColor(0, 0, 0, 1)
+			-- 	brButton.icon:SetDesaturated(true)
+			-- 	brButton.charges:SetTextColor(1, 0, 0)
+			-- 	brButton.charges:Hide()
+			-- end
+		elseif current < max then
 			if brButton.cooldownFrame.charges ~= current or brButton.cooldownFrame.startTime ~= info.cooldownStartTime then
 				brButton.cooldownFrame:SetCooldown(info.cooldownStartTime, info.cooldownDuration, info.chargeModRate)
 				brButton.cooldownFrame.startTime = info.cooldownStartTime
@@ -348,7 +365,7 @@ local function checkKeyStone()
 		for container = BACKPACK_CONTAINER, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
 			for slot = 1, GetContainerNumSlots(container) do
 				local id = GetContainerItemID(container, slot)
-				if id == 180653 then
+				if id == 180653 or id == 151086 then
 					-- Button for ReadyCheck and Pulltimer
 					if UnitInParty("player") and UnitIsGroupLeader("player") then createButtons() end
 

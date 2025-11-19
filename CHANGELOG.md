@@ -1,5 +1,39 @@
 # Changelog
 
+## [6.1.0] – 2025-11-20
+
+### ✨ Added
+
+- Actionbar and Frame fading if you choose to hide it
+- PlayerFrame
+  - Show when I target something
+  - New visibility rule: “Always hide in party/raid” (overrides other rules while grouped; mouseover can still reveal)
+- Quest Tracker
+  - Optional quest counter beneath the tracker header, showing `current/max` with configurable offsets
+- Resource Bars
+  - Optional auto-hide while mounted or inside vehicles, reacting instantly to mounting/vehicle events
+- Sync the width of your resource bars with the relative frame
+- Missing Mythic Keystone id for Keystone helper 
+
+### ⏰ Temporarily disabled
+
+- Show Party frame in solo content, this break in group content with secrets in midnight beta
+
+### ❌ Removed
+
+- Hide raid frame buffs (something changed as this now throws error in retail too)
+
+### 🐛 Fixed
+
+- Error: attempt to perform indexed assignment on field 'moneyTracker'
+- Guard against ChatIM and Ignore feature in restricted content (Raid/M+) for midnight because of secret values
+- Resource Bars: Druid form-specific visibility now uses a secure state driver (no more tug-of-war with the hide rules), and disabling all visibility rules no longer forces redundant bar rebuilds
+- Resource Bars: The module now fully unregisters its visibility drivers when turned off, and “Hide while mounted” also suppresses bars in Travel/Stag form for Druids
+- BR Tracker working in m+/raid now
+- World Map Dungeon Teleports fixed in m+/raid
+
+---
+
 ## [6.0.0] – 2025-11-15
 
 ## Midnight Beta – Addon Status

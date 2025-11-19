@@ -390,6 +390,45 @@ local function buildActionBarExtras(parent)
 	end, L["actionBarShortHotkeysDesc"])
 	labelGroup:AddChild(shortHotkeys)
 
+	local rangeOptionsGroup
+	local function rebuildRangeOptions()
+		if not rangeOptionsGroup then return end
+		rangeOptionsGroup:ReleaseChildren()
+		if addon.db["actionBarFullRangeColoring"] then
+			local colorPicker = AceGUI:Create("ColorPicker")
+			colorPicker:SetLabel(L["rangeOverlayColor"])
+			local c = addon.db["actionBarFullRangeColor"]
+			colorPicker:SetColor(c.r, c.g, c.b)
+			colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b)
+				addon.db["actionBarFullRangeColor"] = { r = r, g = g, b = b }
+				if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
+			end)
+			rangeOptionsGroup:AddChild(colorPicker)
+
+			local alphaPercent = math.floor((addon.db["actionBarFullRangeAlpha"] or 0.35) * 100)
+			local sliderAlpha = addon.functions.createSliderAce(L["rangeOverlayAlpha"] .. ": " .. alphaPercent .. "%", alphaPercent, 1, 100, 1, function(self, _, val)
+				addon.db["actionBarFullRangeAlpha"] = val / 100
+				self:SetLabel(L["rangeOverlayAlpha"] .. ": " .. val .. "%")
+				if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
+			end)
+			rangeOptionsGroup:AddChild(sliderAlpha)
+		end
+		if rangeOptionsGroup.DoLayout then rangeOptionsGroup:DoLayout() end
+	end
+
+	local cbRange = addon.functions.createCheckboxAce(L["fullButtonRangeColoring"], addon.db["actionBarFullRangeColoring"], function(_, _, value)
+		addon.db["actionBarFullRangeColoring"] = value
+		if ActionBarLabels and ActionBarLabels.RefreshAllRangeOverlays then ActionBarLabels.RefreshAllRangeOverlays() end
+		rebuildRangeOptions()
+	end, L["fullButtonRangeColoringDesc"])
+	labelGroup:AddChild(cbRange)
+
+	rangeOptionsGroup = addon.functions.createContainer("SimpleGroup", "List")
+	rangeOptionsGroup:SetFullWidth(true)
+	labelGroup:AddChild(rangeOptionsGroup)
+
+	rebuildRangeOptions()
+
 	local perBarGroup = addon.functions.createContainer("InlineGroup", "Flow")
 	perBarGroup:SetTitle(L["actionBarHideHotkeysGroup"] or "Hide keybinds per bar")
 	perBarGroup:SetFullWidth(true)
@@ -579,6 +618,7 @@ local function addVisibilityHub(container)
 			scenarioGroup:AddChild(addon.functions.createSpacerAce())
 		end
 		local config = getCurrentConfig() or {}
+		local groupedRuleActive = config.ALWAYS_HIDE_IN_GROUP == true
 		local rules = getRulesForCurrentElement()
 		if #rules == 0 then
 			local none = addon.functions.createLabelAce(L["visibilityNoRules"] or "", nil, nil, 12)
@@ -591,12 +631,27 @@ local function addVisibilityHub(container)
 		for _, rule in ipairs(rules) do
 			local value = config and config[rule.key] == true
 			local cb = addon.functions.createCheckboxAce(rule.label or rule.key or "", value, function(_, _, checked) updateRuleSelection(rule.key, checked) end, rule.description)
-			cb:SetRelativeWidth(0.5)
+			if cb.SetFullWidth then
+				cb:SetFullWidth(true)
+			else
+				cb:SetRelativeWidth(1.0)
+			end
 			if disableOthers and rule.key ~= "ALWAYS_HIDDEN" then cb:SetDisabled(true) end
 			scenarioGroup:AddChild(cb)
 		end
 		if disableOthers then
 			local warn = addon.functions.createLabelAce(L["visibilityAlwaysHiddenActive"] or "", nil, nil, 10)
+			warn:SetFullWidth(true)
+			scenarioGroup:AddChild(addon.functions.createSpacerAce())
+			scenarioGroup:AddChild(warn)
+		elseif groupedRuleActive then
+			local warn = addon.functions.createLabelAce(
+				L["visibilityHideInGroupActive"]
+					or "When you are in a party or raid, only \"Always hide in party/raid\" (and Mouseover, if enabled) is evaluated; other visibility rules are ignored while grouped.",
+				nil,
+				nil,
+				10
+			)
 			warn:SetFullWidth(true)
 			scenarioGroup:AddChild(addon.functions.createSpacerAce())
 			scenarioGroup:AddChild(warn)
@@ -794,16 +849,6 @@ local function addUnitFrame2(container)
 		g:AddChild(labelHeadlineUF)
 		g:AddChild(addon.functions.createSpacerAce())
 
-		-- TODO actually no workaround for auras on raid frames so disabling this feature for now
-		if not addon.variables.isMidnight then
-			local cbRaid = addon.functions.createCheckboxAce(L["hideRaidFrameBuffs"], addon.db["hideRaidFrameBuffs"], function(_, _, value)
-				addon.db["hideRaidFrameBuffs"] = value
-				addon.functions.updateRaidFrameBuffs()
-				addon.variables.requireReload = true
-			end)
-			g:AddChild(cbRaid)
-		end
-
 		local cbLeader = addon.functions.createCheckboxAce(L["showLeaderIconRaidFrame"], addon.db["showLeaderIconRaidFrame"], function(_, _, value)
 			addon.db["showLeaderIconRaidFrame"] = value
 			if value then
@@ -814,14 +859,16 @@ local function addUnitFrame2(container)
 		end)
 		g:AddChild(cbLeader)
 
-		local cbSolo = addon.functions.createCheckboxAce(L["showPartyFrameInSoloContent"], addon.db["showPartyFrameInSoloContent"], function(_, _, value)
-			addon.db["showPartyFrameInSoloContent"] = value
-			addon.variables.requireReload = true
-			buildCoreUF()
-			ApplyUnitFrameSettingByVar("unitframeSettingPlayerFrame")
-			addon.functions.togglePartyFrameTitle(addon.db["hidePartyFrameTitle"])
-		end)
-		g:AddChild(cbSolo)
+		if not addon.variables.isMidnight then
+			local cbSolo = addon.functions.createCheckboxAce(L["showPartyFrameInSoloContent"], addon.db["showPartyFrameInSoloContent"], function(_, _, value)
+				addon.db["showPartyFrameInSoloContent"] = value
+				addon.variables.requireReload = true
+				buildCoreUF()
+				ApplyUnitFrameSettingByVar("unitframeSettingPlayerFrame")
+				addon.functions.togglePartyFrameTitle(addon.db["hidePartyFrameTitle"])
+			end)
+			g:AddChild(cbSolo)
+		end
 
 		local cbTitle = addon.functions.createCheckboxAce(L["hidePartyFrameTitle"], addon.db["hidePartyFrameTitle"], function(_, _, value)
 			addon.db["hidePartyFrameTitle"] = value
