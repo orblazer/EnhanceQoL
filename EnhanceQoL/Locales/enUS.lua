@@ -100,8 +100,9 @@ L["containerActionsAnchorLockedCombat"] = "Cannot unlock the container action bu
 L["containerActionsButtonTooltip"] = "Click to use this item."
 L["containerActionsBanTooltip"] = "Shift-Right-Click to ban the current item from this button."
 L["containerActionsNoItems"] = "No secure container items detected."
-L["containerActionsFeatureDesc"] =
-	"When enabled, items that require a secure click are queued on the container action button. Place the anchor where you want it and click the button to use the next queued item without causing taint."
+L["containerActionsFeatureDesc2"] =
+	"When enabled, items that require a secure click are queued on the container action button. \nPlace the anchor where you want it and click the button to use the next queued item."
+
 L["containerActionsManagedItems"] = "Blacklisted Items"
 L["containerActionsBlacklistDesc"] = "Manage the list of item IDs that should never appear on the container action button."
 L["containerActionsBlacklistHint"] = "Tip: Shift-Right-Click the container action button to add the currently shown item to the blacklist."

@@ -570,64 +570,7 @@ local function addCharacterFrame(container)
 	wrapper:DoLayout()
 end
 
--- Returns the raw Misc options table so we can reuse subsets in other views
-
-local function getMiscOptions()
-	local data = {
-		{
-			parent = "",
-			var = "automaticallyOpenContainer",
-			type = "CheckBox",
-			callback = function(self, _, value)
-				addon.db["automaticallyOpenContainer"] = value
-				if addon.ContainerActions and addon.ContainerActions.OnSettingChanged then addon.ContainerActions:OnSettingChanged(value) end
-			end,
-		},
-	}
-	return data
-end
-
 -- Helper to render only a subset of the misc options by var name
-
-local function addMiscSubsetFrame(container, include)
-	local list = {}
-	local allowed = {}
-	for _, k in ipairs(include or {}) do
-		allowed[k] = true
-	end
-	for _, entry in ipairs(getMiscOptions()) do
-		if allowed[entry.var] then table.insert(list, entry) end
-	end
-
-	-- Keep original simple checkbox look used in Misc
-	table.sort(list, function(a, b)
-		local ta = a.text or L[a.var]
-		local tb = b.text or L[b.var]
-		return ta < tb
-	end)
-
-	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-	scroll:SetFullWidth(true)
-	scroll:SetFullHeight(true)
-	container:AddChild(scroll)
-
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	scroll:AddChild(wrapper)
-
-	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(groupCore)
-
-	for _, checkboxData in ipairs(list) do
-		local desc = checkboxData.desc
-		local text = checkboxData.text or L[checkboxData.var]
-		local uFunc = checkboxData.callback or function(self, _, value) addon.db[checkboxData.var] = value end
-		local cb = addon.functions.createCheckboxAce(text, addon.db[checkboxData.var], uFunc, desc)
-		groupCore:AddChild(cb)
-	end
-
-	scroll:DoLayout()
-end
-
 local function addContainerActionsFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "List")
 	scroll:SetFullWidth(true)
