@@ -3,4 +3,6 @@
 	<Script file='CombatDungeon.lua'/>
 	<Script file='ItemInventory.lua'/>
 	<Script file='ContainerAction.lua'/>
+	<Script file='GearUpgrade.lua'/>
+	<Script file='UIInput.lua'/>
 </Ui>
