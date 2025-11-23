@@ -215,9 +215,9 @@ for i = 3, 5 do
 						return addon.SettingsLayout.elements["enableLootToastFilter"]
 							and addon.SettingsLayout.elements["enableLootToastFilter"].setting
 							and addon.SettingsLayout.elements["enableLootToastFilter"].setting:GetValue() == true
-							and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"]
-							and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"].setting
-							and addon.SettingsLayout.elements["lootToastCheckIlvl_rare"].setting:GetValue() == true
+							and addon.SettingsLayout.elements["lootToastCheckIlvl_" .. i]
+							and addon.SettingsLayout.elements["lootToastCheckIlvl_" .. i].setting
+							and addon.SettingsLayout.elements["lootToastCheckIlvl_" .. i].setting:GetValue() == true
 					end,
 					get = function() return addon.db and addon.db.lootToastItemLevels and addon.db.lootToastItemLevels[i] or 0 end,
 					set = function(value)
@@ -250,6 +250,7 @@ for i = 3, 5 do
 
 	addon.functions.SettingsCreateMultiDropdown(cLoot, {
 		var = "lootToastFilters_" .. i,
+		subvar = i,
 		text = L["lootToastAlwaysShow"],
 		parent = true,
 		element = addon.SettingsLayout.elements["enableLootToastFilter"].element,
@@ -259,9 +260,9 @@ for i = 3, 5 do
 				and addon.SettingsLayout.elements["enableLootToastFilter"].setting:GetValue() == true
 		end,
 		options = {
-			{ value = "mounts", text =  L["lootToastAlwaysShowMounts"]},
-			{ value = "pets", text =  L["lootToastAlwaysShowPets"]},
-			{ value = "upgrade", text =  L["lootToastAlwaysShowUpgrades"]},
+			{ value = "mounts", text = L["lootToastAlwaysShowMounts"] },
+			{ value = "pets", text = L["lootToastAlwaysShowPets"] },
+			{ value = "upgrade", text = L["lootToastAlwaysShowUpgrades"] },
 		},
 	})
 end
