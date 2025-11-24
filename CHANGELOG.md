@@ -17,6 +17,7 @@ Starting to change stuff to blizzard options, for now only a small part is there
 
 - Shortening per _Currency_ in _Currency Stream_ added
 - Hide border and/or background of *Button Sink*
+- Scaling, width, height of Reputation and XP-Bar implemented
 
 ### 🔄 Changed
 

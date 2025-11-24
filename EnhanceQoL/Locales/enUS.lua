@@ -193,6 +193,8 @@ L["confirmReplaceEnchantDesc"] = "Skips the confirmation dialog when replacing a
 L["confirmSocketReplace"] = "Automatically accept Socket replacement"
 L["confirmSocketReplaceDesc"] = "Skips the confirmation dialog when replacing sockets"
 
+L["XP_Rep"] = "XP and Reputation bar"
+L["modifyXPRepBar"] = "Modify XP and Reputation bar"
 L["Quest"] = "Quest"
 L["Loot"] = "Loot"
 L["LootPopups"] = "Loot popups"
