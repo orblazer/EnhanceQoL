@@ -26,14 +26,21 @@ local data = {
 		var = "enableSquareMinimap",
 		text = L["SquareMinimap"],
 		desc = L["enableSquareMinimapDesc"],
-		func = function(key) addon.db["enableSquareMinimap"] = key end,
+		func = function(key)
+			addon.db["enableSquareMinimap"] = key
+			addon.variables.requireReload = true
+			addon.functions.checkReloadFrame()
+		end,
 		default = false,
 		children = {
 			{
 				var = "enableSquareMinimapBorder",
 				text = L["enableSquareMinimapBorder"],
 				desc = L["enableSquareMinimapBorderDesc"],
-				func = function(key) addon.db["enableSquareMinimapBorder"] = key end,
+				func = function(key)
+					addon.db["enableSquareMinimapBorder"] = key
+					if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
+				end,
 				default = false,
 				sType = "checkbox",
 				parentCheck = function()
@@ -42,6 +49,7 @@ local data = {
 						and addon.SettingsLayout.elements["enableSquareMinimap"].setting:GetValue() == true
 				end,
 				parent = true,
+				notify = "enableSquareMinimap",
 			},
 			{
 				var = "squareMinimapBorderSize",
@@ -66,11 +74,28 @@ local data = {
 				default = 1,
 				sType = "slider",
 			},
+			{
+				var = "squareMinimapBorderColor",
+				text = L["squareMinimapBorderColor"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableSquareMinimapBorder"]
+						and addon.SettingsLayout.elements["enableSquareMinimapBorder"].setting
+						and addon.SettingsLayout.elements["enableSquareMinimapBorder"].setting:GetValue() == true
+						and addon.SettingsLayout.elements["enableSquareMinimap"]
+						and addon.SettingsLayout.elements["enableSquareMinimap"].setting
+						and addon.SettingsLayout.elements["enableSquareMinimap"].setting:GetValue() == true
+				end,
+				parent = true,
+				default = false,
+				sType = "colorpicker",
+				notify = "enableSquareMinimap",
+				callback = function()
+					if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
+				end,
+			},
 		},
 	},
 }
-
--- TODO add notifier to bordersize/border/square
 
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cMapNav, data)
@@ -107,6 +132,164 @@ data = {
 			end
 		end,
 		default = false,
+	},
+}
+
+table.sort(data, function(a, b) return a.text < b.text end)
+addon.functions.SettingsCreateCheckboxes(cMapNav, data)
+
+addon.functions.SettingsCreateHeadline(cMapNav, L["MinimapButtonSinkGroup"])
+
+data = {
+	{
+		var = "enableMinimapButtonBin",
+		text = L["enableMinimapButtonBin"],
+		desc = L["enableMinimapButtonBin"],
+		func = function(key)
+			addon.db["enableMinimapButtonBin"] = key
+			addon.functions.toggleButtonSink()
+		end,
+		default = false,
+		children = {
+			{
+				var = "useMinimapButtonBinIcon",
+				text = L["useMinimapButtonBinIcon"],
+				func = function(key)
+					addon.db["useMinimapButtonBinIcon"] = key
+					if key then addon.db["useMinimapButtonBinMouseover"] = false end
+					addon.functions.toggleButtonSink()
+				end,
+				default = false,
+				sType = "checkbox",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapButtonBin"]
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+						and addon.SettingsLayout.elements["useMinimapButtonBinMouseover"]
+						and addon.SettingsLayout.elements["useMinimapButtonBinMouseover"].setting
+						and addon.SettingsLayout.elements["useMinimapButtonBinMouseover"].setting:GetValue() == false
+				end,
+				parent = true,
+				notify = "enableMinimapButtonBin",
+			},
+			{
+				var = "useMinimapButtonBinMouseover",
+				text = L["useMinimapButtonBinMouseover"],
+				func = function(key)
+					addon.db["useMinimapButtonBinMouseover"] = key
+					if key then addon.db["useMinimapButtonBinIcon"] = false end
+					addon.functions.toggleButtonSink()
+				end,
+				default = false,
+				sType = "checkbox",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapButtonBin"]
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+						and addon.SettingsLayout.elements["useMinimapButtonBinIcon"]
+						and addon.SettingsLayout.elements["useMinimapButtonBinIcon"].setting
+						and addon.SettingsLayout.elements["useMinimapButtonBinIcon"].setting:GetValue() == false
+				end,
+				parent = true,
+				notify = "enableMinimapButtonBin",
+			},
+			{
+				var = "lockMinimapButtonBin",
+				text = L["lockMinimapButtonBin"],
+				func = function(key)
+					addon.db["lockMinimapButtonBin"] = key
+					addon.functions.toggleButtonSink()
+				end,
+				default = false,
+				sType = "checkbox",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapButtonBin"]
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+						and addon.SettingsLayout.elements["useMinimapButtonBinMouseover"]
+						and addon.SettingsLayout.elements["useMinimapButtonBinMouseover"].setting
+						and addon.SettingsLayout.elements["useMinimapButtonBinMouseover"].setting:GetValue() == true
+				end,
+				parent = true,
+				notify = "enableMinimapButtonBin",
+			},
+			{
+				var = "minimapButtonBinHideBorder",
+				text = L["minimapButtonBinHideBorder"],
+				func = function(key)
+					addon.db["minimapButtonBinHideBorder"] = key
+					addon.functions.toggleButtonSink()
+				end,
+				default = false,
+				sType = "checkbox",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapButtonBin"]
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+				end,
+				parent = true,
+			},
+			{
+				var = "minimapButtonBinHideBackground",
+				text = L["minimapButtonBinHideBackground"],
+				func = function(key)
+					addon.db["minimapButtonBinHideBackground"] = key
+					if addon.functions.applyButtonSinkAppearance then addon.functions.applyButtonSinkAppearance() end
+				end,
+				default = false,
+				sType = "checkbox",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapButtonBin"]
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+				end,
+				parent = true,
+			},
+			{
+				var = "minimapButtonBinColumns",
+				text = L["minimapButtonBinColumns"],
+				set = function(val)
+					val = math.floor(val + 0.5)
+					if val < 1 then
+						val = 1
+					elseif val > 10 then
+						val = 10
+					end
+					addon.db["minimapButtonBinColumns"] = val
+					addon.functions.LayoutButtons()
+				end,
+				sType = "slider",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapButtonBin"]
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting
+						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
+				end,
+				parent = true,
+				min = 1,
+				max = 10,
+				step = 1,
+				default = 4,
+			},
+			{
+				text = "|cff99e599" .. L["ignoreMinimapSinkHole"] .. "|r",
+				sType = "hint",
+			},
+			{
+				var = "hiddenMinimapElements",
+				text = L["minimapHideElements"],
+				options = {
+					{ value = "Tracking", text = L["minimapHideElements_Tracking"] },
+					{ value = "ZoneInfo", text = L["minimapHideElements_ZoneInfo"] },
+					{ value = "Clock", text = L["minimapHideElements_Clock"] },
+					{ value = "Calendar", text = L["minimapHideElements_Calendar"] },
+					{ value = "Mail", text = L["minimapHideElements_Mail"] },
+					{ value = "AddonCompartment", text = L["minimapHideElements_AddonCompartment"] },
+				},
+				callback = function()
+					if addon.functions.ApplyMinimapElementVisibility then addon.functions.ApplyMinimapElementVisibility() end
+				end,
+			},
+		},
 	},
 }
 

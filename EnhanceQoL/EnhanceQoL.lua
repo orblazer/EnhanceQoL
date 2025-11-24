@@ -1465,108 +1465,108 @@ local function addMinimapFrame(container)
 	end
 
 	local function buildGeneral()
-		local g = ensureGroup("general", MINIMAP_LABEL)
-		local cb = addon.functions.createCheckboxAce(L["enableWayCommand"], addon.db["enableWayCommand"], function(self, _, value)
-			addon.db["enableWayCommand"] = value
-			if value then
-				addon.functions.registerWayCommand()
-			else
-				addon.variables.requireReload = true
-			end
-		end, L["enableWayCommandDesc"])
-		g:AddChild(cb)
-		doLayout()
+		-- local g = ensureGroup("general", MINIMAP_LABEL)
+		-- local cb = addon.functions.createCheckboxAce(L["enableWayCommand"], addon.db["enableWayCommand"], function(self, _, value)
+		-- 	addon.db["enableWayCommand"] = value
+		-- 	if value then
+		-- 		addon.functions.registerWayCommand()
+		-- 	else
+		-- 		addon.variables.requireReload = true
+		-- 	end
+		-- end, L["enableWayCommandDesc"])
+		-- g:AddChild(cb)
+		-- doLayout()
 	end
 
 	local function buildSpec()
-		local g = ensureGroup("spec", SPECIALIZATION)
-		local cb = addon.functions.createCheckboxAce(L["enableLootspecQuickswitch"], addon.db["enableLootspecQuickswitch"], function(self, _, value)
-			addon.db["enableLootspecQuickswitch"] = value
-			if value then
-				addon.functions.createLootspecFrame()
-			else
-				addon.functions.removeLootspecframe()
-			end
-		end, L["enableLootspecQuickswitchDesc"])
-		g:AddChild(cb)
-		doLayout()
+		-- local g = ensureGroup("spec", SPECIALIZATION)
+		-- local cb = addon.functions.createCheckboxAce(L["enableLootspecQuickswitch"], addon.db["enableLootspecQuickswitch"], function(self, _, value)
+		-- 	addon.db["enableLootspecQuickswitch"] = value
+		-- 	if value then
+		-- 		addon.functions.createLootspecFrame()
+		-- 	else
+		-- 		addon.functions.removeLootspecframe()
+		-- 	end
+		-- end, L["enableLootspecQuickswitchDesc"])
+		-- g:AddChild(cb)
+		-- doLayout()
 	end
 
 	local function buildHideElements()
-		local g = ensureGroup("hideElements", HUD_EDIT_MODE_MINIMAP_LABEL)
-		local dd = AceGUI:Create("Dropdown")
-		dd:SetLabel(L["minimapHideElements"])
-		local list = {
-			Tracking = L["minimapHideElements_Tracking"],
-			ZoneInfo = L["minimapHideElements_ZoneInfo"],
-			Clock = L["minimapHideElements_Clock"],
-			Calendar = L["minimapHideElements_Calendar"],
-			Mail = L["minimapHideElements_Mail"],
-			AddonCompartment = L["minimapHideElements_AddonCompartment"],
-		}
-		local order = { "Tracking", "ZoneInfo", "Clock", "Calendar", "Mail", "AddonCompartment" }
-		dd:SetList(list, order)
-		dd:SetMultiselect(true)
-		dd:SetFullWidth(true)
-		dd:SetCallback("OnValueChanged", function(widget, _, key, checked)
-			addon.db.hiddenMinimapElements = addon.db.hiddenMinimapElements or {}
-			addon.db.hiddenMinimapElements[key] = checked and true or false
-			if addon.functions.ApplyMinimapElementVisibility then addon.functions.ApplyMinimapElementVisibility() end
-		end)
-		if type(addon.db.hiddenMinimapElements) == "table" then
-			for k, v in pairs(addon.db.hiddenMinimapElements) do
-				if v then dd:SetItemValue(k, true) end
-			end
-		end
-		addon.elements["minimapHideElementsDD"] = dd
-		g:AddChild(dd)
-		doLayout()
+		-- local g = ensureGroup("hideElements", HUD_EDIT_MODE_MINIMAP_LABEL)
+		-- local dd = AceGUI:Create("Dropdown")
+		-- dd:SetLabel(L["minimapHideElements"])
+		-- local list = {
+		-- 	Tracking = L["minimapHideElements_Tracking"],
+		-- 	ZoneInfo = L["minimapHideElements_ZoneInfo"],
+		-- 	Clock = L["minimapHideElements_Clock"],
+		-- 	Calendar = L["minimapHideElements_Calendar"],
+		-- 	Mail = L["minimapHideElements_Mail"],
+		-- 	AddonCompartment = L["minimapHideElements_AddonCompartment"],
+		-- }
+		-- local order = { "Tracking", "ZoneInfo", "Clock", "Calendar", "Mail", "AddonCompartment" }
+		-- dd:SetList(list, order)
+		-- dd:SetMultiselect(true)
+		-- dd:SetFullWidth(true)
+		-- dd:SetCallback("OnValueChanged", function(widget, _, key, checked)
+		-- 	addon.db.hiddenMinimapElements = addon.db.hiddenMinimapElements or {}
+		-- 	addon.db.hiddenMinimapElements[key] = checked and true or false
+		-- 	if addon.functions.ApplyMinimapElementVisibility then addon.functions.ApplyMinimapElementVisibility() end
+		-- end)
+		-- if type(addon.db.hiddenMinimapElements) == "table" then
+		-- 	for k, v in pairs(addon.db.hiddenMinimapElements) do
+		-- 		if v then dd:SetItemValue(k, true) end
+		-- 	end
+		-- end
+		-- addon.elements["minimapHideElementsDD"] = dd
+		-- g:AddChild(dd)
+		-- doLayout()
 	end
 
 	local function buildSquare()
-		local g = ensureGroup("square", L["SquareMinimap"])
-		local cbSquare = addon.functions.createCheckboxAce(L["enableSquareMinimap"], addon.db["enableSquareMinimap"], function(self, _, value)
-			addon.db["enableSquareMinimap"] = value
-			addon.variables.requireReload = true
-			addon.functions.checkReloadFrame()
-		end, L["enableSquareMinimapDesc"])
-		g:AddChild(cbSquare)
+		-- local g = ensureGroup("square", L["SquareMinimap"])
+		-- local cbSquare = addon.functions.createCheckboxAce(L["enableSquareMinimap"], addon.db["enableSquareMinimap"], function(self, _, value)
+		-- 	addon.db["enableSquareMinimap"] = value
+		-- 	addon.variables.requireReload = true
+		-- 	addon.functions.checkReloadFrame()
+		-- end, L["enableSquareMinimapDesc"])
+		-- g:AddChild(cbSquare)
 
-		if addon.db["enableSquareMinimap"] then
-			local cbBorder = addon.functions.createCheckboxAce(L["enableSquareMinimapBorder"], addon.db["enableSquareMinimapBorder"], function(self, _, value)
-				addon.db["enableSquareMinimapBorder"] = value
-				if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
-				buildSquare()
-			end, L["enableSquareMinimapBorderDesc"])
-			g:AddChild(cbBorder)
+		-- if addon.db["enableSquareMinimap"] then
+		-- 	local cbBorder = addon.functions.createCheckboxAce(L["enableSquareMinimapBorder"], addon.db["enableSquareMinimapBorder"], function(self, _, value)
+		-- 		addon.db["enableSquareMinimapBorder"] = value
+		-- 		if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
+		-- 		buildSquare()
+		-- 	end, L["enableSquareMinimapBorderDesc"])
+		-- 	g:AddChild(cbBorder)
 
-			if addon.db["enableSquareMinimapBorder"] then
-				local size = addon.functions.createSliderAce(
-					L["squareMinimapBorderSize"] .. ": " .. (addon.db["squareMinimapBorderSize"] or 1),
-					addon.db["squareMinimapBorderSize"],
-					1,
-					8,
-					1,
-					function(self, _, val)
-						addon.db["squareMinimapBorderSize"] = val
-						self:SetLabel(L["squareMinimapBorderSize"] .. ": " .. tostring(val))
-						if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
-					end
-				)
-				g:AddChild(size)
+		-- 	if addon.db["enableSquareMinimapBorder"] then
+		-- 		local size = addon.functions.createSliderAce(
+		-- 			L["squareMinimapBorderSize"] .. ": " .. (addon.db["squareMinimapBorderSize"] or 1),
+		-- 			addon.db["squareMinimapBorderSize"],
+		-- 			1,
+		-- 			8,
+		-- 			1,
+		-- 			function(self, _, val)
+		-- 				addon.db["squareMinimapBorderSize"] = val
+		-- 				self:SetLabel(L["squareMinimapBorderSize"] .. ": " .. tostring(val))
+		-- 				if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
+		-- 			end
+		-- 		)
+		-- 		g:AddChild(size)
 
-				local cp = AceGUI:Create("ColorPicker")
-				cp:SetLabel(L["squareMinimapBorderColor"])
-				local c = addon.db["squareMinimapBorderColor"] or { r = 0, g = 0, b = 0 }
-				cp:SetColor(c.r or 0, c.g or 0, c.b or 0)
-				cp:SetCallback("OnValueChanged", function(_, _, r, g, b)
-					addon.db["squareMinimapBorderColor"] = { r = r, g = g, b = b }
-					if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
-				end)
-				g:AddChild(cp)
-			end
-		end
-		doLayout()
+		-- 		local cp = AceGUI:Create("ColorPicker")
+		-- 		cp:SetLabel(L["squareMinimapBorderColor"])
+		-- 		local c = addon.db["squareMinimapBorderColor"] or { r = 0, g = 0, b = 0 }
+		-- 		cp:SetColor(c.r or 0, c.g or 0, c.b or 0)
+		-- 		cp:SetCallback("OnValueChanged", function(_, _, r, g, b)
+		-- 			addon.db["squareMinimapBorderColor"] = { r = r, g = g, b = b }
+		-- 			if addon.functions.applySquareMinimapBorder then addon.functions.applySquareMinimapBorder() end
+		-- 		end)
+		-- 		g:AddChild(cp)
+		-- 	end
+		-- end
+		-- doLayout()
 	end
 
 	local function buildButtonBin()
