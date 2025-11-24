@@ -65,10 +65,10 @@ local data = {
 					end
 					return tList
 				end,
-				text = L["lootToastCustomSound"],
+				text = REMOVE,
 				get = function() return "" end,
 				set = function(key)
-					-- remove npc with static popup
+					-- TODO - Add static popup with remove dialog
 				end,
 				parentCheck = function()
 					return addon.SettingsLayout.elements["autoChooseQuest"]
@@ -155,7 +155,37 @@ addon.functions.SettingsCreateCheckboxes(cQuest, data)
 
 ----- REGION END
 
-function addon.functions.initQuest() end
+function addon.functions.initQuest()
+	if Menu and Menu.ModifyMenu then
+		local function GetNPCIDFromGUID(guid)
+			if guid then
+				local type, _, _, _, _, npcID = strsplit("-", guid)
+				if type == "Creature" or type == "Vehicle" then return tonumber(npcID) end
+			end
+			return nil
+		end
+
+		local function AddIgnoreAutoQuest(owner, root, ctx)
+			if not addon.db["autoChooseQuest"] then return end
+
+			if not UnitExists("target") or UnitPlayerControlled("target") then return end
+			local npcID = GetNPCIDFromGUID(UnitGUID("target"))
+			if not npcID then return end
+			local name = UnitName("target")
+			if not name then return end
+
+			root:CreateDivider()
+			root:CreateTitle(addonName)
+			if addon.db["ignoredQuestNPC"][npcID] then
+				root:CreateButton(L["SettingsQuestHeaderIgnoredNPCRemove"], function(id) addon.db["ignoredQuestNPC"][npcID] = nil end, npcID)
+			else
+				root:CreateButton(L["SettingsQuestHeaderIgnoredNPCAdd"], function(id) addon.db["ignoredQuestNPC"][npcID] = name end, npcID)
+			end
+		end
+
+		Menu.ModifyMenu("MENU_UNIT_TARGET", AddIgnoreAutoQuest)
+	end
+end
 
 local eventHandlers = {}
 
