@@ -155,7 +155,6 @@ local data = {
 		func = function(key) addon.db["autoChooseQuest"] = key end,
 		default = false,
 		children = {
-
 			{
 				var = "ignoreDailyQuests",
 				text = L["ignoreDailyQuests"]:format(QUESTS_LABEL),
@@ -219,9 +218,8 @@ local data = {
 						and addon.SettingsLayout.elements["autoChooseQuest"].setting:GetValue() == true
 				end,
 				parent = true,
-				default = "",
 				var = "ignoredQuestNPC",
-				type = Settings.VarType.String,
+				type = Settings.VarType.Number,
 				sType = "dropdown",
 			},
 		},
@@ -400,6 +398,7 @@ function addon.functions.initQuest()
 			if not UnitExists("target") or UnitPlayerControlled("target") then return end
 			local npcID = GetNPCIDFromGUID(UnitGUID("target"))
 			if not npcID then return end
+			if issecretvalue and issecretvalue(npcID) then return end
 			local name = UnitName("target")
 			if not name then return end
 
