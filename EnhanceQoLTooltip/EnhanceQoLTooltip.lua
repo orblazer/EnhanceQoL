@@ -73,6 +73,8 @@ local function UpdateInspectEventRegistration()
 	end
 end
 
+addon.functions.UpdateInspectEventRegistration = UpdateInspectEventRegistration
+
 local function FindLineIndexByLabel(tt, label)
 	local name = tt:GetName()
 	for i = 1, tt:NumLines() do

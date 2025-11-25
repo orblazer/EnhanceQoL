@@ -286,27 +286,60 @@ addon.functions.SettingsCreateCheckboxes(cTooltip, data)
 
 addon.functions.SettingsCreateHeadline(cTooltip, PLAYER)
 
+local function BuildTooltipPlayerDetailOptions()
+	if addon.variables.isMidnight then
+		addon.db["TooltipShowMythicScore"] = false
+		addon.db["TooltipUnitShowSpec"] = false
+		addon.db["TooltipUnitShowItemLevel"] = false
+		return {
+			{ value = "classColor", text = L["TooltipShowClassColor"] },
+		}
+	end
+
+	return {
+		{ value = "mythic", text = L["TooltipShowMythicScore"]:format(DUNGEON_SCORE) },
+		{ value = "spec", text = L["TooltipUnitShowSpec"] },
+		{ value = "ilvl", text = L["TooltipUnitShowItemLevel"] },
+		{ value = "classColor", text = L["TooltipShowClassColor"] },
+	}
+end
+
+local function IsTooltipPlayerDetailSelected(key)
+	if not key then return false end
+	if key == "mythic" then return addon.db["TooltipShowMythicScore"] and true or false end
+	if key == "spec" then return (not addon.variables.isMidnight) and (addon.db["TooltipUnitShowSpec"] and true or false) end
+	if key == "ilvl" then return (not addon.variables.isMidnight) and (addon.db["TooltipUnitShowItemLevel"] and true or false) end
+	if key == "classColor" then return addon.db["TooltipShowClassColor"] and true or false end
+	return false
+end
+
+local function SetTooltipPlayerDetailSelected(key, shouldSelect)
+	if not key then return end
+	local enabled = shouldSelect and true or false
+	if addon.variables.isMidnight and key ~= "classColor" then enabled = false end
+
+	if key == "mythic" then
+		addon.db["TooltipShowMythicScore"] = enabled
+	elseif key == "spec" then
+		addon.db["TooltipUnitShowSpec"] = enabled
+	elseif key == "ilvl" then
+		addon.db["TooltipUnitShowItemLevel"] = enabled
+	elseif key == "classColor" then
+		addon.db["TooltipShowClassColor"] = enabled
+	else
+		return
+	end
+
+	if (key == "spec" or key == "ilvl") and addon.functions.UpdateInspectEventRegistration then addon.functions.UpdateInspectEventRegistration() end
+end
+
 addon.functions.SettingsCreateMultiDropdown(cTooltip, {
 	var = "TooltipPlayerDetailsLabel",
 	text = L["TooltipPlayerDetailsLabel"],
-	options = {
-		{
-			var = "TooltipShowMythicScore",
-			value = "mythic",
-			text = L["TooltipShowMythicScore"]:format(DUNGEON_SCORE),
-			func = function(value) addon.db["TooltipShowMythicScore"] = value and true or false end,
-			get = function() return addon.db["TooltipShowMythicScore"] or false end,
-			default = false,
-		},
-		{
-			var = "TooltipShowMythicScore",
-			value = "spec",
-			text = L["TooltipUnitShowSpec"],
-			func = function(value) addon.db["TooltipUnitShowSpec"] = value and true or false end,
-			get = function() return addon.db["TooltipUnitShowSpec"] or false end,
-			default = false,
-		},
-	},
+	options = BuildTooltipPlayerDetailOptions(),
+	optionfunc = BuildTooltipPlayerDetailOptions,
+	isSelectedFunc = IsTooltipPlayerDetailSelected,
+	setSelectedFunc = SetTooltipPlayerDetailSelected,
 })
 
 -- addon.functions.SettingsCreateHeadline(cMouse, L["mouseTrail"])
