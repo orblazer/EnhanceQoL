@@ -7,61 +7,60 @@ else
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_SharedMedia")
+
 addon.SharedMedia = addon.SharedMedia or {}
 addon.SharedMedia.functions = addon.SharedMedia.functions or {}
 
-local function addSoundFrame(container)
-	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-	scroll:SetFullWidth(true)
-	scroll:SetFullHeight(true)
-	container:AddChild(scroll)
+local cSharedMedia = addon.functions.SettingsCreateCategory(nil, L["SharedMedia"], nil, "SharedMedia")
+addon.SettingsLayout.sharedMediaCategory = cSharedMedia
 
-	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
-	wrapper:SetFullWidth(true)
-	scroll:AddChild(wrapper)
+local soundSettings = {}
+local bulkUpdate = false
 
-	-- Top row with "Enable All" / "Disable All" buttons
-	local function SetAllSounds(state)
-		for _, snd in ipairs(addon.SharedMedia.sounds or {}) do
-			addon.SharedMedia.functions.UpdateSound(snd.key, state)
-		end
-		container:ReleaseChildren()
-		addSoundFrame(container)
-	end
-
-	local topRow = addon.functions.createContainer("SimpleGroup", "Flow")
-	topRow:SetFullWidth(true)
-
-	local btnEnableAll = addon.functions.createButtonAce(L["Enable All"], 120, function() SetAllSounds(true) end)
-	btnEnableAll:SetRelativeWidth(0.5)
-	topRow:AddChild(btnEnableAll)
-
-	local btnDisableAll = addon.functions.createButtonAce(L["Disable All"], 120, function() SetAllSounds(false) end)
-	btnDisableAll:SetRelativeWidth(0.5)
-	topRow:AddChild(btnDisableAll)
-
-	wrapper:AddChild(topRow)
-
-	wrapper:PauseLayout()
-	for _, sound in ipairs(addon.SharedMedia.sounds or {}) do
-		local row = addon.functions.createContainer("SimpleGroup", "Flow")
-		row:SetFullWidth(true)
-
-		local cb = addon.functions.createCheckboxAce(sound.label, addon.db.sharedMediaSounds[sound.key], function(self, _, value) addon.SharedMedia.functions.UpdateSound(sound.key, value) end)
-		cb:SetRelativeWidth(0.8)
-		row:AddChild(cb)
-
-		local btn = addon.functions.createButtonAce(L["Play"], 80, function() PlaySoundFile(sound.path) end)
-		btn:SetRelativeWidth(0.2)
-		row:AddChild(btn)
-
-		wrapper:AddChild(row)
-	end
-	wrapper:ResumeLayout()
-	scroll:DoLayout()
+local function ToggleSound(sound, value)
+	addon.SharedMedia.functions.UpdateSound(sound.key, value and true or false)
+	if value and not bulkUpdate and sound.path then PlaySoundFile(sound.path, "Master") end
 end
 
-function addon.SharedMedia.functions.treeCallback(container, group)
-	container:ReleaseChildren()
-	addSoundFrame(container)
+local function SetAllSounds(state)
+	bulkUpdate = true
+	for _, setting in pairs(soundSettings) do
+		if setting and setting.SetValue then setting:SetValue(state and true or false) end
+	end
+	bulkUpdate = false
+end
+
+addon.functions.SettingsCreateButton(cSharedMedia, {
+	var = "SharedMediaEnableAll",
+	text = L["Enable All"],
+	func = function() SetAllSounds(true) end,
+})
+
+addon.functions.SettingsCreateButton(cSharedMedia, {
+	var = "SharedMediaDisableAll",
+	text = L["Disable All"],
+	func = function() SetAllSounds(false) end,
+})
+
+local function SanitizeVar(key)
+	return (tostring(key):gsub("[^%w_]", "_"))
+end
+
+for _, sound in ipairs(addon.SharedMedia.sounds or {}) do
+	local entry = addon.functions.SettingsCreateCheckbox(cSharedMedia, {
+		var = "SharedMediaSound_" .. SanitizeVar(sound.key),
+		text = sound.label,
+		get = function() return addon.db.sharedMediaSounds[sound.key] and true or false end,
+		func = function(value) ToggleSound(sound, value) end,
+		default = false,
+	})
+	if entry and entry.setting then soundSettings[sound.key] = entry.setting end
+end
+
+addon.functions.addToTree("media", { value = "sharedmedia", text = L["SharedMedia"] }, true)
+
+function addon.SharedMedia.functions.treeCallback()
+	if addon.SettingsLayout and addon.SettingsLayout.sharedMediaCategory then
+		Settings.OpenToCategory(addon.SettingsLayout.sharedMediaCategory:GetID())
+	end
 end

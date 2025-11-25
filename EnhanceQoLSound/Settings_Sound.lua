@@ -11,9 +11,7 @@ if not addon.Sounds or not addon.Sounds.soundFiles then return end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Sound")
 
-local function GetLabel(key)
-	return L[key] or key
-end
+local function GetLabel(key) return L[key] or key end
 
 local function IsPureNumbersTable(tbl)
 	local hasEntries
@@ -80,7 +78,9 @@ local function AddSoundOptions(path, data)
 
 	if AllChildrenArePureNumbers(data) then
 		local keys = {}
-		for key in pairs(data) do table.insert(keys, key) end
+		for key in pairs(data) do
+			table.insert(keys, key)
+		end
 		SortKeys(keys)
 
 		if #path == 1 then
@@ -149,7 +149,9 @@ local function AddSoundOptions(path, data)
 end
 
 local topKeys = {}
-for key in pairs(addon.Sounds.soundFiles) do table.insert(topKeys, key) end
+for key in pairs(addon.Sounds.soundFiles) do
+	table.insert(topKeys, key)
+end
 SortKeys(topKeys)
 
 for _, treeKey in ipairs(topKeys) do

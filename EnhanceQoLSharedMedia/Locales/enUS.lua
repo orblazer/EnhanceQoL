@@ -3,3 +3,4 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_SharedMedia", "enUS", t
 L["Play"] = "Play"
 L["Enable All"] = "Enable all"
 L["Disable All"] = "Disable all"
+L["SharedMedia"] = "Shared Media"
