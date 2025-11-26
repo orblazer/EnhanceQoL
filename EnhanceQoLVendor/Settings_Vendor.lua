@@ -233,17 +233,43 @@ for _, info in ipairs(qualities) do
 
 	local function parentCheck() return isChecked("vendor" .. tabName .. "Enable") end
 
-	addon.functions.SettingsCreateCheckbox(cVendor, {
-		var = "vendor" .. tabName .. "AbsolutIlvl",
-		text = L["vendorAbsolutIlvl"],
-		func = function(value)
-			addon.db["vendor" .. tabName .. "AbsolutIlvl"] = value and true or false
-			refreshSellMarks()
-		end,
-		parent = true,
-		element = enable.element,
-		parentCheck = parentCheck,
-	})
+	local qualityCheckboxes = {
+		{
+			var = "vendor" .. tabName .. "AbsolutIlvl",
+			text = L["vendorAbsolutIlvl"],
+			func = function(value)
+				addon.db["vendor" .. tabName .. "AbsolutIlvl"] = value and true or false
+				refreshSellMarks()
+			end,
+			parent = true,
+			element = enable.element,
+			parentCheck = parentCheck,
+		},
+		{
+			var = "vendor" .. tabName .. "IgnoreBoE",
+			text = L["vendorIgnoreBoE"],
+			func = function(value)
+				addon.db["vendor" .. tabName .. "IgnoreBoE"] = value and true or false
+				syncBindFilters(quality, tabName)
+				refreshSellMarks()
+			end,
+			parent = true,
+			element = enable.element,
+			parentCheck = parentCheck,
+		},
+		{
+			var = "vendor" .. tabName .. "IgnoreWarbound",
+			text = L["vendorIgnoreWarbound"],
+			func = function(value)
+				addon.db["vendor" .. tabName .. "IgnoreWarbound"] = value and true or false
+				syncBindFilters(quality, tabName)
+				refreshSellMarks()
+			end,
+			parent = true,
+			element = enable.element,
+			parentCheck = parentCheck,
+		},
+	}
 
 	addon.functions.SettingsCreateSlider(cVendor, {
 		var = "vendor" .. tabName .. "MinIlvlDif",
@@ -263,34 +289,8 @@ for _, info in ipairs(qualities) do
 		default = 200,
 	})
 
-	addon.functions.SettingsCreateCheckbox(cVendor, {
-		var = "vendor" .. tabName .. "IgnoreBoE",
-		text = L["vendorIgnoreBoE"],
-		func = function(value)
-			addon.db["vendor" .. tabName .. "IgnoreBoE"] = value and true or false
-			syncBindFilters(quality, tabName)
-			refreshSellMarks()
-		end,
-		parent = true,
-		element = enable.element,
-		parentCheck = parentCheck,
-	})
-
-	addon.functions.SettingsCreateCheckbox(cVendor, {
-		var = "vendor" .. tabName .. "IgnoreWarbound",
-		text = L["vendorIgnoreWarbound"],
-		func = function(value)
-			addon.db["vendor" .. tabName .. "IgnoreWarbound"] = value and true or false
-			syncBindFilters(quality, tabName)
-			refreshSellMarks()
-		end,
-		parent = true,
-		element = enable.element,
-		parentCheck = parentCheck,
-	})
-
 	if quality ~= 1 then
-		addon.functions.SettingsCreateCheckbox(cVendor, {
+		table.insert(qualityCheckboxes, {
 			var = "vendor" .. tabName .. "IgnoreUpgradable",
 			text = L["vendorIgnoreUpgradable"],
 			func = function(value)
@@ -304,31 +304,32 @@ for _, info in ipairs(qualities) do
 	end
 
 	if quality == 4 then
-		addon.functions.SettingsCreateCheckboxes(cVendor, {
-			{
-				var = "vendor" .. tabName .. "IgnoreHeroicTrack",
-				text = L["vendorIgnoreHeroicTrack"],
-				func = function(value)
-					addon.db["vendor" .. tabName .. "IgnoreHeroicTrack"] = value and true or false
-					refreshSellMarks()
-				end,
-				parent = true,
-				element = enable.element,
-				parentCheck = parentCheck,
-			},
-			{
-				var = "vendor" .. tabName .. "IgnoreMythTrack",
-				text = L["vendorIgnoreMythTrack"],
-				func = function(value)
-					addon.db["vendor" .. tabName .. "IgnoreMythTrack"] = value and true or false
-					refreshSellMarks()
-				end,
-				parent = true,
-				element = enable.element,
-				parentCheck = parentCheck,
-			},
+		table.insert(qualityCheckboxes, {
+			var = "vendor" .. tabName .. "IgnoreHeroicTrack",
+			text = L["vendorIgnoreHeroicTrack"],
+			func = function(value)
+				addon.db["vendor" .. tabName .. "IgnoreHeroicTrack"] = value and true or false
+				refreshSellMarks()
+			end,
+			parent = true,
+			element = enable.element,
+			parentCheck = parentCheck,
+		})
+		table.insert(qualityCheckboxes, {
+			var = "vendor" .. tabName .. "IgnoreMythTrack",
+			text = L["vendorIgnoreMythTrack"],
+			func = function(value)
+				addon.db["vendor" .. tabName .. "IgnoreMythTrack"] = value and true or false
+				refreshSellMarks()
+			end,
+			parent = true,
+			element = enable.element,
+			parentCheck = parentCheck,
 		})
 	end
+
+	table.sort(qualityCheckboxes, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
+	addon.functions.SettingsCreateCheckboxes(cVendor, qualityCheckboxes)
 
 	addon.functions.SettingsCreateMultiDropdown(cVendor, {
 		var = "vendor" .. tabName .. "CraftingExpansions",
