@@ -121,9 +121,7 @@ addon.functions.SettingsCreateText(cDrink, L["mageFoodReminderEditModeHint"] or 
 
 addon.functions.SettingsCreateHeadline(cDrink, L["Health Macro"])
 
-local function defaultPriority()
-	return { "stone", "potion", addon.db.healthUseCombatPotions and "combatpotion" or "none", "none" }
-end
+local function defaultPriority() return { "stone", "potion", addon.db.healthUseCombatPotions and "combatpotion" or "none", "none" } end
 
 local function ensureHealthPriority()
 	if addon.Health and addon.Health.functions and addon.Health.functions.ensurePriorityOrder then addon.Health.functions.ensurePriorityOrder() end
@@ -204,6 +202,7 @@ local healthEnable = addon.functions.SettingsCreateCheckbox(cDrink, {
 		refreshHealthMacro()
 	end,
 	default = false,
+	notify = "healthUseCustomSpells",
 })
 
 local function healthParentCheck() return isCheckboxEnabled("healthMacroEnabled") end
@@ -332,9 +331,7 @@ addon.functions.SettingsCreateCheckbox(cDrink, {
 	type = Settings.VarType.Boolean,
 })
 
-local function customSpellsEnabled()
-	return healthParentCheck() and addon.db.healthUseCustomSpells == true
-end
+local function customSpellsEnabled() return healthParentCheck() and addon.db.healthUseCustomSpells == true end
 
 StaticPopupDialogs["EQOL_ADD_HEALTH_SPELL"] = StaticPopupDialogs["EQOL_ADD_HEALTH_SPELL"]
 	or {

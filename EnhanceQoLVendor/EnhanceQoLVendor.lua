@@ -1395,6 +1395,15 @@ local function addGeneralFrame(container)
 	scroll:DoLayout()
 end
 
+-- Expose helpers for external settings UI
+function addon.Vendor.functions.refreshSellMarks()
+	if updateSellMarks then updateSellMarks(nil, true) end
+end
+
+function addon.Vendor.functions.refreshDestroyButton()
+	if updateDestroyButtonState then updateDestroyButtonState() end
+end
+
 -- Integrate Vendor into Items -> Vendors & Economy -> Selling (Auto‑Sell)
 -- addon.variables.statusTable.groups["items\001economy"] = true
 -- addon.variables.statusTable.groups["items\001economy\001selling"] = true
