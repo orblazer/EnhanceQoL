@@ -300,6 +300,7 @@ if addon.SettingsLayout and addon.SettingsLayout.characterInspectCategory then
 		get = function() return "" end,
 		set = function(value)
 			if not value or value == "" then return end
+			local newId = "cmg" .. tostring(math.floor(GetTime() * 1000)) .. tostring(math.random(1000, 9999))
 			local barWidth = 210
 			local barHeight = 25
 			local frameWidth = barWidth + barHeight + 2
@@ -308,6 +309,7 @@ if addon.SettingsLayout and addon.SettingsLayout.characterInspectCategory then
 			local y = -((screenH - barHeight) / 2)
 			addon.db["combatMeterGroups"] = addon.db["combatMeterGroups"] or {}
 			table.insert(addon.db["combatMeterGroups"], {
+				id = newId,
 				type = value,
 				point = "TOPLEFT",
 				x = x,
