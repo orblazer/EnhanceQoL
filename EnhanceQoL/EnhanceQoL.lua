@@ -3120,7 +3120,8 @@ local function CreateUI()
 		value = "ui",
 		text = L["UIInput"],
 		children = {
-			{ value = "actionbar", text = L["VisibilityHubName"] or ACTIONBARS_LABEL },
+			{ value = "actionbar", text = L["visibilityKindActionBars"] or ACTIONBARS_LABEL },
+			{ value = "frames", text = L["visibilityKindFrames"] or UNITFRAME_LABEL },
 		},
 	})
 
@@ -3132,7 +3133,13 @@ local function CreateUI()
 		if addon.functions.ShowOptionsPage and addon.functions.ShowOptionsPage(container, group) then return end
 
 		-- Vendors & Economy sub-pages handled by vendor module
-		if string.sub(group, 1, string.len("items\001economy\001selling")) == "items\001economy\001selling" then
+		if group == "ui" then
+			if addon.SettingsLayout.uiInputCategory then Settings.OpenToCategory(addon.SettingsLayout.uiInputCategory:GetID()) end
+		elseif group == "ui\001actionbar" or group == "actionbar" then
+			if addon.SettingsLayout.actionBarCategory then Settings.OpenToCategory(addon.SettingsLayout.actionBarCategory:GetID()) end
+		elseif group == "ui\001frames" or group == "frames" then
+			if addon.SettingsLayout.frameVisibilityCategory then Settings.OpenToCategory(addon.SettingsLayout.frameVisibilityCategory:GetID()) end
+		elseif string.sub(group, 1, string.len("items\001economy\001selling")) == "items\001economy\001selling" then
 			-- Forward Selling (Auto-Sell) pages to Vendor UI
 			addon.Vendor.functions.treeCallback(container, group)
 			-- CraftShopper is integrated into the Selling root; no standalone panel
