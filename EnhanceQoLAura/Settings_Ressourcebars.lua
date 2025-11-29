@@ -69,6 +69,7 @@ local function registerEditModeBars()
 		if not frame then return end
 		local cfg = ResourceBars and ResourceBars.getBarSettings and ResourceBars.getBarSettings(barType) or ResourceBars and ResourceBars.GetBarSettings and ResourceBars.GetBarSettings(barType)
 		local anchor = ResourceBars and ResourceBars.getAnchor and ResourceBars.getAnchor(barType, addon.variables.unitSpec)
+		local frameId = "resourceBar_" .. idSuffix
 		local function curSpecCfg()
 			local spec = addon.variables.unitSpec
 			local specCfg = ensureSpecCfg(spec)
@@ -104,6 +105,7 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						if not c then return end
 						c.width = value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "width", value, nil, true) end
 						queueRefresh()
 					end,
 				},
@@ -123,6 +125,7 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						if not c then return end
 						c.height = value
+						if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "height", value, nil, true) end
 						queueRefresh()
 					end,
 				},
@@ -178,7 +181,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
-					name = L["Text Offset X"] or "Text Offset X",
+					name = L["Text X Offset"] or "Text Offset X",
 					kind = settingType.Slider,
 					field = "textOffsetX",
 					minValue = -100,
@@ -200,7 +203,7 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
-					name = L["Text Offset Y"] or "Text Offset Y",
+					name = L["Text Y Offset"] or "Text Offset Y",
 					kind = settingType.Slider,
 					field = "textOffsetY",
 					minValue = -100,
