@@ -2732,27 +2732,8 @@ function createHealthBar()
 	applyTextPosition(healthBar, settings, 3, 0)
 	configureBarBehavior(healthBar, settings, "HEALTH")
 
-	healthBar:SetMovable(true)
-	healthBar:EnableMouse(true)
-	healthBar:RegisterForDrag("LeftButton")
-	healthBar:SetScript("OnDragStart", function(self)
-		if IsShiftKeyDown() then self:StartMoving() end
-	end)
-	healthBar:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, rel, relPoint, xOfs, yOfs = self:GetPoint()
-		local info = getAnchor("HEALTH", addon.variables.unitSpec)
-		local relName = rel and rel.GetName and rel:GetName() or "UIParent"
-		point = point or "TOPLEFT"
-		info.point = point
-		info.relativeFrame = relName
-		info.relativePoint = relPoint or point
-		info.x = Snap(self, xOfs or 0)
-		info.y = Snap(self, yOfs or 0)
-		info.autoSpacing = nil
-		self:ClearAllPoints()
-		self:SetPoint(info.point, rel or UIParent, info.relativePoint or info.point, info.x or 0, info.y or 0)
-	end)
+	healthBar:SetMovable(false)
+	healthBar:EnableMouse(false)
 
 	local absorbBar = CreateFrame("StatusBar", "EQOLAbsorbBar", healthBar)
 	absorbBar:SetAllPoints(healthBar)
@@ -3712,30 +3693,9 @@ local function createPowerBar(type, anchor)
 	end
 	configureBarBehavior(bar, settings, type)
 
-	-- Dragging only when not anchored to another EQOL bar
-	bar:SetMovable(allowMove)
-	bar:EnableMouse(allowMove)
-	if isNew then bar:RegisterForDrag("LeftButton") end
-	bar:SetScript("OnDragStart", function(self)
-		local ai = getAnchor(type, addon.variables.unitSpec)
-		local canMove = (not ai) or ((ai.relativeFrame or "UIParent") == "UIParent")
-		if IsShiftKeyDown() and canMove then self:StartMoving() end
-	end)
-	bar:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local point, rel, relPoint, xOfs, yOfs = self:GetPoint()
-		local info = getAnchor(type, addon.variables.unitSpec)
-		point = point or "TOPLEFT"
-		local relName = rel and rel.GetName and rel:GetName() or "UIParent"
-		info.point = point
-		info.relativeFrame = relName
-		info.relativePoint = relPoint or point
-		info.x = Snap(self, xOfs or 0)
-		info.y = Snap(self, yOfs or 0)
-		info.autoSpacing = false
-		self:ClearAllPoints()
-		self:SetPoint(info.point, rel or UIParent, info.relativePoint or info.point, info.x or 0, info.y or 0)
-	end)
+	-- Dragging disabled outside Edit Mode; positioning handled via Edit Mode
+	bar:SetMovable(false)
+	bar:EnableMouse(false)
 	bar:Show()
 	if type == "RUNES" then ResourceBars.ForceRuneRecolor() end
 	updatePowerBar(type)
