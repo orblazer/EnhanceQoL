@@ -50,6 +50,13 @@ local function ensureSpecCfg(specIndex)
 	return addon.db.personalResourceBarSettings[class][specIndex]
 end
 
+local function refreshSettingsUI()
+	local lib = addon.EditModeLib
+	if lib and lib.internal and lib.internal.RefreshSettings then
+		lib.internal:RefreshSettings()
+	end
+end
+
 local function setBarEnabled(specIndex, barType, enabled)
 	local specCfg = ensureSpecCfg(specIndex)
 	if not specCfg then return end
@@ -369,6 +376,7 @@ local function registerEditModeBars()
 									a.relativeFrame = target
 									applyAnchorDefaults(a, target)
 									queueRefresh()
+									refreshSettingsUI()
 								end)
 							end
 						end,
@@ -384,6 +392,7 @@ local function registerEditModeBars()
 							a.relativeFrame = target
 							applyAnchorDefaults(a, target)
 							queueRefresh()
+							refreshSettingsUI()
 						end,
 						default = "UIParent",
 					}

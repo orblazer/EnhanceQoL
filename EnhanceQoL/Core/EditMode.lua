@@ -3,7 +3,7 @@ local addonName, addon = ...
 addon.EditMode = addon.EditMode or {}
 local EditMode = addon.EditMode
 
-local LibEditMode = addon.EditModeLib
+local LibEditMode = (LibStub and LibStub("LibEditModeImproved-1.0", true)) or addon.EditModeLib
 
 local DEFAULT_LAYOUT = "_Global"
 
