@@ -670,9 +670,17 @@ function dialogMixin:UpdateButtons()
 	if anyVisible then
 		self.Buttons.ignoreInLayout = nil
 		self.Buttons:Show()
+		if self.Settings and self.Settings.Divider then
+			self.Settings.Divider.ignoreInLayout = nil
+			self.Settings.Divider:Show()
+		end
 	else
 		self.Buttons.ignoreInLayout = true
 		self.Buttons:Hide()
+		if self.Settings and self.Settings.Divider then
+			self.Settings.Divider.ignoreInLayout = true
+			self.Settings.Divider:Hide()
+		end
 	end
 end
 
