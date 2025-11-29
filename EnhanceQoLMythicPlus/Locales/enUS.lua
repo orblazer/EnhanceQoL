@@ -53,7 +53,6 @@ L["autoMarkHealerInDungeon"] = "Automatically mark the %s in dungeons"
 L["autoMarkHealerInDungeonMarker"] = "Healer marker"
 L["autoMarkTankExplanation"] = "It will mark the %s when he has no mark and only changes the mark, when you are either %s or %s"
 
-
 -- Teleports
 L["Teleports"] = "Teleports"
 L["teleportEnabled"] = "Enable Teleport Frame"
@@ -90,6 +89,7 @@ L["talentReminderSoundOnDifference"] = "Play a sound if talents differ from the 
 L["talentReminderUseCustomSound"] = "Use custom reminder sound"
 L["talentReminderCustomSound"] = "Reminder sound"
 L["talentReminderShowActiveBuild"] = "Show active talent build name"
+L["talentReminderHint"] = "Configure in %s"
 L["talentReminderLockActiveBuild"] = "Lock active build text"
 L["talentReminderShowActiveBuildDropdown"] = "Show text only in"
 L["talentReminderShowActiveBuildOutside"] = "Outside"

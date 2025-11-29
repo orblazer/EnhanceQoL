@@ -376,9 +376,7 @@ if cMythic then
 			if addon.ChatIM and addon.ChatIM.BuildSoundTable and not addon.ChatIM.availableSounds then addon.ChatIM:BuildSoundTable() end
 			local soundTable = (addon.ChatIM and addon.ChatIM.availableSounds) or (LSM and LSM:HashTable("sound"))
 			for name, file in pairs(soundTable or {}) do
-				if type(name) == "string" and name ~= "" then
-					soundList[name] = { value = name, label = name, file = file }
-				end
+				if type(name) == "string" and name ~= "" then soundList[name] = { value = name, label = name, file = file } end
 			end
 			return soundList
 		end
@@ -421,11 +419,11 @@ if cMythic then
 		})
 		local function isSoundReminderEnabled() return soundDifference and soundDifference.setting and soundDifference.setting:GetValue() == true end
 
-	local customSound = addon.functions.SettingsCreateCheckbox(cTalent, {
-		var = "talentReminderUseCustomSound",
-		text = L["talentReminderUseCustomSound"],
-		func = function(v) addon.db["talentReminderUseCustomSound"] = v end,
-		parent = true,
+		local customSound = addon.functions.SettingsCreateCheckbox(cTalent, {
+			var = "talentReminderUseCustomSound",
+			text = L["talentReminderUseCustomSound"],
+			func = function(v) addon.db["talentReminderUseCustomSound"] = v end,
+			parent = true,
 			element = soundDifference.element,
 			parentCheck = function() return isTalentReminderEnabled() and isSoundReminderEnabled() end,
 		})
@@ -462,52 +460,8 @@ if cMythic then
 			element = talentEnable.element,
 			parentCheck = isTalentReminderEnabled,
 		})
-		local function isActiveBuildShown() return showActiveBuild and showActiveBuild.setting and showActiveBuild.setting:GetValue() == true end
 
-			addon.functions.SettingsCreateSlider(cTalent, {
-				var = "talentReminderActiveBuildSize",
-				text = L["talentReminderActiveBuildTextSize"],
-				min = 6,
-				max = 64,
-			step = 1,
-			default = addon.db["talentReminderActiveBuildSize"] or 14,
-			get = function() return addon.db["talentReminderActiveBuildSize"] or 14 end,
-			set = function(value)
-				addon.db["talentReminderActiveBuildSize"] = value
-				addon.MythicPlus.functions.updateActiveTalentText()
-				addon.MythicPlus.functions.refreshTalentFrameIfOpen()
-			end,
-				parent = true,
-				element = showActiveBuild.element,
-				parentCheck = function() return isTalentReminderEnabled() and isActiveBuildShown() end,
-			})
-
-			local showOptions = {
-				{ value = 1, text = L["talentReminderShowActiveBuildOutside"] },
-				{ value = 2, text = L["talentReminderShowActiveBuildInstance"] },
-				{ value = 3, text = L["talentReminderShowActiveBuildRaid"] },
-			}
-		addon.functions.SettingsCreateMultiDropdown(cTalent, {
-			var = "talentReminderActiveBuildShowOnly",
-			text = L["talentReminderShowActiveBuildDropdown"],
-			options = showOptions,
-			isSelectedFunc = function(key)
-				local data = addon.db["talentReminderActiveBuildShowOnly"]
-				return type(data) == "table" and data[key] == true
-			end,
-			setSelectedFunc = function(key, shouldSelect)
-				if type(addon.db["talentReminderActiveBuildShowOnly"]) ~= "table" then addon.db["talentReminderActiveBuildShowOnly"] = {} end
-				if shouldSelect then
-					addon.db["talentReminderActiveBuildShowOnly"][key] = true
-				else
-					addon.db["talentReminderActiveBuildShowOnly"][key] = nil
-				end
-				addon.MythicPlus.functions.updateActiveTalentText()
-			end,
-			parent = true,
-			element = showActiveBuild.element,
-			parentCheck = function() return isTalentReminderEnabled() and isActiveBuildShown() end,
-		})
+		addon.functions.SettingsCreateText(cTalent, "|cff99e599" .. L["talentReminderHint"]:format(CRF_EDIT_MODE) .. "|r")
 
 		if TalentLoadoutEx then
 			addon.functions.SettingsCreateText(cTalent, "|cffffd700" .. L["labelExplainedlineTLE"] .. "|r")
