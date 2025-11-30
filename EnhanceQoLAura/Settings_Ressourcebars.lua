@@ -33,6 +33,13 @@ local function toUIColor(value, fallback)
 	return { r = r, g = g, b = b, a = a }
 end
 
+local function setIfChanged(tbl, key, value)
+	if not tbl then return false end
+	if tbl[key] == value then return false end
+	tbl[key] = value
+	return true
+end
+
 local function notifyResourceBarSettings()
 	if not Settings or not Settings.NotifyUpdate then return end
 	Settings.NotifyUpdate("EQOL_enableResourceFrame")
@@ -233,14 +240,14 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						return c and c.width or widthDefault or 200
 					end,
-					set = function(_, value)
-						local c = curSpecCfg()
-						if not c then return end
-						c.width = value
-						if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "width", value, nil, true) end
-						applyBarSize()
-						queueRefresh()
-					end,
+						set = function(_, value)
+							local c = curSpecCfg()
+							if not c then return end
+							if not setIfChanged(c, "width", value) then return end
+							if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "width", value, nil, true) end
+							applyBarSize()
+							queueRefresh()
+						end,
 					isEnabled = function()
 						if anchorUsesUIParent() then return true end
 						local c = curSpecCfg()
@@ -260,14 +267,14 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						return c and c.height or heightDefault or 20
 					end,
-					set = function(_, value)
-						local c = curSpecCfg()
-						if not c then return end
-						c.height = value
-						if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "height", value, nil, true) end
-						applyBarSize()
-						queueRefresh()
-					end,
+						set = function(_, value)
+							local c = curSpecCfg()
+							if not c then return end
+							if not setIfChanged(c, "height", value) then return end
+							if EditMode and EditMode.SetValue then EditMode:SetValue(frameId, "height", value, nil, true) end
+							applyBarSize()
+							queueRefresh()
+						end,
 				},
 			}
 
@@ -533,7 +540,9 @@ local function registerEditModeBars()
 					set = function(_, value)
 						local a = ensureAnchorTable()
 						if not a then return end
-						a.x = value or 0
+						local new = value or 0
+						if a.x == new then return end
+						a.x = new
 						queueRefresh()
 					end,
 					default = 0,
@@ -553,7 +562,9 @@ local function registerEditModeBars()
 					set = function(_, value)
 						local a = ensureAnchorTable()
 						if not a then return end
-						a.y = value or 0
+						local new = value or 0
+						if a.y == new then return end
+						a.y = new
 						queueRefresh()
 					end,
 					default = 0,
@@ -616,7 +627,7 @@ local function registerEditModeBars()
 					set = function(_, value)
 						local c = curSpecCfg()
 						if not c then return end
-						c.fontSize = value
+						if not setIfChanged(c, "fontSize", value) then return end
 						queueRefresh()
 					end,
 					default = 16,
@@ -638,7 +649,9 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						if not c then return end
 						c.textOffset = c.textOffset or { x = 0, y = 0 }
-						c.textOffset.x = value or 0
+						local new = value or 0
+						if c.textOffset.x == new then return end
+						c.textOffset.x = new
 						queueRefresh()
 					end,
 					default = 0,
@@ -660,7 +673,9 @@ local function registerEditModeBars()
 						local c = curSpecCfg()
 						if not c then return end
 						c.textOffset = c.textOffset or { x = 0, y = 0 }
-						c.textOffset.y = value or 0
+						local new = value or 0
+						if c.textOffset.y == new then return end
+						c.textOffset.y = new
 						queueRefresh()
 					end,
 					default = 0,
@@ -921,7 +936,9 @@ local function registerEditModeBars()
 					set = function(_, value)
 						local c = curSpecCfg()
 						if not c then return end
-						c.separatorThickness = value or SEPARATOR_THICKNESS
+						local new = value or SEPARATOR_THICKNESS
+						if c.separatorThickness == new then return end
+						c.separatorThickness = new
 						queueRefresh()
 					end,
 					default = (cfg and cfg.separatorThickness) or SEPARATOR_THICKNESS,

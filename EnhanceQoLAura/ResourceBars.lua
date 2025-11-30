@@ -2365,26 +2365,27 @@ function addon.Aura.functions.addResourceFrame(container)
 					groupConfig:AddChild(dropTex2)
 					ResourceBars.ui.textureDropdown = dropTex2
 					dropTex2._rb_cfgRef = cfg
-					addBackdropControls(groupConfig, cfg, sel)
-					addBehaviorControls(groupConfig, cfg, sel)
-				else
-					-- RUNES specific options
-					local cbRT = addon.functions.createCheckboxAce(L["Show cooldown text"], cfg.showCooldownText == true, function(self, _, val)
+						addBackdropControls(groupConfig, cfg, sel)
+						addBehaviorControls(groupConfig, cfg, sel)
+					else
+						-- RUNES specific options
+						local cbRT = addon.functions.createCheckboxAce(L["Show cooldown text"], cfg.showCooldownText == true, function(self, _, val)
 						cfg.showCooldownText = val and true or false
 						if powerbar["RUNES"] then
 							layoutRunes(powerbar["RUNES"])
 							updatePowerBar("RUNES")
 						end
 					end)
-					groupConfig:AddChild(cbRT)
+						groupConfig:AddChild(cbRT)
 
-					local sRTFont = addon.functions.createSliderAce(L["Cooldown Text Size"], cfg.cooldownTextFontSize or 16, 6, 64, 1, function(self, _, val)
-						cfg.cooldownTextFontSize = val
-						if powerbar["RUNES"] then
-							layoutRunes(powerbar["RUNES"])
-							updatePowerBar("RUNES")
-						end
-					end)
+						local sRTFont = addon.functions.createSliderAce(L["Cooldown Text Size"], cfg.cooldownTextFontSize or 16, 6, 64, 1, function(self, _, val)
+							if cfg.cooldownTextFontSize == val then return end
+							cfg.cooldownTextFontSize = val
+							if powerbar["RUNES"] then
+								layoutRunes(powerbar["RUNES"])
+								updatePowerBar("RUNES")
+							end
+						end)
 					groupConfig:AddChild(sRTFont)
 					addBackdropControls(groupConfig, cfg, sel)
 					addBehaviorControls(groupConfig, cfg, sel)
