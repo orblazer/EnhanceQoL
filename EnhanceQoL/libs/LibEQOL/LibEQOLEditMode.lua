@@ -1,4 +1,4 @@
-local MODULE_MAJOR, BASE_MAJOR, MINOR = "LibEQOLEditMode-1.0", "LibEQOL-1.0", 1
+local MODULE_MAJOR, BASE_MAJOR, MINOR = "LibEQOLEditMode-1.0", "LibEQOL-1.0", 2
 local LibStub = _G.LibStub
 assert(LibStub, MODULE_MAJOR .. " requires LibStub")
 
@@ -41,8 +41,10 @@ local State = {
 	buttonSpecs = lib.buttonSpecs or {},
 	resetToggles = lib.resetToggles or {},
 	collapseFlags = lib.collapseFlags or {},
+	collapseExclusiveFlags = lib.collapseExclusiveFlags or {},
 	widgetPools = lib.widgetPools or {},
 	overlayToggleFlags = lib.overlayToggleFlags or {},
+	dragPredicates = lib.dragPredicates or {},
 	layoutSnapshot = Internal.layoutNameSnapshot,
 }
 
@@ -53,8 +55,10 @@ lib.settingSheets = State.settingSheets
 lib.buttonSpecs = State.buttonSpecs
 lib.resetToggles = State.resetToggles
 lib.collapseFlags = State.collapseFlags
+lib.collapseExclusiveFlags = State.collapseExclusiveFlags
 lib.widgetPools = State.widgetPools
 lib.overlayToggleFlags = State.overlayToggleFlags
+lib.dragPredicates = State.dragPredicates
 
 -- frequently used globals ----------------------------------------------------------
 local CreateFrame = _G.CreateFrame
@@ -340,6 +344,21 @@ local function updateSelectionVisuals(selection, hidden)
 	end
 	updateLabelVisibility(selection, hidden)
 	updateOverlayVisibility(selection, hidden)
+end
+
+local function isDragAllowed(frame)
+	local predicate = State.dragPredicates[frame]
+	if predicate == nil then
+		return true
+	end
+	if type(predicate) == "function" then
+		local ok, result = pcall(predicate, lib.activeLayoutName, lib:GetActiveLayoutIndex())
+		if ok then
+			return result ~= false
+		end
+		return true
+	end
+	return predicate ~= false
 end
 
 -- Layout helpers ------------------------------------------------------------------
@@ -1622,6 +1641,21 @@ local function buildCollapsible()
 				elseif selectionParent then
 					Collapse:Set(selectionParent, data.id or data.name, newState)
 				end
+				if State.collapseExclusiveFlags[selectionParent] and newState == false then
+					local settings = Internal:GetFrameSettings(selectionParent)
+					if settings then
+						for _, other in ipairs(settings) do
+							if other ~= data and other.kind == lib.SettingType.Collapsible then
+								local otherId = other.id or other.name
+								if other.setCollapsed then
+									other.setCollapsed(lib.activeLayoutName, true, lib:GetActiveLayoutIndex())
+								elseif selectionParent then
+									Collapse:Set(selectionParent, otherId, true)
+								end
+							end
+						end
+					end
+				end
 				Internal:RefreshSettings()
 				Internal:RefreshSettingValues()
 			end)
@@ -2104,6 +2138,9 @@ local function beginSelectionDrag(self)
 	if isInCombat() then
 		return
 	end
+	if not isDragAllowed(self.parent) then
+		return
+	end
 	self.parent:StartMoving()
 end
 
@@ -2111,6 +2148,9 @@ local function finishSelectionDrag(self)
 	local parent = self.parent
 	parent:StopMovingOrSizing()
 	if isInCombat() then
+		return
+	end
+	if not isDragAllowed(parent) then
 		return
 	end
 	local point, x, y = deriveAnchorAndOffset(parent)
@@ -2178,6 +2218,9 @@ function lib:AddFrame(frame, callback, default)
 		if not selectionFrame.isSelected or isInCombat() then
 			return
 		end
+		if not isDragAllowed(selectionFrame.parent) then
+			return
+		end
 		local step = IsShiftKeyDown() and 10 or 1
 		if key == "UP" then
 			if selectionFrame.SetPropagateKeyboardInput then
@@ -2218,6 +2261,18 @@ function lib:AddFrame(frame, callback, default)
 
 	selection.labelHidden = false
 	selection.overlayHidden = false
+	if default then
+		local toggle = default.enableOverlayToggle
+			or default.overlayToggleEnabled
+			or (default.enableOverlayToggle == false and false)
+			or (default.overlayToggleEnabled == false and false)
+		if toggle ~= nil then
+			State.overlayToggleFlags[frame] = not not toggle
+		end
+		if default.allowDrag ~= nil or default.dragEnabled ~= nil then
+			State.dragPredicates[frame] = (default.allowDrag ~= nil) and default.allowDrag or default.dragEnabled
+		end
+	end
 	if select(4, GetBuildInfo()) >= 110200 then
 		selection.systemBaseName = frame.editModeName or frame:GetName()
 		selection.system = {}
@@ -2241,6 +2296,13 @@ function lib:AddFrame(frame, callback, default)
 			or (default.overlayToggleEnabled == false and false)
 		if toggle ~= nil then
 			State.overlayToggleFlags[frame] = not not toggle
+		end
+		if default.allowDrag ~= nil or default.dragEnabled ~= nil then
+			State.dragPredicates[frame] = (default.allowDrag ~= nil) and default.allowDrag or default.dragEnabled
+		end
+		if default.collapseExclusive ~= nil or default.exclusiveCollapse ~= nil then
+			State.collapseExclusiveFlags[frame] =
+				(default.collapseExclusive ~= nil) and default.collapseExclusive or default.exclusiveCollapse
 		end
 	end
 
@@ -2315,6 +2377,22 @@ end
 
 function lib:SetFrameResetVisible(frame, showReset)
 	State.resetToggles[frame] = not not showReset
+end
+
+function lib:SetFrameDragEnabled(frame, enabledOrPredicate)
+	if enabledOrPredicate == nil then
+		State.dragPredicates[frame] = nil
+	else
+		State.dragPredicates[frame] = enabledOrPredicate
+	end
+end
+
+function lib:SetFrameCollapseExclusive(frame, enabled)
+	if enabled == nil then
+		State.collapseExclusiveFlags[frame] = nil
+	else
+		State.collapseExclusiveFlags[frame] = not not enabled
+	end
 end
 
 function lib:SetFrameOverlayToggleEnabled(frame, enabled)

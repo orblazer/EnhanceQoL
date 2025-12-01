@@ -131,7 +131,7 @@ local defaults = {
 		power = {
 			color = { 0.1, 0.45, 1, 1 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
-			useClassColor = true,
+			useCustomColor = false,
 			textLeft = "PERCENT",
 			textRight = "CURMAX",
 			fontSize = 14,
@@ -695,20 +695,13 @@ local function updatePower(cfg, unit)
 		end
 	end
 	local cr, cg, cb, ca
-	if pcfg.useClassColor then
-		local class = select(2, UnitClass(unit))
-		local cc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-		if cc then
-			cr, cg, cb, ca = getPowerColor(powerToken)
-		end
-	end
-	if not cr then
+	if pcfg.useCustomColor and pcfg.color and pcfg.color[1] then
+		cr, cg, cb, ca = pcfg.color[1], pcfg.color[2], pcfg.color[3], pcfg.color[4] or 1
+	else
 		cr, cg, cb, ca = getPowerColor(powerToken)
-		if pcfg.color and pcfg.color[1] then
-			cr, cg, cb, ca = pcfg.color[1], pcfg.color[2], pcfg.color[3], pcfg.color[4] or 1
-		end
 	end
 	bar:SetStatusBarColor(cr or 0.1, cg or 0.45, cb or 1, ca or 1)
+	if bar.SetStatusBarDesaturated then bar:SetStatusBarDesaturated(pcfg.useCustomColor ~= true) end
 	if st.powerTextLeft then
 		if (issecretvalue and not issecretvalue(maxv)) or (not addon.variables.isMidnight and maxv == 0) then
 			st.powerTextLeft:SetText("")
@@ -943,10 +936,10 @@ local function updateNameAndLevel(cfg, unit)
 		local scfg = cfg.status or {}
 		local class = select(2, UnitClass(unit))
 		local nc
-		if scfg.nameColorMode == "CLASS" then
-			nc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-		else
+		if scfg.nameColorMode == "CUSTOM" then
 			nc = scfg.nameColor or { 1, 1, 1, 1 }
+		else
+			nc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
 		end
 		st.nameText:SetText(UnitName(unit) or "")
 		st.nameText:SetTextColor(nc and (nc.r or nc[1]) or 1, nc and (nc.g or nc[2]) or 1, nc and (nc.b or nc[3]) or 1, nc and (nc.a or nc[4]) or 1)
@@ -956,7 +949,14 @@ local function updateNameAndLevel(cfg, unit)
 		local enabled = scfg.levelEnabled ~= false
 		st.levelText:SetShown(enabled)
 		if enabled then
-			local lc = scfg.levelColor or { 1, 0.85, 0, 1 }
+			local lc
+			if scfg.levelColorMode == "CUSTOM" then
+				lc = scfg.levelColor or { 1, 0.85, 0, 1 }
+			else
+				local class = select(2, UnitClass(unit))
+				lc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+				if not lc then lc = { 1, 0.85, 0, 1 } end
+			end
 			local rawLevel = UnitLevel(unit) or 0
 			local levelText = rawLevel > 0 and tostring(rawLevel) or "??"
 			local classification = UnitClassification and UnitClassification(unit)
@@ -1237,6 +1237,23 @@ function UF.Refresh()
 	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 end
 
+function UF.RefreshUnit(unit)
+	ensureEventHandling()
+	if unit == TARGET_TARGET_UNIT then
+		local totCfg = ensureDB(TARGET_TARGET_UNIT)
+		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+	elseif unit == TARGET_UNIT then
+		applyConfig(TARGET_UNIT)
+		local targetCfg = ensureDB("target")
+		if targetCfg.enabled and UnitExists and UnitExists(TARGET_UNIT) and states[TARGET_UNIT] and states[TARGET_UNIT].frame then
+			states[TARGET_UNIT].barGroup:Show()
+			states[TARGET_UNIT].status:Show()
+		end
+	else
+		applyConfig(PLAYER_UNIT)
+	end
+end
+
 local function addOptions(container, skipClear, unit)
 	unit = unit or PLAYER_UNIT
 	local cfg = ensureDB(unit)
@@ -1442,19 +1459,20 @@ local function addOptions(container, skipClear, unit)
 	colorRow:SetFullWidth(true)
 	parent:AddChild(colorRow)
 	UF.ui = UF.ui or {}
-	UF.ui.healthColorPicker = addColorPicker(colorRow, L["UFHealthColor"] or "Health color", cfg.health.color or def.health.color, function() refresh() end)
+	UF.ui.healthColorPicker = addColorPicker(colorRow, L["UFHealthColor"], cfg.health.color or def.health.color, function() refresh() end)
 	if UF.ui.healthColorPicker then UF.ui.healthColorPicker:SetDisabled(cfg.health.useClassColor == true) end
-	local cbPowerClassColor = addon.functions.createCheckboxAce(L["UFUseClassColorPower"] or "Use class color (power)", cfg.power.useClassColor == true, function(_, _, val)
-		cfg.power.useClassColor = val and true or false
-		if UF.ui and UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useClassColor == true) end
+	local cbPowerCustom = addon.functions.createCheckboxAce(L["UFPowerColor"], cfg.power.useCustomColor == true, function(_, _, val)
+		cfg.power.useCustomColor = val and true or false
+		if UF.ui and UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useCustomColor ~= true) end
+		if val and not cfg.power.color then cfg.power.color = { getPowerColor(getMainPower()) } end
 		refresh()
 	end)
-	cbPowerClassColor:SetRelativeWidth(0.5)
-	colorRow:AddChild(cbPowerClassColor)
+	cbPowerCustom:SetRelativeWidth(0.5)
+	colorRow:AddChild(cbPowerCustom)
 
-	UF.ui.powerColorPicker = addColorPicker(colorRow, L["UFPowerColor"] or "Power color", cfg.power.color or { getPowerColor(getMainPower()) }, function() refresh() end)
+	UF.ui.powerColorPicker = addColorPicker(colorRow, L["UFPowerColor"], cfg.power.color or { getPowerColor(getMainPower()) }, function() refresh() end)
 	UF.ui.powerColorPicker:SetRelativeWidth(0.5)
-	if UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useClassColor == true) end
+	if UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useCustomColor ~= true) end
 
 	local function textureDropdown(parent, sec)
 		if not parent then return end
@@ -1852,4 +1870,9 @@ if not addon.Aura.UFInitialized then
 end
 
 UF.targetAuras = targetAuras
+UF.defaults = defaults
+UF.GetDefaults = function(unit) return defaults[unit] or defaults.player end
+UF.EnsureDB = ensureDB
+UF.GetConfig = ensureDB
+UF.EnsureFrames = ensureFrames
 return UF

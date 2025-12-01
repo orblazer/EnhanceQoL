@@ -99,13 +99,17 @@ end
 local function registerEditModeBars()
 	if not EditMode or not EditMode.RegisterFrame then return end
 	local registered = 0
+	local registeredFrames = ResourceBars._editModeRegisteredFrames or {}
+	ResourceBars._editModeRegisteredFrames = registeredFrames
 
 	local function registerBar(idSuffix, frameName, barType, widthDefault, heightDefault)
 		local frame = _G[frameName]
 		if not frame then return end
+		local frameId = "resourceBar_" .. idSuffix
+		if registeredFrames[frameId] then return end
+		registeredFrames[frameId] = true
 		local cfg = ResourceBars and ResourceBars.getBarSettings and ResourceBars.getBarSettings(barType) or ResourceBars and ResourceBars.GetBarSettings and ResourceBars.GetBarSettings(barType)
 		local anchor = ResourceBars and ResourceBars.getAnchor and ResourceBars.getAnchor(barType, addon.variables.unitSpec)
-		local frameId = "resourceBar_" .. idSuffix
 		local titleLabel = (barType == "HEALTH") and (HEALTH or "Health") or (_G["POWER_TYPE_" .. barType] or _G[barType] or barType)
 
 		-- Ensure backdrop defaults for current spec view
@@ -181,6 +185,35 @@ local function registerEditModeBars()
 			local a = ensureAnchorTable()
 			return not a or (a.relativeFrame or "UIParent") == "UIParent"
 		end
+		local function notify(msg)
+			if not msg or msg == "" then return end
+			print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+		end
+		local function hasGlobalProfile()
+			return addon.db and addon.db.globalResourceBarSettings and addon.db.globalResourceBarSettings[barType]
+		end
+		local function confirmSaveGlobal(doSave)
+			if hasGlobalProfile() then
+				local key = "EQOL_SAVE_GLOBAL_RB_" .. tostring(barType)
+				StaticPopupDialogs[key] = StaticPopupDialogs[key]
+					or {
+						text = (L["OverwriteGlobalProfile"] or "Overwrite global profile for %s?"):format(titleLabel),
+						button1 = OKAY,
+						button2 = CANCEL,
+						timeout = 0,
+						whileDead = true,
+						hideOnEscape = true,
+						preferredIndex = 3,
+						OnAccept = function()
+							if doSave then doSave() end
+						end,
+					}
+				StaticPopup_Show(key)
+			else
+				if doSave then doSave() end
+			end
+		end
+		local buttons = {}
 		local function forceUIParentAnchor()
 			local a = ensureAnchorTable()
 			if not a then return end
@@ -959,6 +992,114 @@ local function registerEditModeBars()
 				}
 			end
 
+			-- Druid: Show in (forms), exclude Health
+			if addon.variables.unitClass == "DRUID" and barType ~= "HEALTH" then
+				local forms = { "HUMANOID", "BEAR", "CAT", "TRAVEL", "MOONKIN", "TREANT", "STAG" }
+				local formLabels = {
+					HUMANOID = L["Humanoid"] or "Humanoid",
+					BEAR = L["Bear"] or "Bear",
+					CAT = L["Cat"] or "Cat",
+					TRAVEL = L["Travel"] or "Travel",
+					MOONKIN = L["Moonkin"] or "Moonkin",
+					TREANT = L["Treant"] or "Treant",
+					STAG = L["Stag"] or "Stag",
+				}
+
+				local function ensureShowForms()
+					local c = curSpecCfg()
+					if not c then return nil end
+					c.showForms = c.showForms or {}
+					local sf = c.showForms
+					if barType == "COMBO_POINTS" then
+						if sf.CAT == nil then sf.CAT = true end
+						if sf.HUMANOID == nil then sf.HUMANOID = false end
+						if sf.BEAR == nil then sf.BEAR = false end
+						if sf.TRAVEL == nil then sf.TRAVEL = false end
+						if sf.MOONKIN == nil then sf.MOONKIN = false end
+						if sf.TREANT == nil then sf.TREANT = false end
+						if sf.STAG == nil then sf.STAG = false end
+					else
+						if sf.HUMANOID == nil then sf.HUMANOID = true end
+						if sf.BEAR == nil then sf.BEAR = true end
+						if sf.CAT == nil then sf.CAT = true end
+						if sf.TRAVEL == nil then sf.TRAVEL = true end
+						if sf.MOONKIN == nil then sf.MOONKIN = true end
+						if sf.TREANT == nil then sf.TREANT = true end
+						if sf.STAG == nil then sf.STAG = true end
+					end
+					return sf
+				end
+
+				local dropdownValues = {}
+				for _, key in ipairs(forms) do
+					if barType ~= "COMBO_POINTS" or key == "CAT" then dropdownValues[#dropdownValues + 1] = { value = key, text = formLabels[key] or key } end
+				end
+
+				if settingType.MultiDropdown then
+					settingsList[#settingsList + 1] = {
+						name = L["Show in"] or "Show in",
+						kind = settingType.MultiDropdown,
+						field = "showForms",
+						values = dropdownValues,
+						hideSummary = true,
+						isSelected = function(_, value)
+							local sf = ensureShowForms()
+							if not sf then return false end
+							local cur = sf[value]
+							if cur == nil then return true end
+							return cur ~= false
+						end,
+						setSelected = function(_, value, state)
+							local sf = ensureShowForms()
+							if not sf then return end
+							sf[value] = state and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						default = ensureShowForms(),
+					}
+				end
+			end
+
+			do -- Global profile helpers
+				local function saveGlobal()
+					if ResourceBars.SaveGlobalProfile then
+						local ok = ResourceBars.SaveGlobalProfile(barType, addon.variables.unitSpec)
+						if ok then
+							notify((L["SavedGlobalProfile"] or "Saved global profile for %s"):format(titleLabel))
+						else
+							notify(L["GlobalProfileSaveFailed"] or "Could not save global profile.")
+						end
+					end
+				end
+
+				local function applyGlobal()
+					if not hasGlobalProfile() then
+						notify(L["GlobalProfileMissing"] or "No global profile saved for this bar.")
+						return
+					end
+					if ResourceBars.ApplyGlobalProfile then
+						local ok = ResourceBars.ApplyGlobalProfile(barType, addon.variables.unitSpec)
+						if ok then
+							queueRefresh()
+							refreshSettingsUI()
+							notify((L["AppliedGlobalProfile"] or "Applied global profile for %s"):format(titleLabel))
+						else
+							notify(L["GlobalProfileApplyFailed"] or "Could not apply global profile.")
+						end
+					end
+				end
+
+				buttons[#buttons + 1] = {
+					text = (L["UseAsGlobalProfile"] or "Use as global %s profile"):format(titleLabel),
+					click = function() confirmSaveGlobal(saveGlobal) end,
+				}
+				buttons[#buttons + 1] = {
+					text = (L["ApplyGlobalProfile"] or "Apply global %s profile"):format(titleLabel),
+					click = applyGlobal,
+				}
+			end
+
 			settingsList[#settingsList + 1] = {
 				name = COLOR,
 				kind = settingType.Collapsible,
@@ -1288,6 +1429,7 @@ local function registerEditModeBars()
 			frame = frame,
 			title = titleLabel,
 			enableOverlayToggle = true,
+			allowDrag = function() return anchorUsesUIParent() end,
 			layoutDefaults = {
 				point = anchor and anchor.point or "CENTER",
 				relativePoint = anchor and anchor.relativePoint or "CENTER",
@@ -1329,9 +1471,11 @@ local function registerEditModeBars()
 				return c and c.enabled == true
 			end,
 			settings = settingsList,
+			buttons = buttons,
 			showOutsideEditMode = true,
 		})
 		if addon.EditModeLib and addon.EditModeLib.SetFrameResetVisible then addon.EditModeLib:SetFrameResetVisible(frame, false) end
+		registeredFrames[frameId] = true
 		registered = registered + 1
 	end
 

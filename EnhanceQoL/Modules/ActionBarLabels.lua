@@ -65,6 +65,48 @@ local function ForEachActionButton(callback)
 	end
 end
 
+local function GetNormalTexture(button)
+	if not button then return nil end
+	if button.NormalTexture then return button.NormalTexture end
+	if button.GetNormalTexture then return button:GetNormalTexture() end
+	return nil
+end
+
+local function ApplyBorderVisibility(button, hide)
+	local normalTexture = GetNormalTexture(button)
+	if not normalTexture then return end
+
+	if hide then
+		if not normalTexture.EQOL_OriginalBorderState then normalTexture.EQOL_OriginalBorderState = {
+			alpha = normalTexture:GetAlpha(),
+			shown = normalTexture:IsShown() ~= false,
+		} end
+		normalTexture:SetAlpha(0)
+		normalTexture:Hide()
+		normalTexture.EQOL_BorderHiddenByEQOL = true
+	elseif normalTexture.EQOL_BorderHiddenByEQOL then
+		local restore = normalTexture.EQOL_OriginalBorderState or {}
+		normalTexture:SetAlpha(restore.alpha or 1)
+		if restore.shown == false then
+			normalTexture:Hide()
+		else
+			normalTexture:Show()
+		end
+		normalTexture.EQOL_BorderHiddenByEQOL = nil
+		normalTexture.EQOL_OriginalBorderState = nil
+	end
+end
+
+local function RefreshButtonBorder(button)
+	if not addon.db then return end
+	local hide = addon.db.actionBarHideBorders and DetermineButtonBarName(button) ~= nil
+	ApplyBorderVisibility(button, hide)
+end
+
+function Labels.RefreshActionButtonBorders()
+	ForEachActionButton(function(button) RefreshButtonBorder(button) end)
+end
+
 local function EnsureOverlay(btn)
 	if btn.EQOL_RangeOverlay then return btn.EQOL_RangeOverlay end
 	local tex = btn:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -378,6 +420,7 @@ local function OnPlayerLogin(self, event)
 	if Labels.RefreshAllMacroNameVisibility then Labels.RefreshAllMacroNameVisibility() end
 	if Labels.RefreshAllHotkeyStyles then Labels.RefreshAllHotkeyStyles() end
 	if Labels.RefreshAllRangeOverlays then Labels.RefreshAllRangeOverlays() end
+	if Labels.RefreshActionButtonBorders then Labels.RefreshActionButtonBorders() end
 	if self then
 		self:UnregisterEvent("PLAYER_LOGIN")
 		self:SetScript("OnEvent", nil)
