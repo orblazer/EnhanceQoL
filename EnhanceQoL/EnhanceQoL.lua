@@ -1501,6 +1501,7 @@ local function initActionBars()
 	addon.functions.InitDBValue("actionBarFullRangeColoring", false)
 	addon.functions.InitDBValue("actionBarFullRangeColor", { r = 1, g = 0.1, b = 0.1 })
 	addon.functions.InitDBValue("actionBarFullRangeAlpha", 0.35)
+	addon.functions.InitDBValue("actionBarHideBorders", false)
 	addon.functions.InitDBValue("hideMacroNames", false)
 	addon.functions.InitDBValue("actionBarMacroFontOverride", false)
 	addon.functions.InitDBValue("actionBarHotkeyFontOverride", false)
@@ -1548,6 +1549,7 @@ local function initActionBars()
 	end
 	RefreshAllActionBarAnchors()
 	if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
 end
 
 local function initParty()

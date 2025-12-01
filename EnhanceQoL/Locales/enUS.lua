@@ -408,8 +408,7 @@ L["PlayerHealthText"] = "Player health text"
 L["TargetHealthText"] = "Target health text"
 L["HealthTextExplain2"] = "%s follows Blizzard 'Status Text'.\nAny other mode shows your chosen format for Player, Target, and Boss frames."
 
-L["ActionbarVisibilityExplain2"] =
-	'|cff99e599Set the action bar to "%s" in %s to use the options below.|r\n|cff99e599You can combine mouseover, in-combat, and out-of-combat visibility.|r'
+L["ActionbarVisibilityExplain2"] = '|cff99e599Set the action bar to "%s" in %s to use the options below.|r\n|cff99e599You can combine mouseover, in-combat, and out-of-combat visibility.|r'
 L["VisibilityHubName"] = "Visibility Hub"
 L["visibilitySelectorsTitle"] = "Selection"
 L["visibilityKindLabel"] = "Category"
@@ -417,10 +416,8 @@ L["visibilityKindActionBars"] = "Action Bars"
 L["visibilityKindFrames"] = "Frames"
 L["visibilityElementLabel"] = "Element"
 L["visibilityScenarioGroupTitle"] = "Visibility rules"
-L["visibilityFrameExplain2"] =
-	"|cff99e599Combine the same triggers for Blizzard unit frames.|r\n|cff99e599Mouseover can be layered with combat or player-health checks.|r"
-L["visibilityFrameExtrasNote2"] =
-	"|cff99e599Looking for raid frames, name truncation, or health text tweaks?|r\n|cff99e599Those options remain under UI >> Unit Frames.|r"
+L["visibilityFrameExplain2"] = "|cff99e599Combine the same triggers for Blizzard unit frames.|r\n|cff99e599Mouseover can be layered with combat or player-health checks.|r"
+L["visibilityFrameExtrasNote2"] = "|cff99e599Looking for raid frames, name truncation, or health text tweaks?|r\n|cff99e599Those options remain under UI >> Unit Frames.|r"
 L["visibilityNoElement"] = "No elements are available for this category."
 L["visibilityNoRules"] = "This element does not expose any visibility rules."
 L["visibilityAlwaysHiddenActive"] = 'Disable "Always hidden" to use additional rules.'
@@ -457,6 +454,9 @@ L["actionBarAnchorSectionTitle"] = "Button growth"
 L["actionBarAnchorEnable"] = "Modify Action Bar anchor"
 L["actionBarAnchorEnableDesc"] = "Choose how each action bar grows when new buttons are added."
 L["actionBarAnchorDropdown"] = "Action Bar %d button anchor"
+L["actionBarAppearanceHeader"] = "Button appearance"
+L["actionBarHideBorders"] = "Hide action button borders"
+L["actionBarHideBordersDesc"] = "Remove the default border texture around action buttons."
 L["actionBarFontDefault"] = "Blizzard font"
 L["actionBarFontOutlineLabel"] = "Font outline"
 L["fontOutlineNone"] = "None"
@@ -593,9 +593,9 @@ L["ProfileActive"] = "Active profile"
 L["ProfileCopy"] = "Copy settings from profile"
 L["ProfileDelete"] = "Delete profile"
 L["ProfileDeleteDesc2"] = "You can only delete profiles not used by global or active"
-L["ProfileDeleteDesc"] = "Are you sure to delete profile \"%s\"?"
+L["ProfileDeleteDesc"] = 'Are you sure to delete profile "%s"?'
 L["ProfileName"] = "Add a new Profile"
-L["ProfileCopyDesc"] = "Are you sure to copy the settings of \"%s\" to your active profile?"
+L["ProfileCopyDesc"] = 'Are you sure to copy the settings of "%s" to your active profile?'
 L["ProfileUseGlobal"] = "Global profile"
 L["ProfileUseGlobalDesc"] = "Characters first load with this profile. You can always change your active profile"
 L["currentExpensionMythicPlusWarning"] = "For Mythic+ items from legacy dungeons, the results may be inaccurate."

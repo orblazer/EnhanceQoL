@@ -43,6 +43,7 @@ Starting to change stuff to blizzard options, for now only a small part is there
 - World Marker Cycle
   - Set a keybind to cycle through all world markers
   - Set another keybind to clear all world markers
+- Hide Action Button borders
 
 ### 🔄 Changed
 

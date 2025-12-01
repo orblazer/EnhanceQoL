@@ -56,10 +56,7 @@ local function createActionBarVisibility(category)
 	addon.functions.SettingsCreateHeadline(category, L["visibilityScenarioGroupTitle"] or ACTIONBARS_LABEL)
 	local explain = L["ActionbarVisibilityExplain2"]
 	if explain and _G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"] and _G["HUD_EDIT_MODE_MENU"] then
-		addon.functions.SettingsCreateText(
-			category,
-			explain:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_MENU"])
-		)
+		addon.functions.SettingsCreateText(category, explain:format(_G["HUD_EDIT_MODE_SETTING_ACTION_BAR_VISIBLE_SETTING_ALWAYS"], _G["HUD_EDIT_MODE_MENU"]))
 	end
 
 	local bars, seenVars = {}, {}
@@ -155,6 +152,20 @@ local function createAnchorControls(category)
 	end
 end
 
+local function createButtonAppearanceControls(category)
+	addon.functions.SettingsCreateHeadline(category, L["actionBarAppearanceHeader"] or "Button appearance")
+
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "actionBarHideBorders",
+		text = L["actionBarHideBorders"] or "Hide button borders",
+		desc = L["actionBarHideBordersDesc"] or "Remove the default border texture around action buttons.",
+		func = function(value)
+			addon.db.actionBarHideBorders = value and true or false
+			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
+		end,
+	})
+end
+
 local function createLabelControls(category)
 	addon.functions.SettingsCreateHeadline(category, L["actionBarLabelGroupTitle"] or "Button text")
 
@@ -195,12 +206,7 @@ local function createLabelControls(category)
 		end,
 	})
 
-	local function macroParentCheck()
-		return macroOverride.setting
-			and macroOverride.setting:GetValue() == true
-			and hideMacro.setting
-			and hideMacro.setting:GetValue() ~= true
-	end
+	local function macroParentCheck() return macroOverride.setting and macroOverride.setting:GetValue() == true and hideMacro.setting and hideMacro.setting:GetValue() ~= true end
 
 	addon.functions.SettingsCreateDropdown(category, {
 		var = "actionBarMacroFontFace",
@@ -423,6 +429,7 @@ local function createActionBarCategory()
 
 	createActionBarVisibility(category)
 	createAnchorControls(category)
+	createButtonAppearanceControls(category)
 	createLabelControls(category)
 end
 
