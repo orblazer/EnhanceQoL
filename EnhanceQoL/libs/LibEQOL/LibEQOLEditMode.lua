@@ -545,7 +545,7 @@ function Layout:HandleLayoutAdded(addedLayoutIndex, activateNewLayout, isLayoutI
 		if entry and entry.layoutType then
 			layoutType = entry.layoutType
 		end
-		layoutName = entry and entry.layoutName or layoutName
+		layoutName = entry and entry.layoutName
 	end
 	layoutName = layoutName or layoutNames[addedLayoutIndex]
 	for _, callback in next, lib.eventHandlersLayoutAdded do
@@ -1589,15 +1589,18 @@ local function buildSlider()
 
 	function mixin:OnSliderValueChanged(value)
 		if not self.initInProgress then
-			self.setting.set(lib.activeLayoutName, value, lib:GetActiveLayoutIndex())
-			self.currentValue = value
+			-- Avoid redundant setter calls on identical values (helps rapid slider drags).
+			if value ~= self.currentValue then
+				self.setting.set(lib.activeLayoutName, value, lib:GetActiveLayoutIndex())
+				self.currentValue = value
+				Internal:RefreshSettings()
+			end
 			if self.Input and self.Input:IsShown() then
 				self.Input:SetText(tostring(value))
-				if self.Slider.RightText then
+				if self.Slider.RightText and self.Slider.RightText:IsShown() then
 					self.Slider.RightText:Hide()
 				end
 			end
-			Internal:RefreshSettings()
 		end
 	end
 
@@ -2198,6 +2201,24 @@ local function isInCombat()
 	return InCombatLockdown and InCombatLockdown()
 end
 
+local function setPropagateKeyboardInputSafe(frame, propagate)
+	if not frame or not frame.SetPropagateKeyboardInput or isInCombat() or not lib.isEditing then
+		return
+	end
+	frame:SetPropagateKeyboardInput(not not propagate)
+end
+
+local function updateSelectionKeyboard(selection)
+	if not selection or not selection.EnableKeyboard then
+		return
+	end
+	local allow = lib.isEditing and not isInCombat()
+	selection:EnableKeyboard(allow)
+	if allow then
+		setPropagateKeyboardInputSafe(selection, true)
+	end
+end
+
 local function deriveAnchorAndOffset(frame)
 	-- Finds the nearest anchor on each axis (left/right/center, top/bottom/center) and
 	-- returns a Blizzard anchor string plus offsets relative to the parent.
@@ -2282,6 +2303,7 @@ local function resetSelectionIndicators()
 		else
 			selection:ShowHighlighted()
 		end
+		updateSelectionKeyboard(selection)
 	end
 	if Internal.dialog and Internal.dialog.HideLabelButton then
 		updateEyeButton(Internal.dialog.HideLabelButton, false)
@@ -2545,40 +2567,25 @@ function lib:AddFrame(frame, callback, default)
 		end
 		local step = IsShiftKeyDown() and 10 or 1
 		if key == "UP" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, 0, step)
 		elseif key == "DOWN" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, 0, -step)
 		elseif key == "LEFT" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, -step, 0)
 		elseif key == "RIGHT" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, step, 0)
 		else
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(true)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, true)
 		end
 	end)
 	selection:SetScript("OnKeyUp", function(selectionFrame)
-		if selectionFrame.SetPropagateKeyboardInput then
-			selectionFrame:SetPropagateKeyboardInput(true)
-		end
+		setPropagateKeyboardInputSafe(selectionFrame, true)
 	end)
-	selection:EnableKeyboard(true)
-	if selection.SetPropagateKeyboardInput then
-		selection:SetPropagateKeyboardInput(true)
-	end
+	updateSelectionKeyboard(selection)
 	selection:Hide()
 
 	selection.labelHidden = false
