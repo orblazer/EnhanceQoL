@@ -57,6 +57,7 @@ local CreateFrame = CreateFrame
 local GetTime = GetTime
 local IsShiftKeyDown = IsShiftKeyDown
 local After = C_Timer and C_Timer.After
+local NewTicker = C_Timer and C_Timer.NewTicker
 local floor = math.floor
 local max = math.max
 local abs = math.abs
@@ -176,7 +177,7 @@ local defaults = {
 	},
 	target = {
 		enabled = false,
-		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, anchor = "BOTTOM", offset = { x = 0, y = -5 } },
+		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true, anchor = "BOTTOM", offset = { x = 0, y = -5 } },
 		cast = {
 			enabled = true,
 			width = 220,
@@ -222,6 +223,7 @@ local blizzardPlayerHooked = false
 local blizzardTargetHooked = false
 local castOnUpdateHandlers = {}
 local originalFrameRules = {}
+local totTicker
 
 local function defaultsFor(unit) return defaults[unit] or defaults.player or {} end
 
@@ -321,6 +323,19 @@ local function ensureAuraButton(index, ac)
 		btn.cd:SetReverse(true)
 		btn.cd:SetDrawEdge(true)
 		btn.cd:SetDrawSwipe(true)
+		btn:SetScript("OnEnter", function(self)
+			if not self._showTooltip then return end
+			local spellId = self.spellId
+			if not spellId or (issecretvalue and issecretvalue(spellId)) then return end
+			if GameTooltip then
+				GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+				GameTooltip:SetSpellByID(spellId)
+				GameTooltip:Show()
+			end
+		end)
+		btn:SetScript("OnLeave", function()
+			if GameTooltip then GameTooltip:Hide() end
+		end)
 		icons[index] = btn
 	else
 		btn:SetSize(ac.size, ac.size)
@@ -330,6 +345,8 @@ end
 
 local function applyAuraToButton(btn, aura, ac)
 	if not btn or not aura then return end
+	btn.spellId = aura.spellId
+	btn._showTooltip = ac.showTooltip ~= false
 	btn.icon:SetTexture(aura.icon or "")
 	btn.cd:Clear()
 	if issecretvalue and issecretvalue(aura.duration) then
@@ -378,6 +395,7 @@ local function updateTargetAuraIcons(startIndex)
 	ac.size = ac.size or 24
 	ac.padding = ac.padding or 0
 	ac.max = ac.max or 16
+	if ac.showTooltip == nil then ac.showTooltip = true end
 	if ac.max < 1 then ac.max = 1 end
 
 	local width = st.frame:GetWidth() or 0
@@ -634,7 +652,7 @@ do
 	targetDefaults.enabled = false
 	targetDefaults.anchor = targetDefaults.anchor and CopyTable(targetDefaults.anchor) or { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 0, y = -200 }
 	targetDefaults.anchor.x = (targetDefaults.anchor.x or 0) + 260
-	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true }
+	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true }
 	defaults.target = targetDefaults
 
 	local totDefaults = CopyTable(targetDefaults)
@@ -1269,10 +1287,11 @@ local function ensureFrames(unit)
 	st.status = _G[info.statusName] or CreateFrame("Frame", info.statusName, st.frame)
 	st.barGroup = st.barGroup or CreateFrame("Frame", nil, st.frame, "BackdropTemplate")
 	st.health = _G[info.healthName] or CreateFrame("StatusBar", info.healthName, st.barGroup, "BackdropTemplate")
-	st.health:SetStatusBarDesaturated(true)
+	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
 	st.power = _G[info.powerName] or CreateFrame("StatusBar", info.powerName, st.barGroup, "BackdropTemplate")
+	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(false) end
 	st.absorb = CreateFrame("StatusBar", info.healthName .. "Absorb", st.health, "BackdropTemplate")
-	st.absorb:SetStatusBarDesaturated(true)
+	if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
 	st.overAbsorbGlow = st.overAbsorbGlow or st.health:CreateTexture(nil, "ARTWORK", "OverAbsorbGlowTemplate")
 	st.absorb.overAbsorbGlow = st.overAbsorbGlow
 	if not st.overAbsorbGlow then st.overAbsorbGlow = st.health:CreateTexture(nil, "ARTWORK") end
@@ -1343,15 +1362,18 @@ local function applyBars(cfg, unit)
 	local hc = cfg.health or {}
 	local pcfg = cfg.power or {}
 	st.health:SetStatusBarTexture(resolveTexture(hc.texture))
+	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
 	configureSpecialTexture(st.health, "HEALTH", hc.texture, hc)
 	applyBarBackdrop(st.health, hc)
 	st.power:SetStatusBarTexture(resolveTexture(pcfg.texture))
 	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(pcfg.useCustomColor == true) end
+	if unit == PLAYER_UNIT then refreshMainPower(unit) end
 	local _, powerToken = getMainPower(unit)
 	configureSpecialTexture(st.power, powerToken, pcfg.texture, pcfg)
 	applyBarBackdrop(st.power, pcfg)
 	local absorbTextureKey = hc.absorbTexture or hc.texture
 	st.absorb:SetStatusBarTexture(resolveTexture(absorbTextureKey))
+	if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
 	configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc)
 	st.absorb:SetAllPoints(st.health)
 	st.absorb:SetFrameLevel(st.health:GetFrameLevel() + 1)
@@ -1520,22 +1542,56 @@ local allowedEventUnit = {
 	["targettarget"] = true,
 }
 
+local function stopToTTicker()
+	if totTicker and totTicker.Cancel then totTicker:Cancel() end
+	totTicker = nil
+end
+
+local function ensureToTTicker()
+	if totTicker or not NewTicker then return end
+	totTicker = NewTicker(0.2, function()
+		local st = states[TARGET_TARGET_UNIT]
+		local cfg = st and st.cfg
+		if not cfg or not cfg.enabled then return end
+		if not UnitExists(TARGET_TARGET_UNIT) or not st.frame or not st.frame:IsShown() then return end
+		updateHealth(cfg, TARGET_TARGET_UNIT)
+		updatePower(cfg, TARGET_TARGET_UNIT)
+	end)
+end
+
 local function updateTargetTargetFrame(cfg, forceApply)
 	cfg = cfg or ensureDB(TARGET_TARGET_UNIT)
 	local st = states[TARGET_TARGET_UNIT]
+	if not cfg.enabled then
+		stopToTTicker()
+		if st then
+			if st.barGroup then st.barGroup:Hide() end
+			if st.status then st.status:Hide() end
+		end
+		return
+	end
 	if forceApply or not st or not st.frame then
 		applyConfig(TARGET_TARGET_UNIT)
 		st = states[TARGET_TARGET_UNIT]
 	end
-	if UnitExists(TARGET_TARGET_UNIT) and cfg.enabled then
+	if st then st.cfg = st.cfg or cfg end
+	if UnitExists("target") and UnitExists(TARGET_TARGET_UNIT) and UnitHealth("target") > 0 then
 		if st then
 			if st.barGroup then st.barGroup:Show() end
 			if st.status then st.status:Show() end
+			local _, powerToken = getMainPower(TARGET_TARGET_UNIT)
+			updateNameAndLevel(cfg, TARGET_TARGET_UNIT)
+			updateHealth(cfg, TARGET_TARGET_UNIT)
+			if st.power then configureSpecialTexture(st.power, powerToken, (cfg.power or {}).texture, cfg.power) end
+			updatePower(cfg, TARGET_TARGET_UNIT)
 		end
-	elseif st then
-		if st.barGroup then st.barGroup:Hide() end
-		if st.status then st.status:Hide() end
+	else
+		if st then
+			if st.barGroup then st.barGroup:Hide() end
+			if st.status then st.status:Hide() end
+		end
 	end
+	ensureToTTicker()
 end
 
 local function onEvent(self, event, unit, arg1)
@@ -1547,7 +1603,7 @@ local function onEvent(self, event, unit, arg1)
 		refreshMainPower(PLAYER_UNIT)
 		applyConfig("player")
 		applyConfig("target")
-		applyConfig("targettarget")
+		updateTargetTargetFrame(totCfg, true)
 	elseif event == "PLAYER_DEAD" then
 		if states.player and states.player.health then states.player.health:SetValue(0) end
 		updateHealth(playerCfg, "player")
@@ -1567,8 +1623,10 @@ local function onEvent(self, event, unit, arg1)
 		if UnitExists(unitToken) then
 			refreshMainPower(unitToken)
 			fullScanTargetAuras()
+			local _, powerToken = getMainPower(unitToken)
 			updateNameAndLevel(targetCfg, unitToken)
 			updateHealth(targetCfg, unitToken)
+			if st.power then configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power) end
 			updatePower(targetCfg, unitToken)
 			st.barGroup:Show()
 			st.status:Show()
@@ -1647,39 +1705,31 @@ local function onEvent(self, event, unit, arg1)
 	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		if unit == PLAYER_UNIT then updateHealth(playerCfg, "player") end
 		if unit == "target" then updateHealth(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updateHealth(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_MAXPOWER" then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_DISPLAYPOWER" then
-		local powerEnum, powerToken = getMainPower(unit)
 		if unit == PLAYER_UNIT then
-			refreshMainPower()
+			refreshMainPower(unit)
+			local _, powerToken = getMainPower(unit)
 			local st = states[unit]
 			if st and st.power then configureSpecialTexture(st.power, powerToken, (playerCfg.power or {}).texture, playerCfg.power) end
 			updatePower(playerCfg, "player")
 		elseif unit == "target" then
+			local _, powerToken = getMainPower(unit)
 			local st = states[unit]
 			if st and st.power then configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power) end
 			updatePower(targetCfg, "target")
-		elseif unit == TARGET_TARGET_UNIT then
-			local st = states[unit]
-			if st and st.power then configureSpecialTexture(st.power, powerToken, (totCfg.power or {}).texture, totCfg.power) end
-			updatePower(totCfg, TARGET_TARGET_UNIT)
 		end
 	elseif event == "UNIT_POWER_UPDATE" and not FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_POWER_FREQUENT" and FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_NAME_UPDATE" or event == "PLAYER_LEVEL_UP" then
 		if unit == PLAYER_UNIT or event == "PLAYER_LEVEL_UP" then updateNameAndLevel(playerCfg, "player") end
 		if unit == "target" then updateNameAndLevel(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updateNameAndLevel(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_TARGET" and unit == TARGET_UNIT then
 		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
@@ -1711,7 +1761,7 @@ function UF.Enable()
 	applyConfig("player")
 	if ensureDB("target").enabled then applyConfig("target") end
 	local totCfg = ensureDB(TARGET_TARGET_UNIT)
-	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+	if totCfg.enabled then updateTargetTargetFrame(totCfg, true) end
 	-- hideBlizzardPlayerFrame()
 	-- hideBlizzardTargetFrame()
 end
@@ -1720,6 +1770,7 @@ function UF.Disable()
 	local cfg = ensureDB("player")
 	cfg.enabled = false
 	if states.player and states.player.frame then states.player.frame:Hide() end
+	stopToTTicker()
 	addon.variables.requireReload = true
 	if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
 	if _G.PlayerFrame and not InCombatLockdown() then _G.PlayerFrame:Show() end
@@ -1743,6 +1794,7 @@ function UF.RefreshUnit(unit)
 	if unit == TARGET_TARGET_UNIT then
 		local totCfg = ensureDB(TARGET_TARGET_UNIT)
 		updateTargetTargetFrame(totCfg, true)
+		ensureToTTicker()
 	elseif unit == TARGET_UNIT then
 		applyConfig(TARGET_UNIT)
 		local targetCfg = ensureDB("target")
@@ -1863,6 +1915,7 @@ local function addOptions(container, skipClear, unit)
 			if cfg.enabled then
 				if isToT then
 					updateTargetTargetFrame(cfg, true)
+					ensureToTTicker()
 				else
 					applyConfig(unit)
 					if isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
@@ -1873,6 +1926,7 @@ local function addOptions(container, skipClear, unit)
 			elseif states[unit] and states[unit].frame then
 				states[unit].frame:Hide()
 			end
+			if isToT and not cfg.enabled then stopToTTicker() end
 		end
 		refresh()
 	end)
@@ -1911,6 +1965,7 @@ local function addOptions(container, skipClear, unit)
 		cfg.auraIcons.padding = cfg.auraIcons.padding or def.auraIcons.padding
 		cfg.auraIcons.max = cfg.auraIcons.max or def.auraIcons.max
 		if cfg.auraIcons.showCooldown == nil then cfg.auraIcons.showCooldown = def.auraIcons.showCooldown end
+		if cfg.auraIcons.showTooltip == nil then cfg.auraIcons.showTooltip = def.auraIcons.showTooltip end
 
 		local sSize = addon.functions.createSliderAce(L["Aura size"] or "Aura size", cfg.auraIcons.size or 24, 12, 48, 1, function(_, _, val)
 			cfg.auraIcons.size = val
@@ -1939,6 +1994,13 @@ local function addOptions(container, skipClear, unit)
 		end)
 		cbCD:SetFullWidth(true)
 		auraRow:AddChild(cbCD)
+
+		local cbTooltip = addon.functions.createCheckboxAce(L["Show tooltip"] or "Show tooltip", cfg.auraIcons.showTooltip ~= false, function(_, _, v)
+			cfg.auraIcons.showTooltip = v and true or false
+			refresh()
+		end)
+		cbTooltip:SetFullWidth(true)
+		auraRow:AddChild(cbTooltip)
 
 		local anchorOptionsAura = { TOP = L["Top"] or "Top", BOTTOM = L["Bottom"] or "Bottom" }
 		local anchorOrderAura = { "TOP", "BOTTOM" }
@@ -2668,6 +2730,7 @@ if not addon.Aura.UFInitialized then
 	if ttc.enabled then
 		ensureEventHandling()
 		updateTargetTargetFrame(ttc, true)
+		ensureToTTicker()
 	end
 end
 
