@@ -51,6 +51,8 @@ local anchorOptions = {
 	{ value = "RIGHT", label = "RIGHT" },
 }
 
+local function isBossUnit(unit) return unit == "boss" or (unit and unit:match("^boss%d+$")) end
+
 local function defaultsFor(unit)
 	if UF.GetDefaults then
 		local d = UF.GetDefaults(unit)
@@ -80,8 +82,18 @@ local function ensureConfig(unit)
 	if UF.GetConfig then return UF.GetConfig(unit) end
 	addon.db = addon.db or {}
 	addon.db.ufFrames = addon.db.ufFrames or {}
-	addon.db.ufFrames[unit] = addon.db.ufFrames[unit] or {}
-	return addon.db.ufFrames[unit]
+	local key = unit
+	if isBossUnit(unit) then key = "boss" end
+	if key == "boss" and not addon.db.ufFrames[key] then
+		for i = 1, (MAX_BOSS_FRAMES or 5) do
+			if addon.db.ufFrames["boss" .. i] then
+				addon.db.ufFrames[key] = addon.db.ufFrames["boss" .. i]
+				break
+			end
+		end
+	end
+	addon.db.ufFrames[key] = addon.db.ufFrames[key] or {}
+	return addon.db.ufFrames[key]
 end
 
 addon.variables = addon.variables or {}
@@ -137,6 +149,54 @@ local function refreshSettingsUI()
 	if lib and lib.internal and lib.internal.RefreshSettingValues then lib.internal:RefreshSettingValues() end
 end
 
+local copyDialogKey = "EQOL_UF_COPY_SETTINGS"
+local copyFrameLabels = {
+	player = L["UFPlayerFrame"] or PLAYER,
+	target = L["UFTargetFrame"] or TARGET,
+	targettarget = L["UFToTFrame"] or "Target of Target",
+	pet = L["UFPetFrame"] or PET,
+	focus = L["UFFocusFrame"] or FOCUS,
+	boss = L["UFBossFrame"] or BOSS or "Boss Frame",
+}
+
+local function availableCopySources(unit)
+	local opts = {}
+	for key, label in pairs(copyFrameLabels) do
+		if key ~= unit then opts[#opts + 1] = { value = key, label = label } end
+	end
+	table.sort(opts, function(a, b) return tostring(a.label) < tostring(b.label) end)
+	return opts
+end
+
+local function showCopySettingsPopup(fromUnit, toUnit)
+	if not (fromUnit and toUnit and UF.CopySettings) then return end
+	StaticPopupDialogs[copyDialogKey] = StaticPopupDialogs[copyDialogKey]
+		or {
+			text = "%s",
+			button1 = L["Copy"] or ACCEPT,
+			button2 = CANCEL,
+			hideOnEscape = true,
+			timeout = 0,
+			whileDead = 1,
+			preferredIndex = 3,
+			OnAccept = function(self, data)
+				local payload = data or self.data
+				if payload and payload.from and payload.to and UF.CopySettings then
+					if UF.CopySettings(payload.from, payload.to, { keepAnchor = true, keepEnabled = true }) then
+						refresh(payload.to)
+						refreshSettingsUI()
+					end
+				end
+			end,
+		}
+	local dialog = StaticPopupDialogs[copyDialogKey]
+	if not dialog then return end
+	local fromLabel = copyFrameLabels[fromUnit] or fromUnit
+	local toLabel = copyFrameLabels[toUnit] or toUnit
+	dialog.text = string.format("%s\n\n%s -> %s", L["Copy settings"] or "Copy settings", fromLabel, toLabel)
+	StaticPopup_Show(copyDialogKey, nil, nil, { from = fromUnit, to = toUnit })
+end
+
 local function hideFrameReset(frame)
 	local lib = addon.EditModeLib
 	if frame and lib and lib.SetFrameSettingsResetVisible then lib:SetFrameSettingsResetVisible(frame, false) end
@@ -181,6 +241,7 @@ local function radioDropdown(name, options, getter, setter, default, parentId)
 	return {
 		name = name,
 		kind = settingType.Dropdown,
+		height = 180,
 		parentId = parentId,
 		default = default,
 		generator = function(_, root)
@@ -269,9 +330,34 @@ end
 local function buildUnitSettings(unit)
 	local def = defaultsFor(unit)
 	local list = {}
-	local function refreshSelf() refresh(unit) end
+	local isBoss = isBossUnit(unit)
+	local refreshFunc = refresh
+	local function refreshSelf()
+		if isBoss and UF.UpdateBossFrames then
+			UF.UpdateBossFrames(true)
+		else
+			refreshFunc(unit)
+		end
+	end
 	local refresh = refreshSelf
 	local isPlayer = unit == "player"
+	local copyOptions = availableCopySources(unit)
+
+	list[#list + 1] = { name = SETTINGS or "Settings", kind = settingType.Collapsible, id = "utility", defaultCollapsed = true }
+
+	list[#list + 1] = {
+		name = L["Copy settings"] or "Copy settings",
+		kind = settingType.Dropdown,
+		height = 180,
+		parentId = "utility",
+		default = nil,
+		generator = function(_, root)
+			for _, opt in ipairs(copyOptions) do
+				root:CreateRadio(opt.label, function() return false end, function() showCopySettingsPopup(opt.value, unit) end)
+			end
+		end,
+		isEnabled = function() return #copyOptions > 0 end,
+	}
 
 	list[#list + 1] = { name = L["Frame"] or "Frame", kind = settingType.Collapsible, id = "frame", defaultCollapsed = false }
 
@@ -284,6 +370,22 @@ local function buildUnitSettings(unit)
 		setValue(unit, { "barGap" }, val or 0)
 		refreshSelf()
 	end, def.barGap or 0, "frame", true)
+
+	if isBoss then
+		list[#list + 1] = slider(L["UFBossSpacing"] or "Boss spacing", 0, 40, 1, function() return getValue(unit, { "spacing" }, def.spacing or 4) end, function(val)
+			setValue(unit, { "spacing" }, val or def.spacing or 4)
+			refreshSelf()
+		end, def.spacing or 4, "frame", true)
+
+		local growthOpts = {
+			{ value = "DOWN", label = L["Down"] or "Down" },
+			{ value = "UP", label = L["Up"] or "Up" },
+		}
+		list[#list + 1] = radioDropdown(L["UFBossGrowth"] or "Growth direction", growthOpts, function() return (getValue(unit, { "growth" }, def.growth or "DOWN") or "DOWN"):upper() end, function(val)
+			setValue(unit, { "growth" }, (val or "DOWN"):upper())
+			refreshSelf()
+		end, (def.growth or "DOWN"):upper(), "frame")
+	end
 
 	list[#list + 1] = radioDropdown(L["UFStrata"] or "Frame strata", strataOptions, function() return getValue(unit, { "strata" }, def.strata or defaultStrata or "") end, function(val)
 		setValue(unit, { "strata" }, val ~= "" and val or nil)
@@ -352,12 +454,21 @@ local function buildUnitSettings(unit)
 
 	local healthDef = def.health or {}
 
-	list[#list + 1] = checkbox(L["UFUseClassColor"] or "Use class color", function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) == true end, function(val)
-		setValue(unit, { "health", "useClassColor" }, val and true or false)
-		if val then setValue(unit, { "health", "useCustomColor" }, false) end
-		refreshSelf()
-		refreshSettingsUI()
-	end, healthDef.useClassColor == true, "health", function() return getValue(unit, { "health", "useCustomColor" }, healthDef.useCustomColor == true) ~= true end)
+	if not isBoss then
+		list[#list + 1] = checkbox(
+			L["UFUseClassColor"] or "Use class color",
+			function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) == true end,
+			function(val)
+				setValue(unit, { "health", "useClassColor" }, val and true or false)
+				if val then setValue(unit, { "health", "useCustomColor" }, false) end
+				refreshSelf()
+				refreshSettingsUI()
+			end,
+			healthDef.useClassColor == true,
+			"health",
+			function() return getValue(unit, { "health", "useCustomColor" }, healthDef.useCustomColor == true) ~= true end
+		)
+	end
 
 	list[#list + 1] = checkboxColor({
 		name = L["UFHealthColor"] or "Custom health color",
@@ -528,7 +639,7 @@ local function buildUnitSettings(unit)
 		colorDefault = { r = 0, g = 0, b = 0, a = 0.6 },
 	})
 
-	if unit ~= "pet" then
+	if unit ~= "pet" and not isBoss then
 		list[#list + 1] = { name = L["AbsorbBar"] or "Absorb Bar", kind = settingType.Collapsible, id = "absorb", defaultCollapsed = true }
 		local absorbColorDef = healthDef.absorbColor or { 0.85, 0.95, 1, 0.7 }
 
@@ -559,10 +670,16 @@ local function buildUnitSettings(unit)
 			},
 		})
 
-		list[#list + 1] = checkbox(L["Use absorb glow"] or "Use absorb glow", function() return getValue(unit, { "health", "useAbsorbGlow" }, healthDef.useAbsorbGlow ~= false) ~= false end, function(val)
-			setValue(unit, { "health", "useAbsorbGlow" }, val and true or false)
-			refresh()
-		end, healthDef.useAbsorbGlow ~= false, "absorb")
+		list[#list + 1] = checkbox(
+			L["Use absorb glow"] or "Use absorb glow",
+			function() return getValue(unit, { "health", "useAbsorbGlow" }, healthDef.useAbsorbGlow ~= false) ~= false end,
+			function(val)
+				setValue(unit, { "health", "useAbsorbGlow" }, val and true or false)
+				refresh()
+			end,
+			healthDef.useAbsorbGlow ~= false,
+			"absorb"
+		)
 
 		list[#list + 1] = checkbox(L["Show sample absorb"] or "Show sample absorb", function() return sampleAbsorb[unit] == true end, function(val)
 			sampleAbsorb[unit] = val and true or false
@@ -790,7 +907,7 @@ local function buildUnitSettings(unit)
 		isEnabled = isPowerEnabled,
 	})
 
-	if unit == "target" or unit == "focus" or unit:match("^boss%d+$") then
+	if unit == "target" or unit == "focus" then
 		local castDef = def.cast or {}
 		list[#list + 1] = { name = L["CastBar"] or "Cast Bar", kind = settingType.Collapsible, id = "cast", defaultCollapsed = true }
 		local function isCastEnabled() return getValue(unit, { "cast", "enabled" }, castDef.enabled ~= false) ~= false end
@@ -1116,51 +1233,53 @@ local function buildUnitSettings(unit)
 		refresh()
 	end, statusDef.levelEnabled ~= false, "status")
 
-	list[#list + 1] = checkboxColor({
-		name = L["UFNameColor"] or "Custom name color",
-		parentId = "status",
-		defaultChecked = (statusDef.nameColorMode or "CLASS") ~= "CLASS",
-		isChecked = function() return getValue(unit, { "status", "nameColorMode" }, statusDef.nameColorMode or "CLASS") ~= "CLASS" end,
-		onChecked = function(val)
-			setValue(unit, { "status", "nameColorMode" }, val and "CUSTOM" or "CLASS")
-			refresh()
-		end,
-		getColor = function() return toRGBA(getValue(unit, { "status", "nameColor" }, statusDef.nameColor or { 0.8, 0.8, 1, 1 }), statusDef.nameColor or { 0.8, 0.8, 1, 1 }) end,
-		onColor = function(color)
-			setColor(unit, { "status", "nameColor" }, color.r, color.g, color.b, color.a)
-			setValue(unit, { "status", "nameColorMode" }, "CUSTOM")
-			refresh()
-		end,
-		colorDefault = {
-			r = (statusDef.nameColor and statusDef.nameColor[1]) or 0.8,
-			g = (statusDef.nameColor and statusDef.nameColor[2]) or 0.8,
-			b = (statusDef.nameColor and statusDef.nameColor[3]) or 1,
-			a = (statusDef.nameColor and statusDef.nameColor[4]) or 1,
-		},
-	})
+	if not isBoss then
+		list[#list + 1] = checkboxColor({
+			name = L["UFNameColor"] or "Custom name color",
+			parentId = "status",
+			defaultChecked = (statusDef.nameColorMode or "CLASS") ~= "CLASS",
+			isChecked = function() return getValue(unit, { "status", "nameColorMode" }, statusDef.nameColorMode or "CLASS") ~= "CLASS" end,
+			onChecked = function(val)
+				setValue(unit, { "status", "nameColorMode" }, val and "CUSTOM" or "CLASS")
+				refresh()
+			end,
+			getColor = function() return toRGBA(getValue(unit, { "status", "nameColor" }, statusDef.nameColor or { 0.8, 0.8, 1, 1 }), statusDef.nameColor or { 0.8, 0.8, 1, 1 }) end,
+			onColor = function(color)
+				setColor(unit, { "status", "nameColor" }, color.r, color.g, color.b, color.a)
+				setValue(unit, { "status", "nameColorMode" }, "CUSTOM")
+				refresh()
+			end,
+			colorDefault = {
+				r = (statusDef.nameColor and statusDef.nameColor[1]) or 0.8,
+				g = (statusDef.nameColor and statusDef.nameColor[2]) or 0.8,
+				b = (statusDef.nameColor and statusDef.nameColor[3]) or 1,
+				a = (statusDef.nameColor and statusDef.nameColor[4]) or 1,
+			},
+		})
 
-	list[#list + 1] = checkboxColor({
-		name = L["UFLevelColor"] or "Custom level color",
-		parentId = "status",
-		defaultChecked = (statusDef.levelColorMode or "CLASS") ~= "CLASS",
-		isChecked = function() return getValue(unit, { "status", "levelColorMode" }, statusDef.levelColorMode or "CLASS") ~= "CLASS" end,
-		onChecked = function(val)
-			setValue(unit, { "status", "levelColorMode" }, val and "CUSTOM" or "CLASS")
-			refresh()
-		end,
-		getColor = function() return toRGBA(getValue(unit, { "status", "levelColor" }, statusDef.levelColor or { 1, 0.85, 0, 1 }), statusDef.levelColor or { 1, 0.85, 0, 1 }) end,
-		onColor = function(color)
-			setColor(unit, { "status", "levelColor" }, color.r, color.g, color.b, color.a)
-			setValue(unit, { "status", "levelColorMode" }, "CUSTOM")
-			refresh()
-		end,
-		colorDefault = {
-			r = (statusDef.levelColor and statusDef.levelColor[1]) or 1,
-			g = (statusDef.levelColor and statusDef.levelColor[2]) or 0.85,
-			b = (statusDef.levelColor and statusDef.levelColor[3]) or 0,
-			a = (statusDef.levelColor and statusDef.levelColor[4]) or 1,
-		},
-	})
+		list[#list + 1] = checkboxColor({
+			name = L["UFLevelColor"] or "Custom level color",
+			parentId = "status",
+			defaultChecked = (statusDef.levelColorMode or "CLASS") ~= "CLASS",
+			isChecked = function() return getValue(unit, { "status", "levelColorMode" }, statusDef.levelColorMode or "CLASS") ~= "CLASS" end,
+			onChecked = function(val)
+				setValue(unit, { "status", "levelColorMode" }, val and "CUSTOM" or "CLASS")
+				refresh()
+			end,
+			getColor = function() return toRGBA(getValue(unit, { "status", "levelColor" }, statusDef.levelColor or { 1, 0.85, 0, 1 }), statusDef.levelColor or { 1, 0.85, 0, 1 }) end,
+			onColor = function(color)
+				setColor(unit, { "status", "levelColor" }, color.r, color.g, color.b, color.a)
+				setValue(unit, { "status", "levelColorMode" }, "CUSTOM")
+				refresh()
+			end,
+			colorDefault = {
+				r = (statusDef.levelColor and statusDef.levelColor[1]) or 1,
+				g = (statusDef.levelColor and statusDef.levelColor[2]) or 0.85,
+				b = (statusDef.levelColor and statusDef.levelColor[3]) or 0,
+				a = (statusDef.levelColor and statusDef.levelColor[4]) or 1,
+			},
+		})
+	end
 
 	list[#list + 1] = slider(L["FontSize"] or "Font size", 8, 30, 1, function() return getValue(unit, { "status", "fontSize" }, statusDef.fontSize or 14) end, function(val)
 		debounced(unit .. "_statusFontSize", function()
@@ -1402,7 +1521,13 @@ local function buildUnitSettings(unit)
 end
 
 local function registerUnitFrame(unit, info)
-	if UF.EnsureFrames then UF.EnsureFrames(unit) end
+	if UF.EnsureFrames then
+		if unit == "boss" then
+			UF.EnsureFrames("boss1")
+		else
+			UF.EnsureFrames(unit)
+		end
+	end
 	refresh()
 	local frame = _G[info.frameName]
 	if not frame then return end
@@ -1424,7 +1549,6 @@ local function registerUnitFrame(unit, info)
 				cfg.anchor.y = data.y or 0
 				cfg.anchor.relativeTo = cfg.anchor.relativeTo or "UIParent"
 			end
-			if data.width then cfg.width = data.width end
 			refresh()
 		end,
 		isEnabled = function() return ensureConfig(unit).enabled == true end,
@@ -1444,11 +1568,8 @@ if not UF.EditModeRegistered then
 		targettarget = { frameName = "EQOLUFToTFrame", frameId = "EQOL_UF_ToT", title = L["UFToTFrame"] or "Target of Target" },
 		pet = { frameName = "EQOLUFPetFrame", frameId = "EQOL_UF_Pet", title = L["UFPetFrame"] or PET },
 		focus = { frameName = "EQOLUFFocusFrame", frameId = "EQOL_UF_Focus", title = L["UFFocusFrame"] or FOCUS },
+		boss = { frameName = "EQOLUFBossContainer", frameId = "EQOL_UF_Boss", title = (L["UFBossFrame"] or "Boss Frames") },
 	}
-	for i = 1, 5 do
-		local frameName = "EQOLUFBoss" .. i .. "Frame"
-		frames["boss" .. i] = { frameName = frameName, frameId = "EQOL_UF_Boss" .. i, title = (L["UFBossFrame"] or "Boss Frame") .. " " .. i }
-	end
 	for unit, info in pairs(frames) do
 		registerUnitFrame(unit, info)
 	end
