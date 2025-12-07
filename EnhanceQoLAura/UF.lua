@@ -22,9 +22,12 @@ local throttleHook
 local function DisableBossFrames()
 	BossTargetFrameContainer:SetAlpha(0)
 	BossTargetFrameContainer.Selection:SetAlpha(0)
-	if not throttleHook then hooksecurefunc(BossTargetFrameContainer, "SetAlpha", function(self, parent)
-		if self:GetAlpha() ~= 0 then self:SetAlpha(0) end
-	end) end
+	if not throttleHook then
+		throttleHook = true
+		hooksecurefunc(BossTargetFrameContainer, "SetAlpha", function(self, parent)
+			if self:GetAlpha() ~= 0 then self:SetAlpha(0) end
+		end)
+	end
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
@@ -2088,7 +2091,6 @@ local function updateBossFrames(force)
 	end
 	if not bossContainer then ensureBossContainer() end
 	DisableBossFrames()
-	local anyShown
 	local inEdit = addon.EditModeLib and addon.EditModeLib:IsInEditMode()
 	for i = 1, maxBossFrames do
 		local unit = "boss" .. i
@@ -2108,7 +2110,6 @@ local function updateBossFrames(force)
 				if st.barGroup then st.barGroup:Show() end
 				if st.status then st.status:Show() end
 				applyBossEditSample(i, cfg)
-				anyShown = true
 			else
 				local exists = UnitExists and UnitExists(unit)
 				if not InCombatLockdown() then
@@ -2124,7 +2125,6 @@ local function updateBossFrames(force)
 					end
 				end
 				if exists then
-					anyShown = true
 					if st.barGroup then st.barGroup:Show() end
 					if st.status then st.status:Show() end
 					updateNameAndLevel(cfg, unit)

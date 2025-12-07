@@ -1310,6 +1310,9 @@ local function buildDropdown()
 
 		if data.generator then
 			self.Dropdown:SetupMenu(function(owner, rootDescription)
+				if data.height then
+					rootDescription:SetScrollMode(data.height)
+				end
 				pcall(data.generator, owner, rootDescription, data)
 			end)
 		elseif data.values then
@@ -1978,6 +1981,9 @@ local function buildDropdownColor()
 
 		if data.generator then
 			self.Dropdown:SetupMenu(function(owner, rootDescription)
+				if data.height then
+					rootDescription:SetScrollMode(data.height)
+				end
 				pcall(data.generator, owner, rootDescription, data)
 			end)
 		elseif data.values then
