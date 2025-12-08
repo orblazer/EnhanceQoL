@@ -1654,4 +1654,130 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 			if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
 		end,
 	})
+
+	do -- Profile export/import
+		local scopeOptions = {
+			ALL = L["UFProfileScopeAll"] or "All frames",
+			player = L["UFPlayerFrame"] or PLAYER,
+			target = L["UFTargetFrame"] or TARGET,
+			targettarget = L["UFToTFrame"] or "Target of Target",
+			focus = L["UFFocusFrame"] or FOCUS,
+			pet = L["UFPetFrame"] or PET,
+			boss = L["UFBossFrame"] or BOSS or "Boss Frame",
+		}
+		local function getScope()
+			addon.db = addon.db or {}
+			local cur = addon.db.ufProfileScope or "ALL"
+			if not scopeOptions[cur] then cur = "ALL" end
+			addon.db.ufProfileScope = cur
+			return cur
+		end
+		local function setScope(val)
+			addon.db = addon.db or {}
+			addon.db.ufProfileScope = scopeOptions[val] and val or "ALL"
+		end
+
+		addon.functions.SettingsCreateHeadline(cUF, L["Profiles"] or "Profiles")
+		addon.functions.SettingsCreateDropdown(cUF, {
+			var = "ufProfileScope",
+			text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
+			list = scopeOptions,
+			get = getScope,
+			set = setScope,
+			default = "ALL",
+		})
+
+		addon.functions.SettingsCreateButton(cUF, {
+			var = "ufExportProfile",
+			text = L["Export"] or "Export",
+			func = function()
+				local scopeKey = getScope()
+				local code
+				local reason
+				if UF.ExportProfile then code, reason = UF.ExportProfile(scopeKey) end
+				if not code then
+					local msg = (UF.ExportErrorMessage and UF.ExportErrorMessage(reason)) or (L["UFExportProfileFailed"] or "Export failed.")
+					print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+					return
+				end
+				StaticPopupDialogs["EQOL_UF_EXPORT_SETTINGS"] = StaticPopupDialogs["EQOL_UF_EXPORT_SETTINGS"]
+					or {
+						text = L["UFExportProfileTitle"] or "Export Unit Frames",
+						button1 = CLOSE,
+						hasEditBox = true,
+						editBoxWidth = 320,
+						timeout = 0,
+						whileDead = true,
+						hideOnEscape = true,
+						preferredIndex = 3,
+					}
+				StaticPopupDialogs["EQOL_UF_EXPORT_SETTINGS"].text = L["UFExportProfileTitle"] or "Export Unit Frames"
+				StaticPopupDialogs["EQOL_UF_EXPORT_SETTINGS"].OnShow = function(self)
+					self:SetFrameStrata("TOOLTIP")
+					local editBox = self.editBox or self:GetEditBox()
+					editBox:SetText(code)
+					editBox:HighlightText()
+					editBox:SetFocus()
+				end
+				StaticPopup_Show("EQOL_UF_EXPORT_SETTINGS")
+			end,
+		})
+
+		addon.functions.SettingsCreateButton(cUF, {
+			var = "ufImportProfile",
+			text = L["Import"] or "Import",
+			func = function()
+				local importText = (L["UFImportProfileTitle"] or "Import Unit Frames")
+				if L["UFImportProfileReloadHint"] then importText = importText .. "\n\n" .. L["UFImportProfileReloadHint"] end
+				StaticPopupDialogs["EQOL_UF_IMPORT_SETTINGS"] = StaticPopupDialogs["EQOL_UF_IMPORT_SETTINGS"]
+					or {
+						text = importText,
+						button1 = OKAY,
+						button2 = CANCEL,
+						hasEditBox = true,
+						editBoxWidth = 320,
+						timeout = 0,
+						whileDead = true,
+						hideOnEscape = true,
+						preferredIndex = 3,
+					}
+				StaticPopupDialogs["EQOL_UF_IMPORT_SETTINGS"].text = importText
+				StaticPopupDialogs["EQOL_UF_IMPORT_SETTINGS"].OnShow = function(self)
+					self:SetFrameStrata("TOOLTIP")
+					local editBox = self.editBox or self:GetEditBox()
+					editBox:SetText("")
+					editBox:SetFocus()
+				end
+				StaticPopupDialogs["EQOL_UF_IMPORT_SETTINGS"].EditBoxOnEnterPressed = function(editBox)
+					local parent = editBox:GetParent()
+					if parent and parent.button1 then parent.button1:Click() end
+				end
+				StaticPopupDialogs["EQOL_UF_IMPORT_SETTINGS"].OnAccept = function(self)
+					local editBox = self.editBox or self:GetEditBox()
+					local input = editBox:GetText() or ""
+					local scopeKey = getScope()
+					local ok, applied = UF.ImportProfile and UF.ImportProfile(input, scopeKey)
+					if not ok then
+						local msg = UF.ImportErrorMessage and UF.ImportErrorMessage(applied) or (L["UFImportProfileFailed"] or "Import failed.")
+						print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+						return
+					end
+					if applied and #applied > 0 then
+						local names = {}
+						for _, key in ipairs(applied) do
+							names[#names + 1] = scopeOptions[key] or key
+						end
+						local label = table.concat(names, ", ")
+						local msg = (L["UFImportProfileSuccess"] or "Unit Frames updated for: %s"):format(label)
+						print("|cff00ff98Enhance QoL|r: " .. msg)
+					else
+						local msg = L["UFImportProfileSuccessGeneric"] or "Unit Frame profile imported."
+						print("|cff00ff98Enhance QoL|r: " .. msg)
+					end
+					if ReloadUI then ReloadUI() end
+				end
+				StaticPopup_Show("EQOL_UF_IMPORT_SETTINGS")
+			end,
+		})
+	end
 end

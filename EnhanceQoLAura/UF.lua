@@ -17,6 +17,7 @@ local sampleAbsorb = addon.variables.ufSampleAbsorb
 addon.variables.ufSampleCast = addon.variables.ufSampleCast or {}
 local sampleCast = addon.variables.ufSampleCast
 local maxBossFrames = MAX_BOSS_FRAMES or 5
+local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 
 local throttleHook
 local function DisableBossFrames()
@@ -380,6 +381,106 @@ local function copySettings(fromUnit, toUnit, opts)
 	if keepAnchor then dest.anchor = anchor end
 	if keepEnabled then dest.enabled = enabled end
 	return true
+end
+
+local function trim(str)
+	if type(str) ~= "string" then return "" end
+	return str:match("^%s*(.-)%s*$")
+end
+
+local function normalizeScopeKey(scopeKey)
+	if not scopeKey or scopeKey == "" then return "ALL" end
+	if scopeKey == "ALL" then return "ALL" end
+	if isBossUnit(scopeKey) then return "boss" end
+	return scopeKey
+end
+
+local function exportUnitFrameProfile(scopeKey)
+	scopeKey = normalizeScopeKey(scopeKey)
+	addon.db = addon.db or {}
+	addon.db.ufFrames = addon.db.ufFrames or {}
+	local cfg = addon.db.ufFrames
+	if type(cfg) ~= "table" then return nil, "NO_DATA" end
+
+	local payload = {
+		kind = UF_PROFILE_SHARE_KIND,
+		version = 1,
+		frames = {},
+	}
+
+	if scopeKey == "ALL" then
+		if not next(cfg) then return nil, "EMPTY" end
+		payload.frames = CopyTable(cfg)
+	else
+		local src = cfg[scopeKey]
+		if type(src) ~= "table" then return nil, "SCOPE_EMPTY" end
+		payload.frames[scopeKey] = CopyTable(src)
+	end
+
+	local serializer = LibStub("AceSerializer-3.0")
+	local deflate = LibStub("LibDeflate")
+	local serialized = serializer:Serialize(payload)
+	local compressed = deflate:CompressDeflate(serialized)
+	return deflate:EncodeForPrint(compressed)
+end
+
+local function importUnitFrameProfile(encoded, scopeKey)
+	scopeKey = normalizeScopeKey(scopeKey)
+	encoded = trim(encoded or "")
+	if not encoded or encoded == "" then return false, "NO_INPUT" end
+
+	local deflate = LibStub("LibDeflate")
+	local serializer = LibStub("AceSerializer-3.0")
+	local decoded = deflate:DecodeForPrint(encoded) or deflate:DecodeForWoWChatChannel(encoded) or deflate:DecodeForWoWAddonChannel(encoded)
+	if not decoded then return false, "DECODE" end
+	local decompressed = deflate:DecompressDeflate(decoded)
+	if not decompressed then return false, "DECOMPRESS" end
+	local ok, data = serializer:Deserialize(decompressed)
+	if not ok or type(data) ~= "table" then return false, "DESERIALIZE" end
+
+	if data.kind ~= UF_PROFILE_SHARE_KIND then return false, "WRONG_KIND" end
+	if type(data.frames) ~= "table" then return false, "NO_FRAMES" end
+
+	addon.db = addon.db or {}
+	addon.db.ufFrames = addon.db.ufFrames or {}
+	local target = addon.db.ufFrames
+	local applied = {}
+
+	if scopeKey == "ALL" then
+		for unit, frameCfg in pairs(data.frames) do
+			if type(frameCfg) == "table" then
+				local key = normalizeScopeKey(unit)
+				target[key] = CopyTable(frameCfg)
+				applied[#applied + 1] = key
+			end
+		end
+		if #applied == 0 then return false, "NO_FRAMES" end
+	else
+		local key = scopeKey
+		local source = data.frames[key] or data.frames[normalizeScopeKey(key)]
+		if not source and isBossUnit(key) then source = data.frames["boss1"] or data.frames["boss"] end
+		if type(source) ~= "table" then return false, "SCOPE_MISSING" end
+		target[key] = CopyTable(source)
+		applied[#applied + 1] = key
+	end
+
+	table.sort(applied, function(a, b) return tostring(a) < tostring(b) end)
+	addon.variables.requireReload = true
+	return true, applied
+end
+
+local function exportProfileErrorMessage(reason)
+	if reason == "NO_DATA" or reason == "EMPTY" then return L["UFExportProfileEmpty"] or "No unit frame settings to export." end
+	if reason == "SCOPE_EMPTY" then return L["UFExportProfileScopeEmpty"] or "No saved settings for that frame yet." end
+	return L["UFExportProfileFailed"] or "Could not create a Unit Frame export code."
+end
+
+local function importProfileErrorMessage(reason)
+	if reason == "NO_INPUT" then return L["UFImportProfileEmpty"] or "Please enter a code to import." end
+	if reason == "DECODE" or reason == "DECOMPRESS" or reason == "DESERIALIZE" or reason == "WRONG_KIND" then return L["UFImportProfileInvalid"] or "The code could not be read." end
+	if reason == "NO_FRAMES" then return L["UFImportProfileNoFrames"] or "The code does not contain any Unit Frame settings." end
+	if reason == "SCOPE_MISSING" then return L["UFImportProfileMissingScope"] or "The code does not contain settings for that frame." end
+	return L["UFImportProfileFailed"] or "Could not import the Unit Frame profile."
 end
 
 local function anchorBossContainer(cfg)
@@ -2778,3 +2879,10 @@ UF.UpdateBossFrames = updateBossFrames
 UF.HideBossFrames = hideBossFrames
 UF.FullScanTargetAuras = fullScanTargetAuras
 UF.CopySettings = copySettings
+UF.ExportProfile = exportUnitFrameProfile
+UF.ImportProfile = importUnitFrameProfile
+UF.ExportErrorMessage = exportProfileErrorMessage
+UF.ImportErrorMessage = importProfileErrorMessage
+addon.Aura.functions = addon.Aura.functions or {}
+addon.Aura.functions.importUFProfile = importUnitFrameProfile
+addon.Aura.functions.exportUFProfile = exportUnitFrameProfile

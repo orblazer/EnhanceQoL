@@ -842,6 +842,160 @@ local function registerEditModeBars()
 				end
 			end
 
+			-- Separator controls (eligible bars only)
+			if ResourceBars.separatorEligible and ResourceBars.separatorEligible[barType] then
+				settingsList[#settingsList + 1] = {
+					name = L["Show separator"] or "Show separator",
+					kind = settingType.CheckboxColor,
+					field = "showSeparator",
+					default = cfg and cfg.showSeparator == true,
+					get = function()
+						local c = curSpecCfg()
+						return c and c.showSeparator == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.showSeparator = value and true or false
+						queueRefresh()
+					end,
+					colorDefault = toUIColor(cfg and cfg.separatorColor, SEP_DEFAULT),
+					colorGet = function()
+						local c = curSpecCfg()
+						local col = (c and c.separatorColor) or (cfg and cfg.separatorColor) or SEP_DEFAULT
+						local r, g, b, a = toColorComponents(col, SEP_DEFAULT)
+						return { r = r, g = g, b = b, a = a }
+					end,
+					colorSet = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.separatorColor = toColorArray(value, SEP_DEFAULT)
+						queueRefresh()
+					end,
+					hasOpacity = true,
+					parentId = "frame",
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Separator thickness"] or "Separator thickness",
+					kind = settingType.Slider,
+					allowInput = true,
+					field = "separatorThickness",
+					minValue = 1,
+					maxValue = 10,
+					valueStep = 1,
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.separatorThickness) or SEPARATOR_THICKNESS
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						local new = value or SEPARATOR_THICKNESS
+						if c.separatorThickness == new then return end
+						c.separatorThickness = new
+						queueRefresh()
+					end,
+					default = (cfg and cfg.separatorThickness) or SEPARATOR_THICKNESS,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.showSeparator == true
+					end,
+					parentId = "frame",
+				}
+			end
+
+			-- Druid: Show in (forms), exclude Health
+			if addon.variables.unitClass == "DRUID" and barType ~= "HEALTH" then
+				local forms = { "HUMANOID", "BEAR", "CAT", "TRAVEL", "MOONKIN", "TREANT", "STAG" }
+				local formLabels = {
+					HUMANOID = L["Humanoid"] or "Humanoid",
+					BEAR = L["Bear"] or "Bear",
+					CAT = L["Cat"] or "Cat",
+					TRAVEL = L["Travel"] or "Travel",
+					MOONKIN = L["Moonkin"] or "Moonkin",
+					TREANT = L["Treant"] or "Treant",
+					STAG = L["Stag"] or "Stag",
+				}
+
+				local function ensureShowForms()
+					local c = curSpecCfg()
+					if not c then return nil end
+					c.showForms = c.showForms or {}
+					local sf = c.showForms
+					if barType == "COMBO_POINTS" then
+						if sf.CAT == nil then sf.CAT = true end
+						if sf.HUMANOID == nil then sf.HUMANOID = false end
+						if sf.BEAR == nil then sf.BEAR = false end
+						if sf.TRAVEL == nil then sf.TRAVEL = false end
+						if sf.MOONKIN == nil then sf.MOONKIN = false end
+						if sf.TREANT == nil then sf.TREANT = false end
+						if sf.STAG == nil then sf.STAG = false end
+					else
+						local specInfo = currentSpecInfo()
+						local isSecondaryMana = barType == "MANA" and specInfo and specInfo.MAIN ~= "MANA"
+						local isSecondaryEnergy = barType == "ENERGY" and specInfo and specInfo.MAIN ~= "ENERGY"
+						if isSecondaryMana then
+							if sf.HUMANOID == nil then sf.HUMANOID = true end
+							if sf.BEAR == nil then sf.BEAR = false end
+							if sf.CAT == nil then sf.CAT = false end
+							if sf.TRAVEL == nil then sf.TRAVEL = false end
+							if sf.MOONKIN == nil then sf.MOONKIN = false end
+							if sf.TREANT == nil then sf.TREANT = false end
+							if sf.STAG == nil then sf.STAG = false end
+						elseif isSecondaryEnergy then
+							if sf.HUMANOID == nil then sf.HUMANOID = false end
+							if sf.BEAR == nil then sf.BEAR = false end
+							if sf.CAT == nil then sf.CAT = true end
+							if sf.TRAVEL == nil then sf.TRAVEL = false end
+							if sf.MOONKIN == nil then sf.MOONKIN = false end
+							if sf.TREANT == nil then sf.TREANT = false end
+							if sf.STAG == nil then sf.STAG = false end
+						else
+							if sf.HUMANOID == nil then sf.HUMANOID = true end
+							if sf.BEAR == nil then sf.BEAR = true end
+							if sf.CAT == nil then sf.CAT = true end
+							if sf.TRAVEL == nil then sf.TRAVEL = true end
+							if sf.MOONKIN == nil then sf.MOONKIN = true end
+							if sf.TREANT == nil then sf.TREANT = true end
+							if sf.STAG == nil then sf.STAG = true end
+						end
+					end
+					return sf
+				end
+
+				local dropdownValues = {}
+				for _, key in ipairs(forms) do
+					if barType ~= "COMBO_POINTS" or key == "CAT" then dropdownValues[#dropdownValues + 1] = { value = key, text = formLabels[key] or key } end
+				end
+
+				if settingType.MultiDropdown then
+					settingsList[#settingsList + 1] = {
+						name = L["Show in"] or "Show in",
+						kind = settingType.MultiDropdown,
+						field = "showForms",
+						values = dropdownValues,
+						hideSummary = true,
+						isSelected = function(_, value)
+							local sf = ensureShowForms()
+							if not sf then return false end
+							local cur = sf[value]
+							if cur == nil then return true end
+							return cur ~= false
+						end,
+						setSelected = function(_, value, state)
+							local sf = ensureShowForms()
+							if not sf then return end
+							sf[value] = state and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						default = ensureShowForms(),
+						parentId = "frame",
+					}
+				end
+			end
+
 			settingsList[#settingsList + 1] = {
 				name = LOCALE_TEXT_LABEL or L["Text"] or STATUS_TEXT,
 				kind = settingType.Collapsible,
@@ -1077,160 +1231,6 @@ local function registerEditModeBars()
 				}
 			end
 
-			-- Separator controls (eligible bars only)
-			if ResourceBars.separatorEligible and ResourceBars.separatorEligible[barType] then
-				settingsList[#settingsList + 1] = {
-					name = L["Show separator"] or "Show separator",
-					kind = settingType.CheckboxColor,
-					field = "showSeparator",
-					default = cfg and cfg.showSeparator == true,
-					get = function()
-						local c = curSpecCfg()
-						return c and c.showSeparator == true
-					end,
-					set = function(_, value)
-						local c = curSpecCfg()
-						if not c then return end
-						c.showSeparator = value and true or false
-						queueRefresh()
-					end,
-					colorDefault = toUIColor(cfg and cfg.separatorColor, SEP_DEFAULT),
-					colorGet = function()
-						local c = curSpecCfg()
-						local col = (c and c.separatorColor) or (cfg and cfg.separatorColor) or SEP_DEFAULT
-						local r, g, b, a = toColorComponents(col, SEP_DEFAULT)
-						return { r = r, g = g, b = b, a = a }
-					end,
-					colorSet = function(_, value)
-						local c = curSpecCfg()
-						if not c then return end
-						c.separatorColor = toColorArray(value, SEP_DEFAULT)
-						queueRefresh()
-					end,
-					hasOpacity = true,
-					parentId = "frame",
-				}
-
-				settingsList[#settingsList + 1] = {
-					name = L["Separator thickness"] or "Separator thickness",
-					kind = settingType.Slider,
-					allowInput = true,
-					field = "separatorThickness",
-					minValue = 1,
-					maxValue = 10,
-					valueStep = 1,
-					get = function()
-						local c = curSpecCfg()
-						return (c and c.separatorThickness) or SEPARATOR_THICKNESS
-					end,
-					set = function(_, value)
-						local c = curSpecCfg()
-						if not c then return end
-						local new = value or SEPARATOR_THICKNESS
-						if c.separatorThickness == new then return end
-						c.separatorThickness = new
-						queueRefresh()
-					end,
-					default = (cfg and cfg.separatorThickness) or SEPARATOR_THICKNESS,
-					isEnabled = function()
-						local c = curSpecCfg()
-						return c and c.showSeparator == true
-					end,
-					parentId = "frame",
-				}
-			end
-
-			-- Druid: Show in (forms), exclude Health
-			if addon.variables.unitClass == "DRUID" and barType ~= "HEALTH" then
-				local forms = { "HUMANOID", "BEAR", "CAT", "TRAVEL", "MOONKIN", "TREANT", "STAG" }
-				local formLabels = {
-					HUMANOID = L["Humanoid"] or "Humanoid",
-					BEAR = L["Bear"] or "Bear",
-					CAT = L["Cat"] or "Cat",
-					TRAVEL = L["Travel"] or "Travel",
-					MOONKIN = L["Moonkin"] or "Moonkin",
-					TREANT = L["Treant"] or "Treant",
-					STAG = L["Stag"] or "Stag",
-				}
-
-				local function ensureShowForms()
-					local c = curSpecCfg()
-					if not c then return nil end
-					c.showForms = c.showForms or {}
-					local sf = c.showForms
-					if barType == "COMBO_POINTS" then
-						if sf.CAT == nil then sf.CAT = true end
-						if sf.HUMANOID == nil then sf.HUMANOID = false end
-						if sf.BEAR == nil then sf.BEAR = false end
-						if sf.TRAVEL == nil then sf.TRAVEL = false end
-						if sf.MOONKIN == nil then sf.MOONKIN = false end
-						if sf.TREANT == nil then sf.TREANT = false end
-						if sf.STAG == nil then sf.STAG = false end
-					else
-						local specInfo = currentSpecInfo()
-						local isSecondaryMana = barType == "MANA" and specInfo and specInfo.MAIN ~= "MANA"
-						local isSecondaryEnergy = barType == "ENERGY" and specInfo and specInfo.MAIN ~= "ENERGY"
-						if isSecondaryMana then
-							if sf.HUMANOID == nil then sf.HUMANOID = true end
-							if sf.BEAR == nil then sf.BEAR = false end
-							if sf.CAT == nil then sf.CAT = false end
-							if sf.TRAVEL == nil then sf.TRAVEL = false end
-							if sf.MOONKIN == nil then sf.MOONKIN = false end
-							if sf.TREANT == nil then sf.TREANT = false end
-							if sf.STAG == nil then sf.STAG = false end
-						elseif isSecondaryEnergy then
-							if sf.HUMANOID == nil then sf.HUMANOID = false end
-							if sf.BEAR == nil then sf.BEAR = false end
-							if sf.CAT == nil then sf.CAT = true end
-							if sf.TRAVEL == nil then sf.TRAVEL = false end
-							if sf.MOONKIN == nil then sf.MOONKIN = false end
-							if sf.TREANT == nil then sf.TREANT = false end
-							if sf.STAG == nil then sf.STAG = false end
-						else
-							if sf.HUMANOID == nil then sf.HUMANOID = true end
-							if sf.BEAR == nil then sf.BEAR = true end
-							if sf.CAT == nil then sf.CAT = true end
-							if sf.TRAVEL == nil then sf.TRAVEL = true end
-							if sf.MOONKIN == nil then sf.MOONKIN = true end
-							if sf.TREANT == nil then sf.TREANT = true end
-							if sf.STAG == nil then sf.STAG = true end
-						end
-					end
-					return sf
-				end
-
-				local dropdownValues = {}
-				for _, key in ipairs(forms) do
-					if barType ~= "COMBO_POINTS" or key == "CAT" then dropdownValues[#dropdownValues + 1] = { value = key, text = formLabels[key] or key } end
-				end
-
-				if settingType.MultiDropdown then
-					settingsList[#settingsList + 1] = {
-						name = L["Show in"] or "Show in",
-						kind = settingType.MultiDropdown,
-						field = "showForms",
-						values = dropdownValues,
-						hideSummary = true,
-						isSelected = function(_, value)
-							local sf = ensureShowForms()
-							if not sf then return false end
-							local cur = sf[value]
-							if cur == nil then return true end
-							return cur ~= false
-						end,
-						setSelected = function(_, value, state)
-							local sf = ensureShowForms()
-							if not sf then return end
-							sf[value] = state and true or false
-							queueRefresh()
-							refreshSettingsUI()
-						end,
-						default = ensureShowForms(),
-						parentId = "frame",
-					}
-				end
-			end
-
 			do -- Global profile helpers
 				local function syncSizeFromConfig()
 					local c = curSpecCfg()
@@ -1296,7 +1296,7 @@ local function registerEditModeBars()
 					local powerLabel = titleLabel
 					if isMain then opts[#opts + 1] = { label = L["UseAsGlobalMainProfile"] or "Use as global main profile", action = function() saveGlobal("MAIN", powerLabel) end } end
 					opts[#opts + 1] = { label = (L["UseAsGlobalProfile"] or "Use as global %s profile"):format(powerLabel), action = function() saveGlobal(barType, powerLabel) end }
-					if isMain then opts[#opts + 1] = { label = L["ApplyGlobalMainProfile"] or "Apply global main profile", action = function() applyGlobal("MAIN", powerLabel) end } end
+					opts[#opts + 1] = { label = L["ApplyGlobalMainProfile"] or "Apply global main profile", action = function() applyGlobal("MAIN", powerLabel) end }
 					opts[#opts + 1] = { label = (L["ApplyGlobalProfile"] or "Apply global %s profile"):format(powerLabel), action = function() applyGlobal(barType, powerLabel) end }
 					return opts
 				end

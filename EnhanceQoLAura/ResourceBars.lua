@@ -431,7 +431,10 @@ local function applyGlobalProfile(barType, specIndex, cosmeticOnly, sourceKey)
 
 	local function resolveExplicit(key)
 		if not key then return nil end
-		if key == "MAIN" then return mainTemplateMatches(store, barType) end
+		if key == "MAIN" then
+			-- Explicit MAIN request: allow even if stored type tag differs
+			return store and store.MAIN
+		end
 		if key == "SECONDARY" then
 			secondaryIdx = secondaryIndex(specInfo, barType)
 			return store and store.SECONDARY
@@ -1816,7 +1819,7 @@ ResourceBars.separatorEligible = {
 	RUNES = true,
 }
 ResourceBars.RUNE_BORDER_ID = RUNES_BORDER_ID
-ResourceBars.RUNE_BORDER_LABEL = ResourceBars.RUNE_BORDER_LABEL or ((getCustomBorder and getCustomBorder(RUNES_BORDER_ID) or {}).label) or "EQOL: Runes"
+ResourceBars.RUNE_BORDER_LABEL = ResourceBars.RUNE_BORDER_LABEL or (getCustomBorder and getCustomBorder(RUNES_BORDER_ID) or {}).label or "EQOL: Runes"
 
 function getBarSettings(pType)
 	local class = addon.variables.unitClass
