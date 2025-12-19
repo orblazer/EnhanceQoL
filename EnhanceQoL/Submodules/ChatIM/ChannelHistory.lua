@@ -1542,6 +1542,15 @@ function ChannelHistory:LoadFiltersFromDB()
 	end
 end
 
+function ChannelHistory:SetSelection(selection)
+	if type(selection) ~= "table" then return end
+	if not self.history or not self.keys then self:InitStorage() end
+	self.ui = self.ui or {}
+	self.ui.selection = selection
+	if self.history then self.history._selection = selection end
+	if addon.db then addon.db.chatHistorySelection = selection end
+end
+
 function deriveScope(selection, keys)
 	if not selection then return "character", keys and keys.realmKey, keys and keys.charKey, keys and keys.faction end
 	if selection.type == "header" then return "faction", nil, nil, nil end
@@ -1691,27 +1700,26 @@ end
 function ChannelHistory:EnsureSelection()
 	self.ui = self.ui or {}
 	if self.ui.selection then return end
+	if not self.history or not self.keys then self:InitStorage() end
 	local function buildCharSelectionKey(keys) return string.format("char:%s:%s:%s", keys.realmKey or "", keys.faction or "", keys.charKey or "") end
-	local stored = addon.db and addon.db.chatHistorySelection
+	local stored = (self.history and self.history._selection) or (addon.db and addon.db.chatHistorySelection)
 	if stored and type(stored) == "table" and stored.type then
 		if stored.type == "character" and type(stored.key) == "string" and not stored.key:match("^char:[^:]+:[^:]+:") then
 			stored.key = buildCharSelectionKey(self.keys or {})
 			stored.realmKey = (self.keys and self.keys.realmKey) or stored.realmKey
 			stored.factionKey = (self.keys and self.keys.faction) or stored.factionKey
 			stored.charKey = (self.keys and self.keys.charKey) or stored.charKey
-			if addon.db then addon.db.chatHistorySelection = stored end
 		end
-		self.ui.selection = stored
+		self:SetSelection(stored)
 		return
 	end
-	self.ui.selection = {
+	self:SetSelection({
 		type = "character",
 		key = buildCharSelectionKey(self.keys or {}),
 		factionKey = self.keys and self.keys.faction,
 		realmKey = self.keys and self.keys.realmKey,
 		charKey = self.keys and self.keys.charKey,
-	}
-	if addon.db then addon.db.chatHistorySelection = self.ui.selection end
+	})
 end
 
 -- UI helpers: left tree
@@ -1834,37 +1842,33 @@ local function handleLeftClick(btn, button)
 	if not data then return end
 	local selfRef = ChannelHistory
 	if data.kind == "character" then
-		selfRef.ui.selection = {
+		selfRef:SetSelection({
 			type = "character",
 			key = data.key,
 			faction = data.factionKey,
 			factionKey = data.factionKey,
 			realmKey = data.realmKey,
 			charKey = data.charKey,
-		}
-		if addon.db then addon.db.chatHistorySelection = selfRef.ui.selection end
+		})
 		selfRef:RefreshLeftList()
 		selfRef:RequestLogRefresh()
 	elseif data.kind == "realm" then
 		local realmKey = data.realmKey or data.key:match("^realm:(.+)$") or data.key
-		selfRef.ui.selection = { type = "realm", key = data.key, realm = realmKey, realmKey = realmKey }
-		if addon.db then addon.db.chatHistorySelection = selfRef.ui.selection end
+		selfRef:SetSelection({ type = "realm", key = data.key, realm = realmKey, realmKey = realmKey })
 		selfRef:RefreshLeftList()
 		selfRef:RequestLogRefresh()
 	elseif data.kind == "faction" then
-		selfRef.ui.selection = {
+		selfRef:SetSelection({
 			type = "faction",
 			key = data.key,
 			faction = data.factionKey,
 			factionKey = data.factionKey,
 			realmKey = data.realmKey,
-		}
-		if addon.db then addon.db.chatHistorySelection = selfRef.ui.selection end
+		})
 		selfRef:RefreshLeftList()
 		selfRef:RequestLogRefresh()
 	elseif data.kind == "header" then
-		selfRef.ui.selection = { type = "header", key = data.key }
-		if addon.db then addon.db.chatHistorySelection = selfRef.ui.selection end
+		selfRef:SetSelection({ type = "header", key = data.key })
 		selfRef:RefreshLeftList()
 		selfRef:RequestLogRefresh()
 	end

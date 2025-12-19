@@ -1601,11 +1601,45 @@ local function registerEditModeBars()
 				}
 			end
 
+			if barType == "MAELSTROM_WEAPON" then
+				settingsList[#settingsList + 1] = {
+					name = "Use 5-stack color",
+					kind = settingType.CheckboxColor,
+					field = "useMaelstromFiveColor",
+					default = true,
+					get = function()
+						local c = curSpecCfg()
+						return c and c.useMaelstromFiveColor ~= false
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.useMaelstromFiveColor = value and true or false
+						queueRefresh()
+					end,
+					colorDefault = toUIColor(cfg and cfg.maelstromFiveColor, { 0.2, 0.7, 1, 1 }),
+					colorGet = function()
+						local c = curSpecCfg()
+						local col = (c and c.maelstromFiveColor) or (cfg and cfg.maelstromFiveColor) or { 0.2, 0.7, 1, 1 }
+						local r, g, b, a = toColorComponents(col, { 0.2, 0.7, 1, 1 })
+						return { r = r, g = g, b = b, a = a }
+					end,
+					colorSet = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.maelstromFiveColor = toColorArray(value, { 0.2, 0.7, 1, 1 })
+						queueRefresh()
+					end,
+					hasOpacity = true,
+					parentId = "colorsetting",
+				}
+			end
+
 			settingsList[#settingsList + 1] = {
 				name = L["Use max color"] or "Use max color",
 				kind = settingType.CheckboxColor,
 				field = "useMaxColor",
-				default = false,
+				default = barType == "MAELSTROM_WEAPON",
 				get = function()
 					local c = curSpecCfg()
 					return c and c.useMaxColor == true
