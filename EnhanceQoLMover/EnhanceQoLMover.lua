@@ -11,7 +11,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Mover")
 local db = addon.Mover.db
 
 local function buildSettings()
-	local categoryLabel = L["Layout Tools"] or L["Move"] or "Mover"
+	local categoryLabel = L["Move"] or "Mover"
 	local cLayout = addon.functions.SettingsCreateCategory(nil, categoryLabel, nil, "Mover")
 	addon.SettingsLayout.moverCategory = cLayout
 
