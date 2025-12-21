@@ -837,6 +837,7 @@ globals = {
 	"C_Garrison.GetCombatAllyMission",
 	"C_Garrison.GetCompleteMissions",
 	"C_Garrison.GetCompleteTalent",
+	"AUCTION_CATEGORY_HOUSING",
 	"C_Garrison.GetCurrencyTypes",
 	"C_Garrison.GetFollowerAbilities",
 	"C_Garrison.GetFollowerAbilityAtIndex",
