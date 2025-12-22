@@ -24,7 +24,8 @@ L["Global Scale Enabled Desc"] = "Enable scaling with the mouse wheel on the mov
 L["Require Modifier For Move Desc"] = "When enabled, you must hold the move modifier to drag frames."
 L["Move Modifier Desc"] = "Choose the modifier key required for dragging."
 L["Scale Modifier Desc"] = "Choose the modifier key used for scaling."
-L["MoverResetHint"] = "Tip: Hold the scale modifier and right-click a move handle to reset scale and position to default.\nReset uses the scale modifier even when scaling is disabled."
+L["MoverResetHint"] = [[Tip: Hold the scale modifier and right-click a move handle to reset scale and position to default.
+Reset uses the scale modifier even when scaling is disabled.]]
 
 -- Wheel scaling
 L["Wheel Scaling"] = "Wheel Scaling"
