@@ -1970,6 +1970,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 	end
 
 	addToggle("player", L["UFPlayerEnable"] or "Enable custom player frame", "ufEnablePlayer")
+	addon.functions.SettingsCreateText(cUF, L["UFPlayerCastbarHint"] or 'Uses Blizzard\'s Player Castbar.\nBefore enabling, open Edit Mode\nand make sure the Player Frame setting\n"HUD_EDIT_MODE_SETTING_UNIT_FRAME_CAST_BAR_UNDERNEATH" is unchecked.')
 	addToggle("target", L["UFTargetEnable"] or "Enable custom target frame", "ufEnableTarget")
 	addToggle("targettarget", L["UFToTEnable"] or "Enable target-of-target frame", "ufEnableToT")
 	addToggle("pet", L["UFPetEnable"] or "Enable pet frame", "ufEnablePet")
