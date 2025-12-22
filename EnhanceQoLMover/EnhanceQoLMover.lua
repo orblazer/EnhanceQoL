@@ -15,6 +15,9 @@ local function buildSettings()
 	local cLayout = addon.functions.SettingsCreateCategory(nil, categoryLabel, nil, "Mover")
 	addon.SettingsLayout.moverCategory = cLayout
 
+	local hintText = L["MoverResetHint"]
+	if hintText and hintText ~= "" then addon.functions.SettingsCreateText(cLayout, "|cff99e599" .. hintText .. "|r") end
+
 	local sectionGeneral = addon.functions.SettingsCreateExpandableSection(cLayout, {
 		name = L["Global Settings"] or "General",
 		expanded = true,
