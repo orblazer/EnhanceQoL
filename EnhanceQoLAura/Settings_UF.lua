@@ -280,6 +280,25 @@ local function radioDropdown(name, options, getter, setter, default, parentId)
 	}
 end
 
+local function checkboxDropdown(name, options, getter, setter, default, parentId)
+	return {
+		name = name,
+		kind = settingType.Dropdown,
+		height = 180,
+		parentId = parentId,
+		default = default,
+		generator = function(_, root)
+			local opts = type(options) == "function" and options() or options
+			if type(opts) ~= "table" then return end
+			for _, opt in ipairs(opts) do
+				root:CreateCheckbox(opt.label, function() return getter() == opt.value end, function()
+					if getter() ~= opt.value then setter(opt.value) end
+				end)
+			end
+		end,
+	}
+end
+
 local function slider(name, minVal, maxVal, step, getter, setter, default, parentId, allowInput, formatter)
 	return {
 		name = name,
@@ -557,13 +576,13 @@ local function buildUnitSettings(unit)
 
 	local fontOpts = fontOptions()
 	if #fontOpts > 0 then
-		list[#list + 1] = radioDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "health", "font" }, healthDef.font or defaultFontPath()) end, function(val)
+		list[#list + 1] = checkboxDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "health", "font" }, healthDef.font or defaultFontPath()) end, function(val)
 			setValue(unit, { "health", "font" }, val)
 			refresh()
 		end, healthDef.font or defaultFontPath(), "health")
 	end
 
-	list[#list + 1] = radioDropdown(
+	list[#list + 1] = checkboxDropdown(
 		L["Font outline"] or "Font outline",
 		outlineOptions,
 		function() return getValue(unit, { "health", "fontOutline" }, healthDef.fontOutline or "OUTLINE") end,
@@ -649,7 +668,7 @@ local function buildUnitSettings(unit)
 	end, healthDef.useShortNumbers ~= false, "health")
 
 	local textureOpts = textureOptions
-	list[#list + 1] = radioDropdown(L["Bar Texture"] or "Bar Texture", textureOpts, function() return getValue(unit, { "health", "texture" }, healthDef.texture or "DEFAULT") end, function(val)
+	list[#list + 1] = checkboxDropdown(L["Bar Texture"] or "Bar Texture", textureOpts, function() return getValue(unit, { "health", "texture" }, healthDef.texture or "DEFAULT") end, function(val)
 		setValue(unit, { "health", "texture" }, val)
 		refresh()
 	end, healthDef.texture or "DEFAULT", "health")
@@ -725,7 +744,7 @@ local function buildUnitSettings(unit)
 			refresh()
 		end, false, "absorb")
 
-		list[#list + 1] = radioDropdown(
+		list[#list + 1] = checkboxDropdown(
 			L["Absorb texture"] or "Absorb texture",
 			textureOpts,
 			function() return getValue(unit, { "health", "absorbTexture" }, healthDef.absorbTexture or healthDef.texture or "SOLID") end,
@@ -811,7 +830,7 @@ local function buildUnitSettings(unit)
 	list[#list + 1] = powerFontSize
 
 	if #fontOpts > 0 then
-		local powerFont = radioDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "power", "font" }, powerDef.font or defaultFontPath()) end, function(val)
+		local powerFont = checkboxDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "power", "font" }, powerDef.font or defaultFontPath()) end, function(val)
 			setValue(unit, { "power", "font" }, val)
 			refreshSelf()
 		end, powerDef.font or defaultFontPath(), "power")
@@ -819,7 +838,7 @@ local function buildUnitSettings(unit)
 		list[#list + 1] = powerFont
 	end
 
-	local powerFontOutline = radioDropdown(
+	local powerFontOutline = checkboxDropdown(
 		L["Font outline"] or "Font outline",
 		outlineOptions,
 		function() return getValue(unit, { "power", "fontOutline" }, powerDef.fontOutline or "OUTLINE") end,
@@ -914,7 +933,7 @@ local function buildUnitSettings(unit)
 		refresh()
 	end, powerDef.useShortNumbers ~= false, "power", isPowerEnabled)
 
-	local powerTexture = radioDropdown(L["Bar Texture"] or "Bar Texture", textureOpts, function() return getValue(unit, { "power", "texture" }, powerDef.texture or "DEFAULT") end, function(val)
+	local powerTexture = checkboxDropdown(L["Bar Texture"] or "Bar Texture", textureOpts, function() return getValue(unit, { "power", "texture" }, powerDef.texture or "DEFAULT") end, function(val)
 		setValue(unit, { "power", "texture" }, val)
 		refresh()
 	end, powerDef.texture or "DEFAULT", "power")
@@ -1204,7 +1223,7 @@ local function buildUnitSettings(unit)
 		castNameY.isEnabled = isCastNameEnabled
 		list[#list + 1] = castNameY
 
-		local castNameFont = radioDropdown(L["Font"] or "Font", fontOptions(), function() return getValue(unit, { "cast", "font" }, castDef.font or "") end, function(val)
+		local castNameFont = checkboxDropdown(L["Font"] or "Font", fontOptions(), function() return getValue(unit, { "cast", "font" }, castDef.font or "") end, function(val)
 			setValue(unit, { "cast", "font" }, val)
 			refresh()
 		end, castDef.font or "", "cast")
@@ -1271,7 +1290,7 @@ local function buildUnitSettings(unit)
 			refresh()
 		end, false, "cast", isCastEnabled)
 
-		local castTexture = radioDropdown(L["Cast texture"] or "Cast texture", textureOpts, function() return getValue(unit, { "cast", "texture" }, castDef.texture or "DEFAULT") end, function(val)
+		local castTexture = checkboxDropdown(L["Cast texture"] or "Cast texture", textureOpts, function() return getValue(unit, { "cast", "texture" }, castDef.texture or "DEFAULT") end, function(val)
 			setValue(unit, { "cast", "texture" }, val)
 			refresh()
 		end, castDef.texture or "DEFAULT", "cast")
@@ -1362,9 +1381,7 @@ local function buildUnitSettings(unit)
 
 	if isPlayer then
 		local ciDef = statusDef.combatIndicator or {}
-		local function isCombatIndicatorEnabled()
-			return getValue(unit, { "status", "combatIndicator", "enabled" }, ciDef.enabled ~= false) ~= false
-		end
+		local function isCombatIndicatorEnabled() return getValue(unit, { "status", "combatIndicator", "enabled" }, ciDef.enabled ~= false) ~= false end
 		local combatIndicatorToggle = checkbox(
 			L["UFCombatIndicator"] or "Show combat indicator",
 			function() return getValue(unit, { "status", "combatIndicator", "enabled" }, ciDef.enabled ~= false) end,
@@ -1504,7 +1521,7 @@ local function buildUnitSettings(unit)
 
 	fontOpts = fontOptions()
 	if #fontOpts > 0 then
-		local statusFont = radioDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "status", "font" }, statusDef.font or defaultFontPath()) end, function(val)
+		local statusFont = checkboxDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "status", "font" }, statusDef.font or defaultFontPath()) end, function(val)
 			setValue(unit, { "status", "font" }, val)
 			refreshSelf()
 		end, statusDef.font or defaultFontPath(), "status")
@@ -1512,7 +1529,7 @@ local function buildUnitSettings(unit)
 		list[#list + 1] = statusFont
 	end
 
-	local statusFontOutline = radioDropdown(
+	local statusFontOutline = checkboxDropdown(
 		L["Font outline"] or "Font outline",
 		outlineOptions,
 		function() return getValue(unit, { "status", "fontOutline" }, statusDef.fontOutline or "OUTLINE") end,
@@ -1526,10 +1543,17 @@ local function buildUnitSettings(unit)
 	statusFontOutline.isEnabled = isStatusTextEnabled
 	list[#list + 1] = statusFontOutline
 
-	local nameAnchorSetting = radioDropdown(L["UFNameAnchor"] or "Name anchor", anchorOptions, function() return getValue(unit, { "status", "nameAnchor" }, statusDef.nameAnchor or "LEFT") end, function(val)
-		setValue(unit, { "status", "nameAnchor" }, val)
-		refresh()
-	end, statusDef.nameAnchor or "LEFT", "status")
+	local nameAnchorSetting = radioDropdown(
+		L["UFNameAnchor"] or "Name anchor",
+		anchorOptions,
+		function() return getValue(unit, { "status", "nameAnchor" }, statusDef.nameAnchor or "LEFT") end,
+		function(val)
+			setValue(unit, { "status", "nameAnchor" }, val)
+			refresh()
+		end,
+		statusDef.nameAnchor or "LEFT",
+		"status"
+	)
 	nameAnchorSetting.isEnabled = isNameEnabled
 	list[#list + 1] = nameAnchorSetting
 
@@ -1707,7 +1731,7 @@ local function buildUnitSettings(unit)
 			{ value = "THICKOUTLINE", label = L["Thick outline"] or "Thick outline" },
 			{ value = "MONOCHROMEOUTLINE", label = L["Monochrome outline"] or "Monochrome outline" },
 		}
-		list[#list + 1] = radioDropdown(
+		list[#list + 1] = checkboxDropdown(
 			L["Aura stack outline"] or "Aura stack outline",
 			stackOutlineOptions,
 			function() return getValue(unit, { "auraIcons", "countFontOutline" }, auraDef.countFontOutline or "OUTLINE") end,
@@ -1971,7 +1995,10 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 
 	addToggle("player", L["UFPlayerEnable"] or "Enable custom player frame", "ufEnablePlayer")
 	local castbarSetting = _G.HUD_EDIT_MODE_SETTING_UNIT_FRAME_CAST_BAR_UNDERNEATH or "Castbar underneath"
-	addon.functions.SettingsCreateText(cUF, (L["UFPlayerCastbarHint"] or 'Uses Blizzard\'s Player Castbar.\nBefore enabling, open Edit Mode\nand make sure the Player Frame setting\n"%s" is unchecked.'):format(castbarSetting))
+	addon.functions.SettingsCreateText(
+		cUF,
+		(L["UFPlayerCastbarHint"] or 'Uses Blizzard\'s Player Castbar.\nBefore enabling, open Edit Mode\nand make sure the Player Frame setting\n"%s" is unchecked.'):format(castbarSetting)
+	)
 	addToggle("target", L["UFTargetEnable"] or "Enable custom target frame", "ufEnableTarget")
 	addToggle("targettarget", L["UFToTEnable"] or "Enable target-of-target frame", "ufEnableToT")
 	addToggle("pet", L["UFPetEnable"] or "Enable pet frame", "ufEnablePet")
