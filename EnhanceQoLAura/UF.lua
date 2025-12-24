@@ -3249,6 +3249,7 @@ local function onEvent(self, event, unit, arg1)
 		if unit == UNIT.PLAYER then updateHealth(playerCfg, "player") end
 		if unit == "target" then updateHealth(targetCfg, "target") end
 		if unit == UNIT.PET then updateHealth(petCfg, UNIT.PET) end
+		if unit == UNIT.FOCUS then updateHealth(focusCfg, UNIT.FOCUS) end
 		if bossCfg.enabled and isBossUnit(unit) then updateHealth(bossCfg, unit) end
 	elseif event == "UNIT_MAXPOWER" then
 		if unit == UNIT.PLAYER then updatePower(playerCfg, "player") end
