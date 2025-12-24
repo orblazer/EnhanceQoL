@@ -3078,7 +3078,7 @@ local function updateFocusFrame(cfg, forceApply)
 end
 
 local function onEvent(self, event, unit, arg1)
-	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and not (allowedEventUnit[unit] or isBossUnit(unit)) then return end
+	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and not allowedEventUnit[unit] then return end
 	local playerCfg = (states[UNIT.PLAYER] and states[UNIT.PLAYER].cfg) or ensureDB("player")
 	local targetCfg = (states[UNIT.TARGET] and states[UNIT.TARGET].cfg) or ensureDB("target")
 	local totCfg = (states[UNIT.TARGET_TARGET] and states[UNIT.TARGET_TARGET].cfg) or ensureDB(UNIT.TARGET_TARGET)
