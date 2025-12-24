@@ -740,18 +740,22 @@ end
 
 local function cacheTargetAura(aura)
 	if not aura or not aura.auraInstanceID then return end
-	targetAuras[aura.auraInstanceID] = {
-		auraInstanceID = aura.auraInstanceID,
-		spellId = aura.spellId,
-		name = aura.name,
-		icon = aura.icon,
-		isHelpful = aura.isHelpful,
-		isHarmful = aura.isHarmful,
-		applications = aura.applications,
-		duration = aura.duration,
-		expirationTime = aura.expirationTime,
-		sourceUnit = aura.sourceUnit,
-	}
+	local id = aura.auraInstanceID
+	local t = targetAuras[id]
+	if not t then
+		t = {}
+		targetAuras[id] = t
+	end
+	t.auraInstanceID = id
+	t.spellId = aura.spellId
+	t.name = aura.name
+	t.icon = aura.icon
+	t.isHelpful = aura.isHelpful
+	t.isHarmful = aura.isHarmful
+	t.applications = aura.applications
+	t.duration = aura.duration
+	t.expirationTime = aura.expirationTime
+	t.sourceUnit = aura.sourceUnit
 end
 
 local function addTargetAuraToOrder(auraInstanceID)
