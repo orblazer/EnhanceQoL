@@ -310,7 +310,7 @@ local function checkSpell(tooltip, id, name, isSpell)
 			local line = tooltip and _G[tooltip:GetName() .. "TextLeft1"]
 			if line then
 				local current = line:GetText()
-				if current and not current:find("|T", 1, true) then
+				if ((issecretvalue and not issecretvalue(current)) or not issecretvalue) and current and not current:find("|T", 1, true) then
 					local size = addon.db and addon.db["TooltipItemIconSize"] or 16
 					if size < 10 then
 						size = 10
