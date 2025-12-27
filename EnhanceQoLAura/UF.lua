@@ -2740,10 +2740,10 @@ local function applyBars(cfg, unit)
 		applyFont(st.castDuration, castFont, castFontSize, castOutline)
 	end
 
-	applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14)
-	applyFont(st.healthTextRight, hc.font, hc.fontSize or 14)
-	applyFont(st.powerTextLeft, pcfg.font, pcfg.fontSize or 14)
-	applyFont(st.powerTextRight, pcfg.font, pcfg.fontSize or 14)
+	applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14, hc.fontOutline)
+	applyFont(st.healthTextRight, hc.font, hc.fontSize or 14, hc.fontOutline)
+	applyFont(st.powerTextLeft, pcfg.font, pcfg.fontSize or 14, pcfg.fontOutline)
+	applyFont(st.powerTextRight, pcfg.font, pcfg.fontSize or 14, pcfg.fontOutline)
 	syncTextFrameLevels(st)
 end
 

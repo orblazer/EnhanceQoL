@@ -404,7 +404,9 @@ local function radioDropdown(name, options, getter, setter, default, parentId)
 			local opts = type(options) == "function" and options() or options
 			if type(opts) ~= "table" then return end
 			for _, opt in ipairs(opts) do
-				root:CreateRadio(opt.label, function() return getter() == opt.value end, function() setter(opt.value) end)
+				local value = opt.value
+				local label = opt.label
+				root:CreateRadio(label, function() return getter() == value end, function() setter(value) end)
 			end
 		end,
 	}
@@ -421,8 +423,10 @@ local function checkboxDropdown(name, options, getter, setter, default, parentId
 			local opts = type(options) == "function" and options() or options
 			if type(opts) ~= "table" then return end
 			for _, opt in ipairs(opts) do
-				root:CreateCheckbox(opt.label, function() return getter() == opt.value end, function()
-					if getter() ~= opt.value then setter(opt.value) end
+				local value = opt.value
+				local label = opt.label
+				root:CreateCheckbox(label, function() return getter() == value end, function()
+					if getter() ~= value then setter(value) end
 				end)
 			end
 		end,

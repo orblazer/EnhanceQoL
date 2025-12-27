@@ -46,6 +46,7 @@
 - Macro-ID on tooltip was wrong
 - UF Plus non interrupt color wasn't working in midnight
 - UF Plus channeling animation for castbar was in the wrong direction
+- UF Plus font/outline bug fixed
 
 ---
 
