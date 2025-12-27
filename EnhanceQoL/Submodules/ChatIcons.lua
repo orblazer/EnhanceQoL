@@ -142,14 +142,17 @@ local function FilterChatMessage(_, event, message, ...)
 	if issecretvalue and issecretvalue(message) then return end
 	if type(message) ~= "string" or message == "" then return false end
 
-	if ChatIcons.enabled and event == "CHAT_MSG_LOOT" then
-		message = message:gsub(ITEM_LINK_PATTERN, FormatItemLink)
+	local formatItemIcons = ChatIcons.enabled == true
+	local formatItemLevel = ChatIcons.itemLevelEnabled
+	if formatItemIcons or formatItemLevel then
+		message = message:gsub(ITEM_LINK_PATTERN, function(link)
+			if formatItemLevel then link = FormatItemLinkWithLevel(link) end
+			if formatItemIcons then link = FormatItemLink(link) end
+			return link
+		end)
 	end
 	if ChatIcons.enabled and (event == "CHAT_MSG_LOOT" or event == "CHAT_MSG_CURRENCY") then
 		message = message:gsub(CURRENCY_LINK_PATTERN, FormatCurrencyLink)
-	end
-	if ChatIcons.itemLevelEnabled then
-		message = message:gsub(ITEM_LINK_PATTERN, FormatItemLinkWithLevel)
 	end
 
 	return false, message, ...
@@ -163,7 +166,7 @@ ChatIcons.registeredEvents = ChatIcons.registeredEvents or {}
 
 function ChatIcons:UpdateFilters()
 	local needed = {}
-	if self.itemLevelEnabled then
+	if self.itemLevelEnabled or self.enabled then
 		self.itemLinkEvents = self.itemLinkEvents or BuildItemLinkEvents()
 		for event in pairs(self.itemLinkEvents) do
 			needed[event] = true
