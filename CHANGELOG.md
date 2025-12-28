@@ -37,6 +37,7 @@
 - UF Plus: Resting indicator settings merged into the Unit status section.
 - UF Plus: Sample cast previews now auto-show in Edit Mode.
 - Moved the "Hide Minimap Button" setting to Map Navigation.
+- UF Plus: Name/Level font sizes are now configurable independently in the status line.
 - UF/Resource Bars: texture/font/outline dropdowns now stay open on click so you can browse SharedMedia options faster.
 - Mover: Merged Quest and Gossip Frame
 - UF Plus: castbar backdrop now uses the Blizzard default background when the default texture is selected.

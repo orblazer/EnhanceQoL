@@ -2006,15 +2006,6 @@ local function buildUnitSettings(unit)
 		list[#list + 1] = levelColorSetting
 	end
 
-	local statusFontSize = slider(L["FontSize"] or "Font size", 8, 30, 1, function() return getValue(unit, { "status", "fontSize" }, statusDef.fontSize or 14) end, function(val)
-		debounced(unit .. "_statusFontSize", function()
-			setValue(unit, { "status", "fontSize" }, val or statusDef.fontSize or 14)
-			refreshSelf()
-		end)
-	end, statusDef.fontSize or 14, "status", true)
-	statusFontSize.isEnabled = isStatusTextEnabled
-	list[#list + 1] = statusFontSize
-
 	fontOpts = fontOptions()
 	if #fontOpts > 0 then
 		local statusFont = checkboxDropdown(L["Font"] or "Font", fontOpts, function() return getValue(unit, { "status", "font" }, statusDef.font or defaultFontPath()) end, function(val)
@@ -2052,6 +2043,15 @@ local function buildUnitSettings(unit)
 	)
 	nameAnchorSetting.isEnabled = isNameEnabled
 	list[#list + 1] = nameAnchorSetting
+
+	local nameFontSizeSetting = slider(L["Name font size"] or "Name font size", 8, 30, 1, function() return getValue(unit, { "status", "nameFontSize" }, statusDef.fontSize or 14) end, function(val)
+		debounced(unit .. "_statusNameFontSize", function()
+			setValue(unit, { "status", "nameFontSize" }, val or statusDef.fontSize or 14)
+			refreshSelf()
+		end)
+	end, statusDef.fontSize or 14, "status", true)
+	nameFontSizeSetting.isEnabled = isNameEnabled
+	list[#list + 1] = nameFontSizeSetting
 
 	local nameMaxCharsSetting = slider(L["UFNameMaxChars"] or "Name max width", 0, 30, 1, function() return getValue(unit, { "status", "nameMaxChars" }, statusDef.nameMaxChars or 0) end, function(val)
 		setValue(unit, { "status", "nameMaxChars" }, val or 0)
@@ -2107,6 +2107,25 @@ local function buildUnitSettings(unit)
 	)
 	levelAnchorSetting.isEnabled = isLevelEnabled
 	list[#list + 1] = levelAnchorSetting
+
+	local levelFontSizeSetting = slider(
+		L["Level font size"] or "Level font size",
+		8,
+		30,
+		1,
+		function() return getValue(unit, { "status", "levelFontSize" }, statusDef.fontSize or 14) end,
+		function(val)
+			debounced(unit .. "_statusLevelFontSize", function()
+				setValue(unit, { "status", "levelFontSize" }, val or statusDef.fontSize or 14)
+				refreshSelf()
+			end)
+		end,
+		statusDef.fontSize or 14,
+		"status",
+		true
+	)
+	levelFontSizeSetting.isEnabled = isLevelEnabled
+	list[#list + 1] = levelFontSizeSetting
 
 	local levelOffsetXSetting = slider(
 		L["UFLevelX"] or "Level X offset",

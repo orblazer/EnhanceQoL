@@ -2408,8 +2408,11 @@ local function updateStatus(cfg, unit)
 	local statusHeight = showStatus and (cfg.statusHeight or def.statusHeight) or 0.001
 	st.status:SetHeight(statusHeight)
 	st.status:SetShown(showStatus)
+	local nameFontSize = scfg.nameFontSize or scfg.fontSize or 14
+	local levelFontSize = scfg.levelFontSize or scfg.fontSize or 14
+	local statusFontSize = scfg.fontSize or nameFontSize or levelFontSize or 14
 	if st.nameText then
-		applyFont(st.nameText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
+		applyFont(st.nameText, scfg.font, nameFontSize, scfg.fontOutline)
 		local nameAnchor = scfg.nameAnchor or "LEFT"
 		st.nameText:ClearAllPoints()
 		st.nameText:SetPoint(nameAnchor, st.status, nameAnchor, (scfg.nameOffset and scfg.nameOffset.x) or 0, (scfg.nameOffset and scfg.nameOffset.y) or 0)
@@ -2418,13 +2421,13 @@ local function updateStatus(cfg, unit)
 		applyNameCharLimit(st, scfg, defStatus)
 	end
 	if st.levelText then
-		applyFont(st.levelText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
+		applyFont(st.levelText, scfg.font, levelFontSize, scfg.fontOutline)
 		st.levelText:ClearAllPoints()
 		st.levelText:SetPoint(scfg.levelAnchor or "RIGHT", st.status, scfg.levelAnchor or "RIGHT", (scfg.levelOffset and scfg.levelOffset.x) or 0, (scfg.levelOffset and scfg.levelOffset.y) or 0)
 		st.levelText:SetShown(showStatus and showLevel)
 	end
 	if st.unitStatusText then
-		applyFont(st.unitStatusText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
+		applyFont(st.unitStatusText, scfg.font, statusFontSize, scfg.fontOutline)
 		local off = usCfg.offset or usDef.offset or {}
 		st.unitStatusText:ClearAllPoints()
 		st.unitStatusText:SetPoint("CENTER", st.status, "CENTER", off.x or 0, off.y or 0)
