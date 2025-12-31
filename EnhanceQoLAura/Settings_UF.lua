@@ -20,6 +20,7 @@ local UFHelper = addon.Aura and addon.Aura.UFHelper
 if not (UF and settingType) then return end
 
 local MIN_WIDTH = 50
+local OFFSET_RANGE = 700
 local defaultStrata = (_G.PlayerFrame and _G.PlayerFrame.GetFrameStrata and _G.PlayerFrame:GetFrameStrata()) or "MEDIUM"
 local defaultLevel = (_G.PlayerFrame and _G.PlayerFrame.GetFrameLevel and _G.PlayerFrame:GetFrameLevel()) or 0
 
@@ -688,7 +689,7 @@ local function buildUnitSettings(unit)
 	end, def.barGap or 0, "frame", true)
 
 	if isBoss then
-		list[#list + 1] = slider(L["UFBossSpacing"] or "Boss spacing", 0, 40, 1, function() return getValue(unit, { "spacing" }, def.spacing or 4) end, function(val)
+		list[#list + 1] = slider(L["UFBossSpacing"] or "Boss spacing", 0, 100, 1, function() return getValue(unit, { "spacing" }, def.spacing or 4) end, function(val)
 			setValue(unit, { "spacing" }, val or def.spacing or 4)
 			refreshSelf()
 		end, def.spacing or 4, "frame", true)
@@ -1039,8 +1040,8 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = slider(
 		L["TextLeftOffsetX"] or "Left text X offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "health", "offsetLeft", "x" }, (healthDef.offsetLeft and healthDef.offsetLeft.x) or 0)) end,
 		function(val)
@@ -1056,8 +1057,8 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = slider(
 		L["TextLeftOffsetY"] or "Left text Y offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "health", "offsetLeft", "y" }, (healthDef.offsetLeft and healthDef.offsetLeft.y) or 0)) end,
 		function(val)
@@ -1073,8 +1074,8 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = slider(
 		L["TextRightOffsetX"] or "Right text X offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "health", "offsetRight", "x" }, (healthDef.offsetRight and healthDef.offsetRight.x) or 0)) end,
 		function(val)
@@ -1090,8 +1091,8 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = slider(
 		L["TextRightOffsetY"] or "Right text Y offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "health", "offsetRight", "y" }, (healthDef.offsetRight and healthDef.offsetRight.y) or 0)) end,
 		function(val)
@@ -1243,7 +1244,7 @@ local function buildUnitSettings(unit)
 	powerWidthSetting.isEnabled = isPowerDetachedEnabled
 	list[#list + 1] = powerWidthSetting
 
-	local powerOffsetX = slider(L["Offset X"] or "Offset X", -200, 200, 1, function() return getValue(unit, { "power", "offset", "x" }, 0) end, function(val)
+	local powerOffsetX = slider(L["Offset X"] or "Offset X", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "power", "offset", "x" }, 0) end, function(val)
 		debounced(unit .. "_powerOffsetX", function()
 			setValue(unit, { "power", "offset", "x" }, val or 0)
 			refresh()
@@ -1252,7 +1253,7 @@ local function buildUnitSettings(unit)
 	powerOffsetX.isEnabled = isPowerDetachedEnabled
 	list[#list + 1] = powerOffsetX
 
-	local powerOffsetY = slider(L["Offset Y"] or "Offset Y", -200, 200, 1, function() return getValue(unit, { "power", "offset", "y" }, 0) end, function(val)
+	local powerOffsetY = slider(L["Offset Y"] or "Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "power", "offset", "y" }, 0) end, function(val)
 		debounced(unit .. "_powerOffsetY", function()
 			setValue(unit, { "power", "offset", "y" }, val or 0)
 			refresh()
@@ -1349,8 +1350,8 @@ local function buildUnitSettings(unit)
 
 	local powerLeftX = slider(
 		L["TextLeftOffsetX"] or "Left text X offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "power", "offsetLeft", "x" }, (powerDef.offsetLeft and powerDef.offsetLeft.x) or 0)) end,
 		function(val)
@@ -1368,8 +1369,8 @@ local function buildUnitSettings(unit)
 
 	local powerLeftY = slider(
 		L["TextLeftOffsetY"] or "Left text Y offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "power", "offsetLeft", "y" }, (powerDef.offsetLeft and powerDef.offsetLeft.y) or 0)) end,
 		function(val)
@@ -1387,8 +1388,8 @@ local function buildUnitSettings(unit)
 
 	local powerRightX = slider(
 		L["TextRightOffsetX"] or "Right text X offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "power", "offsetRight", "x" }, (powerDef.offsetRight and powerDef.offsetRight.x) or 0)) end,
 		function(val)
@@ -1406,8 +1407,8 @@ local function buildUnitSettings(unit)
 
 	local powerRightY = slider(
 		L["TextRightOffsetY"] or "Right text Y offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return (getValue(unit, { "power", "offsetRight", "y" }, (powerDef.offsetRight and powerDef.offsetRight.y) or 0)) end,
 		function(val)
@@ -1558,8 +1559,8 @@ local function buildUnitSettings(unit)
 
 		local classOffsetX = slider(
 			L["Offset X"] or "Offset X",
-			-400,
-			400,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "classResource", "offset", "x" }, (crDef.offset and crDef.offset.x) or 0) end,
 			function(val)
@@ -1575,7 +1576,7 @@ local function buildUnitSettings(unit)
 		classOffsetX.isEnabled = isClassResourceEnabled
 		list[#list + 1] = classOffsetX
 
-		local classOffsetY = slider(L["Offset Y"] or "Offset Y", -400, 400, 1, function() return getValue(unit, { "classResource", "offset", "y" }, defaultOffsetY()) end, function(val)
+		local classOffsetY = slider(L["Offset Y"] or "Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "classResource", "offset", "y" }, defaultOffsetY()) end, function(val)
 			debounced(unit .. "_classResourceOffsetY", function()
 				setValue(unit, { "classResource", "offset", "y" }, val or 0)
 				refreshSelf()
@@ -1651,8 +1652,8 @@ local function buildUnitSettings(unit)
 
 	local raidIconOffsetX = slider(
 		L["Offset X"] or "Offset X",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "raidIcon", "offset", "x" }, (raidIconDef.offset and raidIconDef.offset.x) or 0) end,
 		function(val)
@@ -1668,8 +1669,8 @@ local function buildUnitSettings(unit)
 
 	local raidIconOffsetY = slider(
 		L["Offset Y"] or "Offset Y",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "raidIcon", "offset", "y" }, (raidIconDef.offset and raidIconDef.offset.y) or 0) end,
 		function(val)
@@ -1724,14 +1725,14 @@ local function buildUnitSettings(unit)
 		castAnchor.isEnabled = isCastEnabled
 		list[#list + 1] = castAnchor
 
-		local castOffsetX = slider(L["Offset X"] or "Offset X", -200, 200, 1, function() return getValue(unit, { "cast", "offset", "x" }, (castDef.offset and castDef.offset.x) or 0) end, function(val)
+		local castOffsetX = slider(L["Offset X"] or "Offset X", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "cast", "offset", "x" }, (castDef.offset and castDef.offset.x) or 0) end, function(val)
 			setValue(unit, { "cast", "offset", "x" }, val or 0)
 			refresh()
 		end, (castDef.offset and castDef.offset.x) or 0, "cast", true)
 		castOffsetX.isEnabled = isCastEnabled
 		list[#list + 1] = castOffsetX
 
-		local castOffsetY = slider(L["Offset Y"] or "Offset Y", -200, 200, 1, function() return getValue(unit, { "cast", "offset", "y" }, (castDef.offset and castDef.offset.y) or 0) end, function(val)
+		local castOffsetY = slider(L["Offset Y"] or "Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "cast", "offset", "y" }, (castDef.offset and castDef.offset.y) or 0) end, function(val)
 			setValue(unit, { "cast", "offset", "y" }, val or 0)
 			refresh()
 		end, (castDef.offset and castDef.offset.y) or 0, "cast", true)
@@ -1759,8 +1760,8 @@ local function buildUnitSettings(unit)
 
 		local castNameX = slider(
 			L["Name X Offset"] or "Name X Offset",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "cast", "nameOffset", "x" }, (castDef.nameOffset and castDef.nameOffset.x) or 6) end,
 			function(val)
@@ -1776,8 +1777,8 @@ local function buildUnitSettings(unit)
 
 		local castNameY = slider(
 			L["Name Y Offset"] or "Name Y Offset",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "cast", "nameOffset", "y" }, (castDef.nameOffset and castDef.nameOffset.y) or 0) end,
 			function(val)
@@ -1820,8 +1821,8 @@ local function buildUnitSettings(unit)
 
 		local castDurX = slider(
 			L["Duration X Offset"] or "Duration X Offset",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "cast", "durationOffset", "x" }, (castDef.durationOffset and castDef.durationOffset.x) or -6) end,
 			function(val)
@@ -1838,8 +1839,8 @@ local function buildUnitSettings(unit)
 
 		local castDurY = slider(
 			L["Duration Y Offset"] or "Duration Y Offset",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "cast", "durationOffset", "y" }, (castDef.durationOffset and castDef.durationOffset.y) or 0) end,
 			function(val)
@@ -2071,8 +2072,8 @@ local function buildUnitSettings(unit)
 
 	local nameOffsetXSetting = slider(
 		L["UFNameX"] or "Name X offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "status", "nameOffset", "x" }, (statusDef.nameOffset and statusDef.nameOffset.x) or 0) end,
 		function(val)
@@ -2088,8 +2089,8 @@ local function buildUnitSettings(unit)
 
 	local nameOffsetYSetting = slider(
 		L["UFNameY"] or "Name Y offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "status", "nameOffset", "y" }, (statusDef.nameOffset and statusDef.nameOffset.y) or 0) end,
 		function(val)
@@ -2138,8 +2139,8 @@ local function buildUnitSettings(unit)
 
 	local levelOffsetXSetting = slider(
 		L["UFLevelX"] or "Level X offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "status", "levelOffset", "x" }, (statusDef.levelOffset and statusDef.levelOffset.x) or 0) end,
 		function(val)
@@ -2155,8 +2156,8 @@ local function buildUnitSettings(unit)
 
 	local levelOffsetYSetting = slider(
 		L["UFLevelY"] or "Level Y offset",
-		-200,
-		200,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "status", "levelOffset", "y" }, (statusDef.levelOffset and statusDef.levelOffset.y) or 0) end,
 		function(val)
@@ -2182,8 +2183,8 @@ local function buildUnitSettings(unit)
 
 	local unitStatusOffsetX = slider(
 		L["UFUnitStatusOffsetX"] or "Unit status X offset",
-		-400,
-		400,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "status", "unitStatus", "offset", "x" }, (usDef.offset and usDef.offset.x) or 0) end,
 		function(val)
@@ -2201,8 +2202,8 @@ local function buildUnitSettings(unit)
 
 	local unitStatusOffsetY = slider(
 		L["UFUnitStatusOffsetY"] or "Unit status Y offset",
-		-400,
-		400,
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
 		1,
 		function() return getValue(unit, { "status", "unitStatus", "offset", "y" }, (usDef.offset and usDef.offset.y) or 0) end,
 		function(val)
@@ -2235,8 +2236,8 @@ local function buildUnitSettings(unit)
 
 		list[#list + 1] = slider(
 			L["UFRestingOffsetX"] or "Resting offset X",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "resting", "offset", "x" }, (restDef.offset and restDef.offset.x) or 0) end,
 			function(val)
@@ -2254,8 +2255,8 @@ local function buildUnitSettings(unit)
 
 		list[#list + 1] = slider(
 			L["UFRestingOffsetY"] or "Resting offset Y",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "resting", "offset", "y" }, (restDef.offset and restDef.offset.y) or 0) end,
 			function(val)
@@ -2307,8 +2308,8 @@ local function buildUnitSettings(unit)
 
 		local combatIndicatorOffsetX = slider(
 			L["UFCombatIndicatorOffsetX"] or "Combat indicator X offset",
-			-300,
-			300,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "status", "combatIndicator", "offset", "x" }, (ciDef.offset and ciDef.offset.x) or -8) end,
 			function(val)
@@ -2326,8 +2327,8 @@ local function buildUnitSettings(unit)
 
 		local combatIndicatorOffsetY = slider(
 			L["UFCombatIndicatorOffsetY"] or "Combat indicator Y offset",
-			-300,
-			300,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "status", "combatIndicator", "offset", "y" }, (ciDef.offset and ciDef.offset.y) or 0) end,
 			function(val)
@@ -2450,8 +2451,8 @@ local function buildUnitSettings(unit)
 
 		list[#list + 1] = slider(
 			L["Aura stack offset X"] or "Aura stack offset X",
-			-50,
-			50,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "auraIcons", "countOffset", "x" }, (auraDef.countOffset and auraDef.countOffset.x) or -2) end,
 			function(val)
@@ -2465,8 +2466,8 @@ local function buildUnitSettings(unit)
 
 		list[#list + 1] = slider(
 			L["Aura stack offset Y"] or "Aura stack offset Y",
-			-50,
-			50,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "auraIcons", "countOffset", "y" }, (auraDef.countOffset and auraDef.countOffset.y) or 2) end,
 			function(val)
@@ -2535,7 +2536,7 @@ local function buildUnitSettings(unit)
 			"auras"
 		)
 
-		list[#list + 1] = slider(L["Aura Offset X"] or "Aura Offset X", -500, 500, 1, function()
+		list[#list + 1] = slider(L["Aura Offset X"] or "Aura Offset X", -OFFSET_RANGE, OFFSET_RANGE, 1, function()
 			local anchor = getValue(unit, { "auraIcons", "anchor" }, auraDef.anchor or "BOTTOM")
 			return getValue(unit, { "auraIcons", "offset", "x" }, (auraDef.offset and auraDef.offset.x) or defaultAuraOffsetX(anchor))
 		end, function(val)
@@ -2543,7 +2544,7 @@ local function buildUnitSettings(unit)
 			refresh()
 		end, (auraDef.offset and auraDef.offset.x) or defaultAuraOffsetX(auraDef.anchor or "BOTTOM"), "auras", true)
 
-		list[#list + 1] = slider(L["Aura Offset Y"] or "Aura Offset Y", -500, 500, 1, function()
+		list[#list + 1] = slider(L["Aura Offset Y"] or "Aura Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function()
 			local anchor = getValue(unit, { "auraIcons", "anchor" }, auraDef.anchor or "BOTTOM")
 			return getValue(unit, { "auraIcons", "offset", "y" }, (auraDef.offset and auraDef.offset.y) or defaultAuraOffsetY(anchor))
 		end, function(val)
@@ -2597,8 +2598,8 @@ local function buildUnitSettings(unit)
 
 		list[#list + 1] = slider(
 			L["Debuff Offset X"] or "Debuff Offset X",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function()
 				return getValue(
@@ -2619,8 +2620,8 @@ local function buildUnitSettings(unit)
 
 		list[#list + 1] = slider(
 			L["Debuff Offset Y"] or "Debuff Offset Y",
-			-200,
-			200,
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
 			1,
 			function() return getValue(unit, { "auraIcons", "debuffOffset", "y" }, (auraDef.debuffOffset and auraDef.debuffOffset.y) or debuffOffsetYDefault()) end,
 			function(val)
