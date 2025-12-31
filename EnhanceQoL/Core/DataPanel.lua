@@ -702,8 +702,8 @@ function DataPanel.Create(id, name, existingOnly)
 				end
 				data.text:Show()
 				local text = payload.text or ""
-				local textChanged = false
-				if text ~= data.lastText then
+				local textChanged = text ~= data.lastText
+				if textChanged or wasParts then
 					data.text:SetText(text)
 					data.lastText = text
 					textChanged = true

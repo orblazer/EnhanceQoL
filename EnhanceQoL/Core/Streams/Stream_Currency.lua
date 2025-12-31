@@ -29,6 +29,7 @@ local FORMAT_LABELS = {
 	short3 = L["CurrencyFormatShort3"] or "Short (13.343k)",
 }
 local FORMAT_ORDER = { "full", "short0", "short1", "short2", "short3" }
+local EMPTY_TRACKING_TEXT = L["No currency tracking"] or "No currency tracking"
 
 local checkCurrencies
 local updateCurrency
@@ -355,7 +356,7 @@ local function rebuildTooltip(s)
 			s.snapshot.tooltip = hint
 		end
 	else
-		s.snapshot.tooltip = getOptionsHint()
+		s.snapshot.tooltip = EMPTY_TRACKING_TEXT
 	end
 	s.snapshot.perCurrency = false
 	s.snapshot.showDescription = db.showDescription
@@ -417,13 +418,12 @@ checkCurrencies = function(s)
 			end
 		end
 	end
-	local hint = getOptionsHint()
 	if #parts > 0 then
 		s.snapshot.parts = parts
 		s.snapshot.text = nil
 	else
 		s.snapshot.parts = nil
-		s.snapshot.text = hint
+		s.snapshot.text = EMPTY_TRACKING_TEXT
 	end
 	s.snapshot.fontSize = size
 	rebuildTooltip(s)

@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.6.2] – 2025-12-31
+
+### 🐛 Fixed
+
+- Empty currecy streams in datapanels set all others streams hidden
+
+---
+
 ## [6.6.1] – 2025-12-31
 
 ### 🐛 Fixed
