@@ -71,6 +71,8 @@ L["Show on Inspect Frame"] = "Show on Inspect Frame"
 L["Gem slot tooltip"] = "Gem slot tooltip"
 
 -- Category titles
+L["UI"] = "UI"
+L["Economy"] = "Economy"
 L["ItemsInventory"] = "Items & Inventory"
 L["ContainerActions"] = "Container Actions"
 L["Confirmations"] = "Confirmations"

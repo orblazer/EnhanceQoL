@@ -1,4 +1,3 @@
--- SettingsUI.lua (LibEQOLSettingsMode-basiert)
 local addonName, addon = ...
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local SettingsLib = LibStub("LibEQOLSettingsMode-1.0")
