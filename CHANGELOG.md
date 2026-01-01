@@ -8,6 +8,7 @@
   - Per-frame aura toggle for Player/Target/Boss frames
   - Boss frames can optionally show auras.
   - Player frame can optionally show auras (default off).
+  - Player unit status can show group number.
 
 ---
 

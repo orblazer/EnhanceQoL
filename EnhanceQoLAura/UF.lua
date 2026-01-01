@@ -244,6 +244,9 @@ local defaults = {
 			nameMaxChars = 15,
 			unitStatus = {
 				enabled = false,
+				showGroup = true,
+				groupFontSize = nil,
+				groupOffset = { x = 0, y = 0 },
 				offset = { x = 0, y = 0 },
 			},
 			combatIndicator = {
@@ -2267,13 +2270,28 @@ local function hookTextFrameLevels(st)
 	syncTextFrameLevels(st)
 end
 
+local function getPlayerSubGroup()
+	if not IsInRaid then return nil end
+	if not IsInRaid() then return nil end
+	local idx = UnitInRaid and UnitInRaid(UNIT.PLAYER)
+	if not idx then return nil end
+	local _, _, subgroup = GetRaidRosterInfo(idx)
+	return subgroup
+end
+
 local function updateUnitStatusIndicator(cfg, unit)
 	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	local st = states[unit]
-	if not st or not st.unitStatusText then return end
+	if not st or (not st.unitStatusText and not st.unitGroupText) then return end
 	if cfg.enabled == false then
-		st.unitStatusText:SetText("")
-		st.unitStatusText:Hide()
+		if st.unitStatusText then
+			st.unitStatusText:SetText("")
+			st.unitStatusText:Hide()
+		end
+		if st.unitGroupText then
+			st.unitGroupText:SetText("")
+			st.unitGroupText:Hide()
+		end
 		return
 	end
 	local def = defaultsFor(unit) or {}
@@ -2282,25 +2300,53 @@ local function updateUnitStatusIndicator(cfg, unit)
 	local usDef = defStatus.unitStatus or {}
 	local usCfg = scfg.unitStatus or usDef or {}
 	if usCfg.enabled ~= true then
-		st.unitStatusText:SetText("")
-		st.unitStatusText:Hide()
+		if st.unitStatusText then
+			st.unitStatusText:SetText("")
+			st.unitStatusText:Hide()
+		end
+		if st.unitGroupText then
+			st.unitGroupText:SetText("")
+			st.unitGroupText:Hide()
+		end
 		return
 	end
 	if UnitExists and not UnitExists(unit) then
-		st.unitStatusText:SetText("")
-		st.unitStatusText:Hide()
+		if st.unitStatusText then
+			st.unitStatusText:SetText("")
+			st.unitStatusText:Hide()
+		end
+		if st.unitGroupText then
+			st.unitGroupText:SetText("")
+			st.unitGroupText:Hide()
+		end
 		return
 	end
-	local tag
+	local statusTag
 	if UnitIsConnected and UnitIsConnected(unit) == false then
-		tag = PLAYER_OFFLINE or "Offline"
+		statusTag = PLAYER_OFFLINE or "Offline"
 	elseif UnitIsAFK and UnitIsAFK(unit) then
-		tag = DEFAULT_AFK_MESSAGE or "AFK"
+		statusTag = DEFAULT_AFK_MESSAGE or "AFK"
 	elseif UnitIsDND and UnitIsDND(unit) then
-		tag = DEFAULT_DND_MESSAGE or "DND"
+		statusTag = DEFAULT_DND_MESSAGE or "DND"
 	end
-	st.unitStatusText:SetText(tag or "")
-	st.unitStatusText:SetShown(tag ~= nil)
+	if st.unitStatusText then
+		st.unitStatusText:SetText(statusTag or "")
+		st.unitStatusText:SetShown(statusTag ~= nil)
+	end
+
+	local groupTag
+	if unit == UNIT.PLAYER and usCfg.showGroup == true then
+		local subgroup = getPlayerSubGroup()
+		if subgroup then
+			groupTag = string.format(GROUP_NUMBER or "Group %d", subgroup)
+		elseif addon.EditModeLib and addon.EditModeLib:IsInEditMode() then
+			groupTag = string.format(GROUP_NUMBER or "Group %d", 1)
+		end
+	end
+	if st.unitGroupText then
+		st.unitGroupText:SetText(groupTag or "")
+		st.unitGroupText:SetShown(groupTag ~= nil)
+	end
 end
 
 local function shouldShowLevel(scfg, unit)
@@ -2355,6 +2401,16 @@ local function updateStatus(cfg, unit)
 		if st.unitStatusText.SetJustifyH then st.unitStatusText:SetJustifyH("CENTER") end
 		if st.unitStatusText.SetWordWrap then st.unitStatusText:SetWordWrap(false) end
 		if st.unitStatusText.SetMaxLines then st.unitStatusText:SetMaxLines(1) end
+	end
+	if st.unitGroupText then
+		local groupFontSize = usCfg.groupFontSize or statusFontSize
+		local groupOff = usCfg.groupOffset or usDef.groupOffset or {}
+		UFHelper.applyFont(st.unitGroupText, scfg.font, groupFontSize, scfg.fontOutline)
+		st.unitGroupText:ClearAllPoints()
+		st.unitGroupText:SetPoint("CENTER", st.status, "CENTER", groupOff.x or 0, groupOff.y or 0)
+		if st.unitGroupText.SetJustifyH then st.unitGroupText:SetJustifyH("CENTER") end
+		if st.unitGroupText.SetWordWrap then st.unitGroupText:SetWordWrap(false) end
+		if st.unitGroupText.SetMaxLines then st.unitGroupText:SetMaxLines(1) end
 	end
 	updateUnitStatusIndicator(cfg, unit)
 end
@@ -2874,6 +2930,7 @@ local function ensureFrames(unit)
 	st.nameText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.levelText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.unitStatusText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.unitGroupText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.raidIcon = st.statusTextLayer:CreateTexture(nil, "OVERLAY", nil, 7)
 	st.raidIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
 	st.raidIcon:SetSize(18, 18)
@@ -3353,6 +3410,7 @@ local generalEvents = {
 	"PLAYER_REGEN_ENABLED",
 	"PLAYER_FLAGS_CHANGED",
 	"PLAYER_UPDATE_RESTING",
+	"GROUP_ROSTER_UPDATE",
 	"UNIT_PET",
 	"PLAYER_FOCUS_CHANGED",
 	"INSTANCE_ENCOUNTER_ENGAGE_UNIT",
@@ -3957,6 +4015,12 @@ local function onEvent(self, event, unit, arg1)
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
 	elseif event == "PLAYER_UPDATE_RESTING" then
 		updateRestingIndicator(getCfg(UNIT.PLAYER))
+	elseif event == "GROUP_ROSTER_UPDATE" then
+		local playerCfg = getCfg(UNIT.PLAYER)
+		local defStatus = (defaultsFor(UNIT.PLAYER) and defaultsFor(UNIT.PLAYER).status) or {}
+		local usDef = defStatus.unitStatus or {}
+		local usCfg = (playerCfg.status and playerCfg.status.unitStatus) or usDef or {}
+		if playerCfg.enabled ~= false and usCfg.enabled == true and usCfg.showGroup == true then updateUnitStatusIndicator(playerCfg, UNIT.PLAYER) end
 	elseif event == "RAID_TARGET_UPDATE" then
 		updateAllRaidTargetIcons()
 	end

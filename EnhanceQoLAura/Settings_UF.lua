@@ -1580,12 +1580,22 @@ local function buildUnitSettings(unit)
 		classOffsetX.isEnabled = isClassResourceEnabled
 		list[#list + 1] = classOffsetX
 
-		local classOffsetY = slider(L["Offset Y"] or "Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "classResource", "offset", "y" }, defaultOffsetY()) end, function(val)
-			debounced(unit .. "_classResourceOffsetY", function()
-				setValue(unit, { "classResource", "offset", "y" }, val or 0)
-				refreshSelf()
-			end)
-		end, defaultOffsetY(), "classResource", true)
+		local classOffsetY = slider(
+			L["Offset Y"] or "Offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "classResource", "offset", "y" }, defaultOffsetY()) end,
+			function(val)
+				debounced(unit .. "_classResourceOffsetY", function()
+					setValue(unit, { "classResource", "offset", "y" }, val or 0)
+					refreshSelf()
+				end)
+			end,
+			defaultOffsetY(),
+			"classResource",
+			true
+		)
 		classOffsetY.isEnabled = isClassResourceEnabled
 		list[#list + 1] = classOffsetY
 
@@ -1729,17 +1739,37 @@ local function buildUnitSettings(unit)
 		castAnchor.isEnabled = isCastEnabled
 		list[#list + 1] = castAnchor
 
-		local castOffsetX = slider(L["Offset X"] or "Offset X", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "cast", "offset", "x" }, (castDef.offset and castDef.offset.x) or 0) end, function(val)
-			setValue(unit, { "cast", "offset", "x" }, val or 0)
-			refresh()
-		end, (castDef.offset and castDef.offset.x) or 0, "cast", true)
+		local castOffsetX = slider(
+			L["Offset X"] or "Offset X",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "cast", "offset", "x" }, (castDef.offset and castDef.offset.x) or 0) end,
+			function(val)
+				setValue(unit, { "cast", "offset", "x" }, val or 0)
+				refresh()
+			end,
+			(castDef.offset and castDef.offset.x) or 0,
+			"cast",
+			true
+		)
 		castOffsetX.isEnabled = isCastEnabled
 		list[#list + 1] = castOffsetX
 
-		local castOffsetY = slider(L["Offset Y"] or "Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "cast", "offset", "y" }, (castDef.offset and castDef.offset.y) or 0) end, function(val)
-			setValue(unit, { "cast", "offset", "y" }, val or 0)
-			refresh()
-		end, (castDef.offset and castDef.offset.y) or 0, "cast", true)
+		local castOffsetY = slider(
+			L["Offset Y"] or "Offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "cast", "offset", "y" }, (castDef.offset and castDef.offset.y) or 0) end,
+			function(val)
+				setValue(unit, { "cast", "offset", "y" }, val or 0)
+				refresh()
+			end,
+			(castDef.offset and castDef.offset.y) or 0,
+			"cast",
+			true
+		)
 		castOffsetY.isEnabled = isCastEnabled
 		list[#list + 1] = castOffsetY
 
@@ -2224,6 +2254,72 @@ local function buildUnitSettings(unit)
 	list[#list + 1] = unitStatusOffsetY
 
 	if unit == "player" then
+		local function isGroupEnabled() return isUnitStatusEnabled() and getValue(unit, { "status", "unitStatus", "showGroup" }, usDef.showGroup == true) == true end
+
+		list[#list + 1] = checkbox(
+			L["UFUnitStatusShowGroup"] or "Show group number",
+			function() return getValue(unit, { "status", "unitStatus", "showGroup" }, usDef.showGroup == true) == true end,
+			function(val)
+				setValue(unit, { "status", "unitStatus", "showGroup" }, val and true or false)
+				refresh()
+			end,
+			usDef.showGroup == true,
+			"unitStatus"
+		)
+		list[#list].isEnabled = isUnitStatusEnabled
+
+		list[#list + 1] = slider(
+			L["UFUnitStatusGroupSize"] or "Group number size",
+			8,
+			30,
+			1,
+			function() return getValue(unit, { "status", "unitStatus", "groupFontSize" }, usDef.groupFontSize or statusDef.fontSize or 14) end,
+			function(val)
+				setValue(unit, { "status", "unitStatus", "groupFontSize" }, val or statusDef.fontSize or 14)
+				refresh()
+			end,
+			usDef.groupFontSize or statusDef.fontSize or 14,
+			"unitStatus",
+			true
+		)
+		list[#list].isEnabled = isGroupEnabled
+
+		list[#list + 1] = slider(
+			L["UFUnitStatusGroupOffsetX"] or "Group number X offset",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "status", "unitStatus", "groupOffset", "x" }, (usDef.groupOffset and usDef.groupOffset.x) or 0) end,
+			function(val)
+				local off = getValue(unit, { "status", "unitStatus", "groupOffset" }, { x = 0, y = 0 }) or {}
+				off.x = val or 0
+				setValue(unit, { "status", "unitStatus", "groupOffset" }, off)
+				refresh()
+			end,
+			(usDef.groupOffset and usDef.groupOffset.x) or 0,
+			"unitStatus",
+			true
+		)
+		list[#list].isEnabled = isGroupEnabled
+
+		list[#list + 1] = slider(
+			L["UFUnitStatusGroupOffsetY"] or "Group number Y offset",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "status", "unitStatus", "groupOffset", "y" }, (usDef.groupOffset and usDef.groupOffset.y) or 0) end,
+			function(val)
+				local off = getValue(unit, { "status", "unitStatus", "groupOffset" }, { x = 0, y = 0 }) or {}
+				off.y = val or 0
+				setValue(unit, { "status", "unitStatus", "groupOffset" }, off)
+				refresh()
+			end,
+			(usDef.groupOffset and usDef.groupOffset.y) or 0,
+			"unitStatus",
+			true
+		)
+		list[#list].isEnabled = isGroupEnabled
+
 		local restDef = def.resting or {}
 		local function isRestEnabled() return getValue(unit, { "resting", "enabled" }, restDef.enabled ~= false) ~= false end
 
@@ -2368,9 +2464,7 @@ local function buildUnitSettings(unit)
 			return y
 		end
 		local function debuffOffsetYDefault() return defaultAuraOffsetY(debuffAnchorValue()) end
-		local function isAuraEnabled()
-			return getValue(unit, { "auraIcons", "enabled" }, auraDef.enabled ~= false) ~= false
-		end
+		local function isAuraEnabled() return getValue(unit, { "auraIcons", "enabled" }, auraDef.enabled ~= false) ~= false end
 		local function refreshAuras()
 			if not (UF and UF.FullScanTargetAuras) then return end
 			if unit == "boss" then
@@ -2604,9 +2698,7 @@ local function buildUnitSettings(unit)
 		)
 		list[#list].isEnabled = isAuraEnabled
 
-		local function isSeparateDebuffEnabled()
-			return isAuraEnabled() and getValue(unit, { "auraIcons", "separateDebuffAnchor" }, auraDef.separateDebuffAnchor == true) == true
-		end
+		local function isSeparateDebuffEnabled() return isAuraEnabled() and getValue(unit, { "auraIcons", "separateDebuffAnchor" }, auraDef.separateDebuffAnchor == true) == true end
 
 		local debuffAnchorSetting = radioDropdown(L["UFDebuffAnchor"] or "Debuff anchor", anchorOpts, function() return debuffAnchorValue() end, function(val)
 			setValue(unit, { "auraIcons", "debuffAnchor" }, val or nil)
