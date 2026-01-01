@@ -23,26 +23,37 @@ local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 local DEFAULT_SOUND_SENTINEL = "__DEFAULT_SOUND__"
 local NONE_SOUND_SENTINEL = "__NONE_SOUND__"
 
--- Enable or disable the food reminder frame
-addon.functions.InitDBValue("mageFoodReminder", false)
 local defaultPos = { point = "TOP", x = 0, y = -100 }
-addon.functions.InitDBValue("mageFoodReminderPos", { point = defaultPos.point, x = defaultPos.x, y = defaultPos.y })
-addon.functions.InitDBValue("mageFoodReminderScale", 1)
-addon.functions.InitDBValue("mageFoodReminderSound", true)
-addon.functions.InitDBValue("mageFoodReminderUseCustomSound", false)
-addon.functions.InitDBValue("mageFoodReminderJoinSoundFile", nil)
-addon.functions.InitDBValue("mageFoodReminderLeaveSoundFile", nil)
+local function initReminderDefaults()
+	if not addon.db or not addon.functions or not addon.functions.InitDBValue then return end
+	local init = addon.functions.InitDBValue
 
-local oldSoundDisabled = addon.db.mageFoodReminderSound == false
-if oldSoundDisabled then
-	if addon.db.mageFoodReminderJoinSoundFile == nil or addon.db.mageFoodReminderJoinSoundFile == "" then addon.db.mageFoodReminderJoinSoundFile = NONE_SOUND_SENTINEL end
-	if addon.db.mageFoodReminderLeaveSoundFile == nil or addon.db.mageFoodReminderLeaveSoundFile == "" then addon.db.mageFoodReminderLeaveSoundFile = NONE_SOUND_SENTINEL end
+	-- Enable or disable the food reminder frame
+	init("mageFoodReminder", false)
+	init("mageFoodReminderPos", { point = defaultPos.point, x = defaultPos.x, y = defaultPos.y })
+	init("mageFoodReminderScale", 1)
+	init("mageFoodReminderSound", true)
+	init("mageFoodReminderUseCustomSound", false)
+	init("mageFoodReminderJoinSoundFile", nil)
+	init("mageFoodReminderLeaveSoundFile", nil)
+
+	local oldSoundDisabled = addon.db.mageFoodReminderSound == false
+	if oldSoundDisabled then
+		if addon.db.mageFoodReminderJoinSoundFile == nil or addon.db.mageFoodReminderJoinSoundFile == "" then
+			addon.db.mageFoodReminderJoinSoundFile = NONE_SOUND_SENTINEL
+		end
+		if addon.db.mageFoodReminderLeaveSoundFile == nil or addon.db.mageFoodReminderLeaveSoundFile == "" then
+			addon.db.mageFoodReminderLeaveSoundFile = NONE_SOUND_SENTINEL
+		end
+	end
+	addon.db.mageFoodReminderSound = nil
+	addon.db.mageFoodReminderUseCustomSound = nil
+
+	if addon.db.mageFoodReminderJoinSoundFile == "" then addon.db.mageFoodReminderJoinSoundFile = NONE_SOUND_SENTINEL end
+	if addon.db.mageFoodReminderLeaveSoundFile == "" then addon.db.mageFoodReminderLeaveSoundFile = NONE_SOUND_SENTINEL end
 end
-addon.db.mageFoodReminderSound = nil
-addon.db.mageFoodReminderUseCustomSound = nil
 
-if addon.db.mageFoodReminderJoinSoundFile == "" then addon.db.mageFoodReminderJoinSoundFile = NONE_SOUND_SENTINEL end
-if addon.db.mageFoodReminderLeaveSoundFile == "" then addon.db.mageFoodReminderLeaveSoundFile = NONE_SOUND_SENTINEL end
+if addon.Drinks and addon.Drinks.functions then addon.Drinks.functions.InitFoodReminder = initReminderDefaults end
 
 local brButton
 local defaultButtonSize = 60

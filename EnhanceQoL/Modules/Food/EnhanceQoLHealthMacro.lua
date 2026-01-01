@@ -20,23 +20,27 @@ local CreateMacro = CreateMacro
 local healthMacroName = "EnhanceQoLHealthMacro"
 
 -- TODO always reorder by cooldown and remove the setting (more convinient)
--- DB defaults
-addon.functions.InitDBValue("healthMacroEnabled", false)
-addon.functions.InitDBValue("healthUseBoth", false)
-addon.functions.InitDBValue("healthPreferStoneFirst", true)
-addon.functions.InitDBValue("healthReset", "combat")
-addon.functions.InitDBValue("healthReorderByCooldown", true)
-addon.functions.InitDBValue("healthUseRecuperate", false)
--- Allow using combat potions (from EnhanceQoLDrinkMacro/Health.lua entries tagged with isCombatPotion)
-addon.functions.InitDBValue("healthUseCombatPotions", false)
--- Custom spells support
-addon.functions.InitDBValue("healthUseCustomSpells", false)
-addon.functions.InitDBValue("healthCustomSpells", {})
--- Multiselect preference for ordering (spells, stones)
--- Fallback to legacy healthPreferStoneFirst when not initialized yet
-addon.functions.InitDBValue("healthPreferFirstPrefs", nil)
--- New priority-based ordering (overrides legacy prefs if set)
-addon.functions.InitDBValue("healthPriorityOrder", nil)
+function addon.Health.functions.InitHealthMacro()
+	if not addon.db or not addon.functions or not addon.functions.InitDBValue then return end
+	local init = addon.functions.InitDBValue
+	-- DB defaults
+	init("healthMacroEnabled", false)
+	init("healthUseBoth", false)
+	init("healthPreferStoneFirst", true)
+	init("healthReset", "combat")
+	init("healthReorderByCooldown", true)
+	init("healthUseRecuperate", false)
+	-- Allow using combat potions (from EnhanceQoLDrinkMacro/Health.lua entries tagged with isCombatPotion)
+	init("healthUseCombatPotions", false)
+	-- Custom spells support
+	init("healthUseCustomSpells", false)
+	init("healthCustomSpells", {})
+	-- Multiselect preference for ordering (spells, stones)
+	-- Fallback to legacy healthPreferStoneFirst when not initialized yet
+	init("healthPreferFirstPrefs", nil)
+	-- New priority-based ordering (overrides legacy prefs if set)
+	init("healthPriorityOrder", nil)
+end
 
 local function IsMidnightBuild()
 	return addon and addon.variables and addon.variables.isMidnight

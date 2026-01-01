@@ -71,9 +71,13 @@ Submodules\Mailbox.xml
 Settings\SettingsUI.xml
 
 # Aura
-Modules\Aura\locales\[TextLocale].lua
+Modules\Aura\Locales\[TextLocale].lua
 Modules\Aura\Aura.xml
 
 # Food
-Modules\Food\locales\[TextLocale].lua
+Modules\Food\Locales\[TextLocale].lua
 Modules\Food\Food.xml
+
+# Mouse
+Modules\Mouse\Locales\[TextLocale].lua
+Modules\Mouse\Mouse.xml

@@ -6,15 +6,15 @@ else
     error(parentAddonName .. " is not loaded")
 end
 
-addon.Drinks = {}
-addon.Drinks.functions = {}
-addon.Drinks.filteredDrinks = {} -- Used for the filtered List later
-addon.LDrinkMacro = {} -- Locales for drink macro
+addon.Drinks = addon.Drinks or {}
+addon.Drinks.functions = addon.Drinks.functions or {}
+addon.Drinks.filteredDrinks = addon.Drinks.filteredDrinks or {} -- Used for the filtered List later
+addon.LDrinkMacro = addon.LDrinkMacro or {} -- Locales for drink macro
 
 -- Health macro module scaffolding
-addon.Health = {}
-addon.Health.functions = {}
-addon.Health.filteredHealth = {}
+addon.Health = addon.Health or {}
+addon.Health.functions = addon.Health.functions or {}
+addon.Health.filteredHealth = addon.Health.filteredHealth or {}
 
 -- Shared Recuperate spell info (used by Drink and Health macros)
 addon.Recuperate = addon.Recuperate or {

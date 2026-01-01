@@ -3591,22 +3591,6 @@ local function LoadResourceBars()
 	end
 end
 
-if addon.db["enableResourceFrame"] then
-	local frameLogin = CreateFrame("Frame")
-	frameLogin:RegisterEvent("PLAYER_LOGIN")
-	frameLogin:SetScript("OnEvent", function(self, event)
-		if event == "PLAYER_LOGIN" then
-			if addon.db["enableResourceFrame"] then
-				LoadResourceBars()
-				addon.Aura.ResourceBars.EnableResourceBars()
-			end
-			frameLogin:UnregisterAllEvents()
-			frameLogin:SetScript("OnEvent", nil)
-			frameLogin = nil
-		end
-	end)
-end
-
 local function wipeTable(t)
 	for k in pairs(t) do
 		t[k] = nil
@@ -4324,4 +4308,20 @@ ResourceBars.SpecNameByIndex = specNameByIndex
 ResourceBars.SaveGlobalProfile = saveGlobalProfile
 ResourceBars.ApplyGlobalProfile = applyGlobalProfile
 
-return ResourceBars
+function addon.Aura.functions.InitResourceBars()
+	if addon.db["enableResourceFrame"] then
+		local frameLogin = CreateFrame("Frame")
+		frameLogin:RegisterEvent("PLAYER_LOGIN")
+		frameLogin:SetScript("OnEvent", function(self, event)
+			if event == "PLAYER_LOGIN" then
+				if addon.db["enableResourceFrame"] then
+					LoadResourceBars()
+					addon.Aura.ResourceBars.EnableResourceBars()
+				end
+				frameLogin:UnregisterAllEvents()
+				frameLogin:SetScript("OnEvent", nil)
+				frameLogin = nil
+			end
+		end)
+	end
+end

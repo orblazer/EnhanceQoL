@@ -106,18 +106,16 @@ function addon.functions.updateAvailableDrinks(ignoreCombat)
 	addDrinks()
 end
 
-local initialValue = 50
-if addon.db["minManaFoodValue"] then
-	initialValue = addon.db["minManaFoodValue"]
-else
-	addon.db["minManaFoodValue"] = initialValue
+function addon.Drinks.functions.InitDrinkMacro()
+	if not addon.db or not addon.functions or not addon.functions.InitDBValue then return end
+	local init = addon.functions.InitDBValue
+	init("minManaFoodValue", 50)
+	init("preferMageFood", true)
+	init("drinkMacroEnabled", false)
+	init("allowRecuperate", true)
+	init("useManaPotionInCombat", false)
+	if addon.functions.updateAllowedDrinks then addon.functions.updateAllowedDrinks() end
 end
-
-addon.functions.InitDBValue("preferMageFood", true)
-addon.functions.InitDBValue("drinkMacroEnabled", false)
-addon.functions.InitDBValue("allowRecuperate", true)
-addon.functions.InitDBValue("useManaPotionInCombat", false)
-addon.functions.updateAllowedDrinks()
 
 local frameLoad = CreateFrame("Frame")
 -- Registriere das Event

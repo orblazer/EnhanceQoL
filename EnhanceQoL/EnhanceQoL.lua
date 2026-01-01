@@ -4556,6 +4556,16 @@ local function setAllHooks()
 		if addon.Aura.functions.InitBuffTracker then addon.Aura.functions.InitBuffTracker() end
 		if addon.Aura.functions.InitCastTracker then addon.Aura.functions.InitCastTracker() end
 		if addon.Aura.functions.InitCooldownNotify then addon.Aura.functions.InitCooldownNotify() end
+		if addon.Aura.functions.InitResourceBars then addon.Aura.functions.InitResourceBars() end
+	end
+	if addon.Drinks and addon.Drinks.functions then
+		if addon.Drinks.functions.InitDrinkMacro then addon.Drinks.functions.InitDrinkMacro() end
+		if addon.Drinks.functions.InitFoodReminder then addon.Drinks.functions.InitFoodReminder() end
+	end
+	if addon.Health and addon.Health.functions and addon.Health.functions.InitHealthMacro then addon.Health.functions.InitHealthMacro() end
+	if addon.Mouse and addon.Mouse.functions then
+		if addon.Mouse.functions.InitDB then addon.Mouse.functions.InitDB() end
+		if addon.Mouse.functions.InitState then addon.Mouse.functions.InitState() end
 	end
 end
 
@@ -4738,10 +4748,8 @@ local eventHandlers = {
 			--@end-debug@
 			loadSubAddon("EnhanceQoLSharedMedia")
 			loadSubAddon("EnhanceQoLSound")
-			loadSubAddon("EnhanceQoLMouse")
 			loadSubAddon("EnhanceQoLMythicPlus")
 			if not addon.variables.isMidnight then loadSubAddon("EnhanceQoLCombatMeter") end
-			loadSubAddon("EnhanceQoLDrinkMacro")
 			loadSubAddon("EnhanceQoLTooltip")
 			loadSubAddon("EnhanceQoLVendor")
 

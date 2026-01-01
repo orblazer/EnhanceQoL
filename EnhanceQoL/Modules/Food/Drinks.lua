@@ -14,7 +14,6 @@ local IsSpellInSpellBook = C_SpellBook.IsSpellInSpellBook
 local wipe = wipe
 local tinsert = table.insert
 local newItem = addon.functions.newItem
-local db = addon.db
 
 local _, race = UnitRace("player")
 local isEarthen = (race == "EarthenDwarf")
@@ -652,21 +651,23 @@ addon.Drinks.manaPotions = {
 
 function addon.functions.updateAllowedDrinks()
 	-- cache globals as locals
+	local db = addon.db
+	if not db then return end
 
 	local playerLevel = UnitLevel("player")
 	local mana = UnitPowerMax("player", 0)
 	if mana <= 0 then return end
 
-	local minManaValue = mana * (db.minManaFoodValue / 100)
+	local minManaValue = mana * ((db.minManaFoodValue or 50) / 100)
 
 	-- prepare new result tables
 	local filtered = {}
 	local mageFoodMap = {}
 
-    local preferMage = db.preferMageFood
-    -- Always ignore Well Fed buff food and Jewelcrafting gem foods
-    local ignoreBuff = true
-    local ignoreGems = true
+	local preferMage = db.preferMageFood
+	-- Always ignore Well Fed buff food and Jewelcrafting gem foods
+	local ignoreBuff = true
+	local ignoreGems = true
 	local allowRecuperate = db.allowRecuperate
 
 	-- iterate only once over the master list
