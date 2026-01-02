@@ -10,6 +10,7 @@
   - Additional health/mana text modes (percent-first + level combos).
   - Unit status text now has its own font size/font/outline controls + Edit Mode sample.
   - PvP indicator icon for Player/Target/Focus.
+  - Optional reverse-fill absorb bar in UF.
   - Edit Mode shows sample auras for frames with auras enabled.
 - **Misc**
   - Auto-accept summons.

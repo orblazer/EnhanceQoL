@@ -1,3 +1,4 @@
+-- luacheck: globals C_GameRules
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 
@@ -121,11 +122,28 @@ function H.configureSpecialTexture(bar, pType, texKey, cfg)
 	end
 end
 
+local reverseStyle = Enum.StatusBarFillStyle and Enum.StatusBarFillStyle.Reverse or "REVERSE"
+local standardStyle = Enum.StatusBarFillStyle and Enum.StatusBarFillStyle.Standard or "STANDARD"
+function H.applyStatusBarReverseFill(bar, reverse)
+	if not bar then return end
+	if bar.SetFillStyle then
+		bar:SetFillStyle(reverse and reverseStyle or standardStyle)
+	elseif bar.SetReverseFill then
+		bar:SetReverseFill(reverse and true or false)
+	end
+end
+
 function H.resolveTextDelimiter(delimiter)
 	if delimiter == nil or delimiter == "" then delimiter = " " end
 	if delimiter == " " then return " " end
 	return " " .. tostring(delimiter) .. " "
 end
+
+local function join2(a, b, sep) return a .. sep .. b end
+
+local function join3(a, b, c, sep) return a .. sep .. b .. sep .. c end
+
+local function join4(a, b, c, d, sep) return a .. sep .. b .. sep .. c .. sep .. d end
 
 function H.shortValue(val)
 	if val == nil then return "" end
@@ -171,16 +189,16 @@ function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePe
 	local function formatPercentMode(curText, maxText, percentText)
 		if not percentText then return "" end
 		if mode == "PERCENT" then return percentText end
-		if mode == "CURPERCENT" or mode == "CURPERCENTDASH" then return table.concat({ curText, percentText }, join) end
-		if mode == "CURMAXPERCENT" then return table.concat({ curText, maxText, percentText }, join) end
-		if mode == "MAXPERCENT" then return table.concat({ maxText, percentText }, join) end
-		if mode == "PERCENTMAX" then return table.concat({ percentText, maxText }, join) end
-		if mode == "PERCENTCUR" then return table.concat({ percentText, curText }, join) end
-		if mode == "PERCENTCURMAX" then return table.concat({ percentText, curText, maxText }, join) end
-		if mode == "LEVELPERCENT" then return table.concat({ levelText, percentText }, join) end
-		if mode == "LEVELPERCENTMAX" then return table.concat({ levelText, percentText, maxText }, join) end
-		if mode == "LEVELPERCENTCUR" then return table.concat({ levelText, percentText, curText }, join) end
-		if mode == "LEVELPERCENTCURMAX" then return table.concat({ levelText, percentText, curText, maxText }, join) end
+		if mode == "CURPERCENT" or mode == "CURPERCENTDASH" then return join2(curText, percentText, join) end
+		if mode == "CURMAXPERCENT" then return join3(curText, maxText, percentText, join) end
+		if mode == "MAXPERCENT" then return join2(maxText, percentText, join) end
+		if mode == "PERCENTMAX" then return join2(percentText, maxText, join) end
+		if mode == "PERCENTCUR" then return join2(percentText, curText, join) end
+		if mode == "PERCENTCURMAX" then return join3(percentText, curText, maxText, join) end
+		if mode == "LEVELPERCENT" then return join2(levelText, percentText, join) end
+		if mode == "LEVELPERCENTMAX" then return join3(levelText, percentText, maxText, join) end
+		if mode == "LEVELPERCENTCUR" then return join3(levelText, percentText, curText, join) end
+		if mode == "LEVELPERCENTCURMAX" then return join4(levelText, percentText, curText, maxText, join) end
 		return ""
 	end
 	if addon.variables and addon.variables.isMidnight and issecretvalue then
@@ -192,7 +210,7 @@ function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePe
 
 			if mode == "CURRENT" then return tostring(scur) end
 			if mode == "MAX" then return tostring(smax) end
-			if mode == "CURMAX" then return ("%s/%s"):format(tostring(scur), tostring(smax)) end
+			if mode == "CURMAX" then return tostring(scur) .. "/" .. tostring(smax) end
 			if isPercentMode then return formatPercentMode(tostring(scur), tostring(smax), percentText) end
 			return ""
 		end
@@ -214,7 +232,7 @@ function H.formatText(mode, cur, maxv, useShort, percentValue, delimiter, hidePe
 	if mode == "CURMAX" then
 		local curText = useShort == false and tostring(cur or 0) or H.shortValue(cur or 0)
 		local maxText = useShort == false and tostring(maxv or 0) or H.shortValue(maxv or 0)
-		return ("%s/%s"):format(curText, maxText)
+		return curText .. "/" .. maxText
 	end
 	if isPercentMode then
 		local curText = useShort == false and tostring(cur or 0) or H.shortValue(cur or 0)

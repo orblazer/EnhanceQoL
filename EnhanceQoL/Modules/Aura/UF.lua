@@ -198,6 +198,7 @@ local defaults = {
 			absorbUseCustomColor = false,
 			showSampleAbsorb = false,
 			absorbTexture = "SOLID",
+			absorbReverseFill = false,
 			useAbsorbGlow = true,
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			textLeft = "PERCENT",
@@ -1908,7 +1909,7 @@ local function configureCastStatic(unit, ccfg, defc)
 	st.castBar:SetStatusBarColor(clr[1] or 0.9, clr[2] or 0.7, clr[3] or 0.2, clr[4] or 1)
 	local duration = (st.castInfo.endTime or 0) - (st.castInfo.startTime or 0)
 	local maxValue = duration and duration > 0 and duration / 1000 or 1
-	if st.castBar.SetReverseFill then st.castBar:SetReverseFill(st.castInfo.isChannel == true) end
+	UFHelper.applyStatusBarReverseFill(st.castBar, st.castInfo.isChannel == true)
 	st.castBar:SetMinMaxValues(0, maxValue)
 	if st.castName then
 		local showName = ccfg.showName ~= false
@@ -3079,6 +3080,8 @@ local function applyBars(cfg, unit)
 	local info = UNITS[unit]
 	local allowAbsorb = not (info and info.disableAbsorb)
 	local hc = cfg.health or {}
+	local def = defaultsFor(unit) or {}
+	local defH = def.health or {}
 	local pcfg = cfg.power or {}
 	local powerEnabled = pcfg.enabled ~= false
 	st.health:SetStatusBarTexture(UFHelper.resolveTexture(hc.texture))
@@ -3103,6 +3106,9 @@ local function applyBars(cfg, unit)
 		st.absorb:SetStatusBarTexture(UFHelper.resolveTexture(absorbTextureKey))
 		if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
 		UFHelper.configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc)
+		local reverseAbsorb = hc.absorbReverseFill
+		if reverseAbsorb == nil then reverseAbsorb = defH.absorbReverseFill == true end
+		UFHelper.applyStatusBarReverseFill(st.absorb, reverseAbsorb)
 		st.absorb:SetAllPoints(st.health)
 		local borderFrame = st.barGroup and st.barGroup._ufBorder
 		setFrameLevelAbove(st.absorb, st.health, 1)

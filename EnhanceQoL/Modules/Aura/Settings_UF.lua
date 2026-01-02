@@ -1195,6 +1195,17 @@ local function buildUnitSettings(unit)
 			"absorb"
 		)
 
+		list[#list + 1] = checkbox(
+			L["Reverse fill"] or "Reverse fill",
+			function() return getValue(unit, { "health", "absorbReverseFill" }, healthDef.absorbReverseFill == true) == true end,
+			function(val)
+				setValue(unit, { "health", "absorbReverseFill" }, val and true or false)
+				refresh()
+			end,
+			healthDef.absorbReverseFill == true,
+			"absorb"
+		)
+
 		list[#list + 1] = checkbox(L["Show sample absorb"] or "Show sample absorb", function() return sampleAbsorb[unit] == true end, function(val)
 			sampleAbsorb[unit] = val and true or false
 			refresh()
