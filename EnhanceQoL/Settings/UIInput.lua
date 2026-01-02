@@ -131,10 +131,16 @@ local function UpdateAutoUnwrapWatcher()
 	end
 end
 
-local cUIInput = addon.functions.SettingsCreateCategory(nil, L["UIInput"], nil, "UIInput")
-addon.SettingsLayout.uiInputCategory = cUIInput
+local cUIInput = addon.SettingsLayout.rootUI
+
+local expandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
+	name = AUCTION_CATEGORY_MISCELLANEOUS,
+	expanded = false,
+	colorizeTitle = false,
+})
+addon.SettingsLayout.expUnitFrames = expandable
 local class, classname = UnitClass("player")
-addon.functions.SettingsCreateHeadline(cUIInput, L["headerClassInfo"]:format(class))
+addon.functions.SettingsCreateHeadline(cUIInput, L["headerClassInfo"]:format(class), { parentSection = expandable })
 
 local verticalScale = 11 / 17
 local horizontalScale = 565 / 571
@@ -170,6 +176,7 @@ local function addTotemCheckbox(dbKey)
 		text = L["shaman_HideTotem"],
 		func = function(value) addon.db[dbKey] = value end,
 		get = function() return addon.db[dbKey] end,
+		parentSection = expandable,
 	})
 end
 if classname == "DEATHKNIGHT" then
@@ -186,6 +193,7 @@ if classname == "DEATHKNIGHT" then
 				if RuneFrame then RuneFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 	addTotemCheckbox("deathknight_HideTotemBar")
 elseif classname == "DRUID" then
@@ -203,6 +211,7 @@ elseif classname == "DRUID" then
 				if DruidComboPointBarFrame then DruidComboPointBarFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 	table.insert(data, {
 		var = "autoCancelDruidFlightForm",
@@ -212,6 +221,7 @@ elseif classname == "DRUID" then
 			addon.db["autoCancelDruidFlightForm"] = value and true or false
 			if addon.functions.updateDruidFlightFormWatcher then addon.functions.updateDruidFlightFormWatcher() end
 		end,
+		parentSection = expandable,
 	})
 elseif classname == "EVOKER" then
 	table.insert(data, {
@@ -227,6 +237,7 @@ elseif classname == "EVOKER" then
 				if EssencePlayerFrame then EssencePlayerFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 elseif classname == "MAGE" then
 	addTotemCheckbox("mage_HideTotemBar")
@@ -244,6 +255,7 @@ elseif classname == "MONK" then
 				if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 	addTotemCheckbox("monk_HideTotemBar")
 elseif classname == "PRIEST" then
@@ -264,6 +276,7 @@ elseif classname == "ROGUE" then
 				if RogueComboPointBarFrame then RogueComboPointBarFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 elseif classname == "PALADIN" then
 	addTotemCheckbox("paladin_HideTotemBar")
@@ -280,6 +293,7 @@ elseif classname == "PALADIN" then
 				if PaladinPowerBarFrame then PaladinPowerBarFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 elseif classname == "WARLOCK" then
 	table.insert(data, {
@@ -295,13 +309,14 @@ elseif classname == "WARLOCK" then
 				if WarlockPowerFrame then WarlockPowerFrame:Show() end
 			end
 		end,
+		parentSection = expandable,
 	})
 	addTotemCheckbox("warlock_HideTotemBar")
 end
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 
-addon.functions.SettingsCreateHeadline(cUIInput, L["XP_Rep"])
+addon.functions.SettingsCreateHeadline(cUIInput, L["XP_Rep"], { parentSection = expandable })
 
 data = {
 	{
@@ -318,6 +333,7 @@ data = {
 			EQOL_UpdateStatusBars(MainStatusTrackingBarContainer, height, width, scale)
 			EQOL_UpdateStatusBars(SecondaryStatusTrackingBarContainer, height, width, scale)
 		end,
+		parentSection = expandable,
 		children = {
 			{
 				var = "modifyXPRepBarWidth",
@@ -344,6 +360,7 @@ data = {
 				parent = true,
 				default = 571,
 				sType = "slider",
+				parentSection = expandable,
 			},
 			{
 				var = "modifyXPRepBarHeight",
@@ -370,6 +387,7 @@ data = {
 				parent = true,
 				default = 17,
 				sType = "slider",
+				parentSection = expandable,
 			},
 			{
 				var = "modifyXPRepBarScale",
@@ -392,19 +410,21 @@ data = {
 				parent = true,
 				default = 1,
 				sType = "slider",
+				parentSection = expandable,
 			},
 		},
 	},
 }
 addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 
-addon.functions.SettingsCreateHeadline(cUIInput, AUCTION_CATEGORY_MISCELLANEOUS)
+addon.functions.SettingsCreateHeadline(cUIInput, AUCTION_CATEGORY_MISCELLANEOUS, { parentSection = expandable })
 
 data = {
 	{
 		var = "ignoreTalkingHead",
 		text = string.format(L["ignoreTalkingHeadN"], HUD_EDIT_MODE_TALKING_HEAD_FRAME_LABEL),
 		func = function(v) addon.db["ignoreTalkingHead"] = v end,
+		parentSection = expandable,
 	},
 	{
 		var = "hideQuickJoinToast",
@@ -413,6 +433,7 @@ data = {
 			addon.db["hideQuickJoinToast"] = v
 			addon.functions.toggleQuickJoinToastButton(addon.db["hideQuickJoinToast"])
 		end,
+		parentSection = expandable,
 	},
 	{
 		var = "autoUnwrapMounts",
@@ -422,6 +443,7 @@ data = {
 			addon.db["autoUnwrapMounts"] = v
 			UpdateAutoUnwrapWatcher()
 		end,
+		parentSection = expandable,
 	},
 	{
 		var = "hideZoneText",
@@ -430,6 +452,7 @@ data = {
 			addon.db["hideZoneText"] = v
 			addon.functions.toggleZoneText(addon.db["hideZoneText"])
 		end,
+		parentSection = expandable,
 	},
 	{
 		var = "hideMicroMenuNotificationOverlay",
@@ -439,6 +462,7 @@ data = {
 			addon.db["hideMicroMenuNotificationOverlay"] = v and true or false
 			ApplyNotificationOverlaySetting()
 		end,
+		parentSection = expandable,
 	},
 	{
 		var = "hideRaidTools",
@@ -447,6 +471,7 @@ data = {
 			addon.db["hideRaidTools"] = v
 			addon.functions.toggleRaidTools(addon.db["hideRaidTools"], _G.CompactRaidFrameManager)
 		end,
+		parentSection = expandable,
 	},
 	{
 		var = "gameMenuScaleEnabled",
@@ -463,6 +488,7 @@ data = {
 				end
 			end
 		end,
+		parentSection = expandable,
 		children = {
 			{
 				var = "gameMenuScale",
@@ -484,6 +510,7 @@ data = {
 				parent = true,
 				default = 1,
 				sType = "slider",
+				parentSection = expandable,
 			},
 		},
 	},

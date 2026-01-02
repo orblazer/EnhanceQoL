@@ -5,7 +5,6 @@
 	<Script file='ItemInventory.lua'/>
 	<Script file='ContainerAction.lua'/>
 	<Script file='GearUpgrade.lua'/>
-	<Script file='UIInput.lua'/>
 	<Script file='VendorEconomy.lua'/>
 	<Script file='Loot.lua'/>
 	<Script file='MapNavigation.lua'/>
@@ -17,4 +16,5 @@
 	<Script file='UIOptions.lua'/>
 	<Script file='UnitFrames.lua'/>
 	<Script file='Profiles.lua'/>
+	<Script file='UIInput.lua'/>
 </Ui>
