@@ -1,3 +1,4 @@
+-- luacheck: globals SendMailFrame_SendMail SendMailFrame_Reset
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
