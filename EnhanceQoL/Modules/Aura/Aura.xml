@@ -2,7 +2,6 @@
 	<Script file="Init.lua" />
 	<Script file="widgets\DragTreeGroup.lua" />
 	<Script file="ResourceBars.lua" />
-	<Script file="Settings_Ressourcebars.lua" />
 	<Script file="Aura.lua" />
 	<Script file="BuffTracker.lua" />
 	<Script file="CastTracker.lua" />
@@ -10,4 +9,5 @@
 	<Script file="UF_Helper.lua" />
 	<Script file="UF.lua" />
 	<Script file="Settings_UF.lua" />
+	<Script file="Settings_Ressourcebars.lua" />
 </Ui>

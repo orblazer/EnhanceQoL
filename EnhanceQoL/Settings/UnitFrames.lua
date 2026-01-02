@@ -9,6 +9,7 @@ local expandable = addon.functions.SettingsCreateExpandableSection(cUnitFrame, {
 	expanded = false,
 	colorizeTitle = false,
 })
+addon.SettingsLayout.expUnitFrames = expandable
 
 addon.functions.SettingsCreateHeadline(cUnitFrame, COMBAT_TEXT_LABEL, { parentSection = expandable })
 

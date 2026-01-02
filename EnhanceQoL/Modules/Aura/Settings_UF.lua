@@ -2830,10 +2830,13 @@ end
 
 -- Simple toggles in Settings panel (keep basic visibility outside Edit Mode)
 if addon.functions and addon.functions.SettingsCreateCategory then
-	local cUF = addon.functions.SettingsCreateCategory(nil, L["UFPlusRoot"] or "UF Plus", nil, "UFPlus")
+	local cUF = addon.SettingsLayout.rootUI
+	local expandable = addon.SettingsLayout.expUnitFrames
+
+	addon.functions.SettingsCreateHeadline(cUF, L["CustomUnitFrames"], { parentSection = expandable })
 	addon.SettingsLayout.ufPlusCategory = cUF
-	addon.functions.SettingsCreateText(cUF, "|cff99e599" .. L["UFPlusHint"] .. "|r")
-	addon.functions.SettingsCreateText(cUF, "")
+	addon.functions.SettingsCreateText(cUF, "|cff99e599" .. L["UFPlusHint"] .. "|r", { parentSection = expandable })
+	addon.functions.SettingsCreateText(cUF, "", { parentSection = expandable })
 	local function addToggle(unit, label, varName)
 		local def = defaultsFor(unit)
 		addon.functions.SettingsCreateCheckbox(cUF, {
@@ -2860,6 +2863,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 					if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
 				end
 			end,
+			parentSection = expandable,
 		})
 		return def.enabled or false
 	end
@@ -2868,7 +2872,8 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 	local castbarSetting = _G.HUD_EDIT_MODE_SETTING_UNIT_FRAME_CAST_BAR_UNDERNEATH or "Castbar underneath"
 	addon.functions.SettingsCreateText(
 		cUF,
-		(L["UFPlayerCastbarHint"] or 'Uses Blizzard\'s Player Castbar.\nBefore enabling, open Edit Mode\nand make sure the Player Frame setting\n"%s" is unchecked.'):format(castbarSetting)
+		(L["UFPlayerCastbarHint"] or 'Uses Blizzard\'s Player Castbar.\nBefore enabling, open Edit Mode\nand make sure the Player Frame setting\n"%s" is unchecked.'):format(castbarSetting),
+		{ parentSection = expandable }
 	)
 	addToggle("target", L["UFTargetEnable"] or "Enable custom target frame", "ufEnableTarget")
 	addToggle("targettarget", L["UFToTEnable"] or "Enable target-of-target frame", "ufEnableToT")
@@ -2899,6 +2904,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
 			end
 		end,
+		parentSection = expandable,
 	})
 
 	do -- Profile export/import
@@ -2923,7 +2929,9 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 			addon.db.ufProfileScope = scopeOptions[val] and val or "ALL"
 		end
 
-		addon.functions.SettingsCreateHeadline(cUF, L["Profiles"] or "Profiles")
+		addon.functions.SettingsCreateHeadline(cUF, L["Profiles"] or "Profiles", {
+			parentSection = expandable,
+		})
 		addon.functions.SettingsCreateDropdown(cUF, {
 			var = "ufProfileScope",
 			text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
@@ -2931,6 +2939,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 			get = getScope,
 			set = setScope,
 			default = "ALL",
+			parentSection = expandable,
 		})
 
 		addon.functions.SettingsCreateButton(cUF, {
@@ -2969,6 +2978,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				end
 				StaticPopup_Show("EQOL_UF_EXPORT_SETTINGS")
 			end,
+			parentSection = expandable,
 		})
 
 		addon.functions.SettingsCreateButton(cUF, {
@@ -3029,6 +3039,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				end
 				StaticPopup_Show("EQOL_UF_IMPORT_SETTINGS")
 			end,
+			parentSection = expandable,
 		})
 	end
 end
