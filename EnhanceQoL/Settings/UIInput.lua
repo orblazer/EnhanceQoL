@@ -133,13 +133,15 @@ end
 
 local cUIInput = addon.SettingsLayout.rootUI
 
-local expandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
-	name = AUCTION_CATEGORY_MISCELLANEOUS,
-	expanded = false,
-	colorizeTitle = false,
-})
-local class, classname = UnitClass("player")
-addon.functions.SettingsCreateHeadline(cUIInput, L["headerClassInfo"]:format(class), { parentSection = expandable })
+local framesExpandable = addon.SettingsLayout.uiFramesExpandable
+if not framesExpandable then
+	framesExpandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
+		name = L["visibilityKindFrames"],
+		expanded = false,
+		colorizeTitle = false,
+	})
+	addon.SettingsLayout.uiFramesExpandable = framesExpandable
+end
 
 local verticalScale = 11 / 17
 local horizontalScale = 565 / 571
@@ -167,157 +169,159 @@ local function EQOL_UpdateStatusBars(container, height, width, scale)
 	container:SetScale(scale)
 end
 
-local data = {}
+function addon.functions.SettingsCreateClassSpecificResourceBars(category, parentSection)
+	if not category or not parentSection then return end
 
-local function addTotemCheckbox(dbKey)
-	table.insert(data, {
-		var = dbKey,
-		text = L["shaman_HideTotem"],
-		func = function(value) addon.db[dbKey] = value end,
-		get = function() return addon.db[dbKey] end,
-		parentSection = expandable,
-	})
+	local class, classTag = UnitClass("player")
+	if not classTag then return end
+
+	local data = {}
+
+	local function addTotemCheckbox(dbKey)
+		table.insert(data, {
+			var = dbKey,
+			text = L["shaman_HideTotem"],
+			func = function(value) addon.db[dbKey] = value end,
+			get = function() return addon.db[dbKey] end,
+			parentSection = parentSection,
+		})
+	end
+
+	if classTag == "DEATHKNIGHT" then
+		table.insert(data, {
+			var = "deathknight_HideRuneFrame",
+			text = L["deathknight_HideRuneFrame"],
+			func = function(value)
+				addon.db["deathknight_HideRuneFrame"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if RuneFrame then RuneFrame:Hide() end
+				else
+					if RuneFrame then RuneFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+		addTotemCheckbox("deathknight_HideTotemBar")
+	elseif classTag == "DRUID" then
+		addTotemCheckbox("druid_HideTotemBar")
+		table.insert(data, {
+			var = "druid_HideComboPoint",
+			text = L["druid_HideComboPoint"],
+			func = function(value)
+				addon.db["druid_HideComboPoint"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if DruidComboPointBarFrame then DruidComboPointBarFrame:Hide() end
+				else
+					if DruidComboPointBarFrame then DruidComboPointBarFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+	elseif classTag == "EVOKER" then
+		table.insert(data, {
+			var = "evoker_HideEssence",
+			text = L["evoker_HideEssence"],
+			func = function(value)
+				addon.db["evoker_HideEssence"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if EssencePlayerFrame then EssencePlayerFrame:Hide() end
+				else
+					if EssencePlayerFrame then EssencePlayerFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+	elseif classTag == "MAGE" then
+		addTotemCheckbox("mage_HideTotemBar")
+	elseif classTag == "MONK" then
+		table.insert(data, {
+			var = "monk_HideHarmonyBar",
+			text = L["monk_HideHarmonyBar"],
+			func = function(value)
+				addon.db["monk_HideHarmonyBar"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Hide() end
+				else
+					if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+		addTotemCheckbox("monk_HideTotemBar")
+	elseif classTag == "PRIEST" then
+		addTotemCheckbox("priest_HideTotemBar")
+	elseif classTag == "SHAMAN" then
+		addTotemCheckbox("shaman_HideTotem")
+	elseif classTag == "ROGUE" then
+		table.insert(data, {
+			var = "rogue_HideComboPoint",
+			text = L["rogue_HideComboPoint"],
+			func = function(value)
+				addon.db["rogue_HideComboPoint"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if RogueComboPointBarFrame then RogueComboPointBarFrame:Hide() end
+				else
+					if RogueComboPointBarFrame then RogueComboPointBarFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+	elseif classTag == "PALADIN" then
+		addTotemCheckbox("paladin_HideTotemBar")
+		table.insert(data, {
+			var = "paladin_HideHolyPower",
+			text = L["paladin_HideHolyPower"],
+			func = function(value)
+				addon.db["paladin_HideHolyPower"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if PaladinPowerBarFrame then PaladinPowerBarFrame:Hide() end
+				else
+					if PaladinPowerBarFrame then PaladinPowerBarFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+	elseif classTag == "WARLOCK" then
+		table.insert(data, {
+			var = "warlock_HideSoulShardBar",
+			text = L["warlock_HideSoulShardBar"],
+			func = function(value)
+				addon.db["warlock_HideSoulShardBar"] = value
+				local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
+				local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
+				if value and not ufActive and not ufCR then
+					if WarlockPowerFrame then WarlockPowerFrame:Hide() end
+				else
+					if WarlockPowerFrame then WarlockPowerFrame:Show() end
+				end
+			end,
+			parentSection = parentSection,
+		})
+		addTotemCheckbox("warlock_HideTotemBar")
+	end
+
+	if #data == 0 then return end
+
+	addon.functions.SettingsCreateHeadline(category, L["headerClassInfo"]:format(class), { parentSection = parentSection })
+	table.sort(data, function(a, b) return a.text < b.text end)
+	addon.functions.SettingsCreateCheckboxes(category, data)
 end
-if classname == "DEATHKNIGHT" then
-	table.insert(data, {
-		var = "deathknight_HideRuneFrame",
-		text = L["deathknight_HideRuneFrame"],
-		func = function(value)
-			addon.db["deathknight_HideRuneFrame"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if RuneFrame then RuneFrame:Hide() end
-			else
-				if RuneFrame then RuneFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-	addTotemCheckbox("deathknight_HideTotemBar")
-elseif classname == "DRUID" then
-	addTotemCheckbox("druid_HideTotemBar")
-	table.insert(data, {
-		var = "druid_HideComboPoint",
-		text = L["druid_HideComboPoint"],
-		func = function(value)
-			addon.db["druid_HideComboPoint"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if DruidComboPointBarFrame then DruidComboPointBarFrame:Hide() end
-			else
-				if DruidComboPointBarFrame then DruidComboPointBarFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-	table.insert(data, {
-		var = "autoCancelDruidFlightForm",
-		text = L["autoCancelDruidFlightForm"],
-		desc = L["autoCancelDruidFlightFormDesc"],
-		func = function(value)
-			addon.db["autoCancelDruidFlightForm"] = value and true or false
-			if addon.functions.updateDruidFlightFormWatcher then addon.functions.updateDruidFlightFormWatcher() end
-		end,
-		parentSection = expandable,
-	})
-elseif classname == "EVOKER" then
-	table.insert(data, {
-		var = "evoker_HideEssence",
-		text = L["evoker_HideEssence"],
-		func = function(value)
-			addon.db["evoker_HideEssence"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if EssencePlayerFrame then EssencePlayerFrame:Hide() end
-			else
-				if EssencePlayerFrame then EssencePlayerFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-elseif classname == "MAGE" then
-	addTotemCheckbox("mage_HideTotemBar")
-elseif classname == "MONK" then
-	table.insert(data, {
-		var = "monk_HideHarmonyBar",
-		text = L["monk_HideHarmonyBar"],
-		func = function(value)
-			addon.db["monk_HideHarmonyBar"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Hide() end
-			else
-				if MonkHarmonyBarFrame then MonkHarmonyBarFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-	addTotemCheckbox("monk_HideTotemBar")
-elseif classname == "PRIEST" then
-	addTotemCheckbox("priest_HideTotemBar")
-elseif classname == "SHAMAN" then
-	addTotemCheckbox("shaman_HideTotem")
-elseif classname == "ROGUE" then
-	table.insert(data, {
-		var = "rogue_HideComboPoint",
-		text = L["rogue_HideComboPoint"],
-		func = function(value)
-			addon.db["rogue_HideComboPoint"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if RogueComboPointBarFrame then RogueComboPointBarFrame:Hide() end
-			else
-				if RogueComboPointBarFrame then RogueComboPointBarFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-elseif classname == "PALADIN" then
-	addTotemCheckbox("paladin_HideTotemBar")
-	table.insert(data, {
-		var = "paladin_HideHolyPower",
-		text = L["paladin_HideHolyPower"],
-		func = function(value)
-			addon.db["paladin_HideHolyPower"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if PaladinPowerBarFrame then PaladinPowerBarFrame:Hide() end
-			else
-				if PaladinPowerBarFrame then PaladinPowerBarFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-elseif classname == "WARLOCK" then
-	table.insert(data, {
-		var = "warlock_HideSoulShardBar",
-		text = L["warlock_HideSoulShardBar"],
-		func = function(value)
-			addon.db["warlock_HideSoulShardBar"] = value
-			local ufCR = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.classResource and addon.db.ufFrames.player.classResource.enabled == true
-			local ufActive = addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-			if value and not ufActive and not ufCR then
-				if WarlockPowerFrame then WarlockPowerFrame:Hide() end
-			else
-				if WarlockPowerFrame then WarlockPowerFrame:Show() end
-			end
-		end,
-		parentSection = expandable,
-	})
-	addTotemCheckbox("warlock_HideTotemBar")
-end
-table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 
-addon.functions.SettingsCreateHeadline(cUIInput, L["XP_Rep"], { parentSection = expandable })
+addon.functions.SettingsCreateHeadline(cUIInput, L["XP_Rep"], { parentSection = framesExpandable })
 
-data = {
+local data = {
 	{
 		var = "modifyXPRepBar",
 		text = L["modifyXPRepBar"],
@@ -332,7 +336,7 @@ data = {
 			EQOL_UpdateStatusBars(MainStatusTrackingBarContainer, height, width, scale)
 			EQOL_UpdateStatusBars(SecondaryStatusTrackingBarContainer, height, width, scale)
 		end,
-		parentSection = expandable,
+		parentSection = framesExpandable,
 		children = {
 			{
 				var = "modifyXPRepBarWidth",
@@ -359,7 +363,7 @@ data = {
 				parent = true,
 				default = 571,
 				sType = "slider",
-				parentSection = expandable,
+				parentSection = framesExpandable,
 			},
 			{
 				var = "modifyXPRepBarHeight",
@@ -386,7 +390,7 @@ data = {
 				parent = true,
 				default = 17,
 				sType = "slider",
-				parentSection = expandable,
+				parentSection = framesExpandable,
 			},
 			{
 				var = "modifyXPRepBarScale",
@@ -409,21 +413,25 @@ data = {
 				parent = true,
 				default = 1,
 				sType = "slider",
-				parentSection = expandable,
+				parentSection = framesExpandable,
 			},
 		},
 	},
 }
 addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 
-addon.functions.SettingsCreateHeadline(cUIInput, AUCTION_CATEGORY_MISCELLANEOUS, { parentSection = expandable })
+local interfaceExpandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
+	name = L["InterfaceTweaks"],
+	expanded = false,
+	colorizeTitle = false,
+})
 
 data = {
 	{
 		var = "ignoreTalkingHead",
 		text = string.format(L["ignoreTalkingHeadN"], HUD_EDIT_MODE_TALKING_HEAD_FRAME_LABEL),
 		func = function(v) addon.db["ignoreTalkingHead"] = v end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 	},
 	{
 		var = "hideQuickJoinToast",
@@ -432,7 +440,7 @@ data = {
 			addon.db["hideQuickJoinToast"] = v
 			addon.functions.toggleQuickJoinToastButton(addon.db["hideQuickJoinToast"])
 		end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 	},
 	{
 		var = "autoUnwrapMounts",
@@ -442,7 +450,7 @@ data = {
 			addon.db["autoUnwrapMounts"] = v
 			UpdateAutoUnwrapWatcher()
 		end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 	},
 	{
 		var = "hideZoneText",
@@ -451,7 +459,7 @@ data = {
 			addon.db["hideZoneText"] = v
 			addon.functions.toggleZoneText(addon.db["hideZoneText"])
 		end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 	},
 	{
 		var = "hideMicroMenuNotificationOverlay",
@@ -461,7 +469,7 @@ data = {
 			addon.db["hideMicroMenuNotificationOverlay"] = v and true or false
 			ApplyNotificationOverlaySetting()
 		end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 	},
 	{
 		var = "hideRaidTools",
@@ -470,7 +478,7 @@ data = {
 			addon.db["hideRaidTools"] = v
 			addon.functions.toggleRaidTools(addon.db["hideRaidTools"], _G.CompactRaidFrameManager)
 		end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 	},
 	{
 		var = "gameMenuScaleEnabled",
@@ -487,7 +495,7 @@ data = {
 				end
 			end
 		end,
-		parentSection = expandable,
+		parentSection = interfaceExpandable,
 		children = {
 			{
 				var = "gameMenuScale",
@@ -509,7 +517,7 @@ data = {
 				parent = true,
 				default = 1,
 				sType = "slider",
-				parentSection = expandable,
+				parentSection = interfaceExpandable,
 			},
 		},
 	},

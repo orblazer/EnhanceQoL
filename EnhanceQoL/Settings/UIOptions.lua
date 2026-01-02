@@ -628,6 +628,7 @@ local function createFrameCategory()
 		expanded = false,
 		colorizeTitle = false,
 	})
+	addon.SettingsLayout.uiFramesExpandable = expandable
 
 	addon.functions.SettingsCreateHeadline(category, L["visibilityScenarioGroupTitle"] or (L["ActionBarVisibilityLabel"] or "Visibility"), { parentSection = expandable })
 	if L["visibilityFrameExplain2"] then addon.functions.SettingsCreateText(category, L["visibilityFrameExplain2"], { parentSection = expandable }) end

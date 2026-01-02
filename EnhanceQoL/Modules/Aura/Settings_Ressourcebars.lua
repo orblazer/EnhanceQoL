@@ -2179,6 +2179,8 @@ local function buildSettings()
 
 	addon.functions.SettingsCreateCheckboxes(cat, data)
 
+	if addon.functions and addon.functions.SettingsCreateClassSpecificResourceBars then addon.functions.SettingsCreateClassSpecificResourceBars(cat, expandable) end
+
 	do -- Profile export/import
 		local classKey = addon.variables.unitClass or "UNKNOWN"
 		addon.db.resourceBarsProfileScope = addon.db.resourceBarsProfileScope or {}
