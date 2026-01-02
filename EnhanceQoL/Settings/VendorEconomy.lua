@@ -234,6 +234,15 @@ data = {
 			},
 		},
 	},
+	{
+		var = "mailboxRememberLastRecipient",
+		text = L["mailboxRememberLastRecipient"],
+		desc = L["mailboxRememberLastRecipientDesc"],
+		func = function(v)
+			addon.db["mailboxRememberLastRecipient"] = v
+			if addon.Mailbox and addon.Mailbox.SetRememberRecipientEnabled then addon.Mailbox:SetRememberRecipientEnabled(v) end
+		end,
+	},
 }
 
 applyParentSection(data, mailboxExpandable)

@@ -440,6 +440,8 @@ L["Item id does not exist"] = "Item id does not exist"
 -- Mailbox Address Book
 L["enableMailboxAddressBook"] = "Enable mailbox address book"
 L["enableMailboxAddressBookDesc"] = "Adds a searchable list of your characters next to the Send Mail panel. Click a name to fill the recipient."
+L["mailboxRememberLastRecipient"] = "Remember last recipient"
+L["mailboxRememberLastRecipientDesc"] = "Keeps the last recipient in the To field after sending mail until you close the mailbox."
 L["MailboxWindowTitle"] = "Address Book"
 L["mailboxRemoveHeader"] = "Remove character"
 L["mailboxRemoveSelect"] = "Select character"

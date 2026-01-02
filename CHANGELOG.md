@@ -15,6 +15,8 @@
   - Auto-accept resurrection requests.
   - Auto-release in PvP/BGs.
   - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
+- **Mailbox**
+  - Option to remember the last recipient in the Send Mail field until the mailbox closes.
 
 ### 🔄 Changed
 
