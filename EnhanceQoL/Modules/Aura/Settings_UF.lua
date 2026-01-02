@@ -2929,20 +2929,24 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 			addon.db.ufProfileScope = scopeOptions[val] and val or "ALL"
 		end
 
-		addon.functions.SettingsCreateHeadline(cUF, L["Profiles"] or "Profiles", {
-			parentSection = expandable,
+		local cProfiles = addon.SettingsLayout.rootPROFILES
+
+		local expandableProfile = addon.functions.SettingsCreateExpandableSection(cProfiles, {
+			name = L["CustomUnitFrames"],
+			expanded = false,
+			colorizeTitle = false,
 		})
-		addon.functions.SettingsCreateDropdown(cUF, {
+		addon.functions.SettingsCreateDropdown(cProfiles, {
 			var = "ufProfileScope",
 			text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
 			list = scopeOptions,
 			get = getScope,
 			set = setScope,
 			default = "ALL",
-			parentSection = expandable,
+			parentSection = expandableProfile,
 		})
 
-		addon.functions.SettingsCreateButton(cUF, {
+		addon.functions.SettingsCreateButton(cProfiles, {
 			var = "ufExportProfile",
 			text = L["Export"] or "Export",
 			func = function()
@@ -2978,10 +2982,10 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				end
 				StaticPopup_Show("EQOL_UF_EXPORT_SETTINGS")
 			end,
-			parentSection = expandable,
+			parentSection = expandableProfile,
 		})
 
-		addon.functions.SettingsCreateButton(cUF, {
+		addon.functions.SettingsCreateButton(cProfiles, {
 			var = "ufImportProfile",
 			text = L["Import"] or "Import",
 			func = function()
@@ -3039,7 +3043,7 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 				end
 				StaticPopup_Show("EQOL_UF_IMPORT_SETTINGS")
 			end,
-			parentSection = expandable,
+			parentSection = expandableProfile,
 		})
 	end
 end

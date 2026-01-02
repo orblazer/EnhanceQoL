@@ -138,7 +138,6 @@ local expandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
 	expanded = false,
 	colorizeTitle = false,
 })
-addon.SettingsLayout.expUnitFrames = expandable
 local class, classname = UnitClass("player")
 addon.functions.SettingsCreateHeadline(cUIInput, L["headerClassInfo"]:format(class), { parentSection = expandable })
 

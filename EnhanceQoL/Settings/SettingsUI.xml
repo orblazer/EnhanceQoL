@@ -10,11 +10,11 @@
 	<Script file='MapNavigation.lua'/>
 	<Script file='Quest.lua'/>
 	<Script file='ChatFrame.lua'/>
-	<Script file='DataPanel.lua'/>
 	<Script file='Social.lua'/>
 	<Script file='System.lua'/>
 	<Script file='UIOptions.lua'/>
-	<Script file='UnitFrames.lua'/>
+	<Script file='DataPanel.lua'/>
 	<Script file='Profiles.lua'/>
 	<Script file='UIInput.lua'/>
+	<Script file='UnitFrames.lua'/>
 </Ui>

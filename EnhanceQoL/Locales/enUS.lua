@@ -635,6 +635,7 @@ L["minimapButtonBinAnchor_TopRight"] = "Top right"
 L["minimapButtonBinAnchor_BottomLeft"] = "Bottom left"
 L["minimapButtonBinAnchor_BottomRight"] = "Bottom right"
 
+L["AddOn"] = "AddOn"
 -- Game Menu
 L["enableGameMenuScale"] = "Enable Game Menu scaling"
 L["gameMenuScale"] = "Game Menu scale"
