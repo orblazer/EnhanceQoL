@@ -2200,20 +2200,25 @@ local function buildSettings()
 			end
 		end
 
-		addon.functions.SettingsCreateHeadline(cat, L["Profiles"], {
-			parentSection = expandable,
+		local cProfiles = addon.SettingsLayout.rootPROFILES
+
+		local expandableProfile = addon.functions.SettingsCreateExpandableSection(cProfiles, {
+			name = L["Resource Bars"],
+			expanded = false,
+			colorizeTitle = false,
 		})
-		addon.functions.SettingsCreateDropdown(cat, {
+
+		addon.functions.SettingsCreateDropdown(cProfiles, {
 			var = "resourceBarsProfileScope",
 			text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
 			list = scopeList,
 			get = getScope,
 			set = setScope,
 			default = "ALL",
-			parentSection = expandable,
+			parentSection = expandableProfile,
 		})
 
-		addon.functions.SettingsCreateButton(cat, {
+		addon.functions.SettingsCreateButton(cProfiles, {
 			var = "resourceBarsExport",
 			text = L["Export"] or "Export",
 			func = function()
@@ -2248,10 +2253,10 @@ local function buildSettings()
 				end
 				StaticPopup_Show("EQOL_RESOURCEBAR_EXPORT_SETTINGS")
 			end,
-			parentSection = expandable,
+			parentSection = expandableProfile,
 		})
 
-		addon.functions.SettingsCreateButton(cat, {
+		addon.functions.SettingsCreateButton(cProfiles, {
 			var = "resourceBarsImport",
 			text = L["Import"] or "Import",
 			func = function()
@@ -2317,7 +2322,7 @@ local function buildSettings()
 				end
 				StaticPopup_Show("EQOL_RESOURCEBAR_IMPORT_SETTINGS")
 			end,
-			parentSection = expandable,
+			parentSection = expandableProfile,
 		})
 	end
 
