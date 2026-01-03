@@ -237,6 +237,7 @@ globals = {
 	"CharacterChestSlot",
 	"CharacterWristSlot",
 	"CharacterHandsSlot",
+	"GetPowerBarColor",
 	"CharacterWaistSlot",
 	"CharacterLegsSlot",
 	"CharacterFeetSlot",
