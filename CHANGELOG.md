@@ -39,6 +39,9 @@
   - Quest settings moved to Gameplay with a single Questing accordion.
 - **Gear & Upgrades**
   - Character/Inspect display options now use a multi-select dropdown with per-option tooltips.
+- **Items & Inventory**
+  - Bag display options and item level targets now use multi-select dropdowns with tooltips.
+  - Dialog auto-confirm options are grouped into a single multi-select dropdown.
 - **Minimap**
   - Square minimap layout now anchors the mail icon to the top-left of the minimap.
   - Button Sink labels and tooltips refreshed for clarity.
