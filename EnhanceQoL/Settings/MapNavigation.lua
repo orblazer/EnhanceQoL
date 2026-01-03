@@ -971,7 +971,7 @@ function addon.functions.applySquareMinimapLayout(forceUnderneath)
 		hooksecurefunc(MinimapCluster, "SetHeaderUnderneath", applySquareMinimapLayout)
 		addon.variables.squareMinimapLayoutHooked = true
 	end
-	if not addon.variables.squareMinimapIndicatorHooked and type(MiniMapIndicatorFrame_UpdatePosition) == "function" then
+	if not addon.variables.squareMinimapIndicatorHooked and type(_G.MiniMapIndicatorFrame_UpdatePosition) == "function" then
 		hooksecurefunc("MiniMapIndicatorFrame_UpdatePosition", function()
 			if not addon.db or not addon.db.enableSquareMinimap or not addon.db.enableSquareMinimapLayout then return end
 			if not Minimap or not MinimapCluster or not MinimapCluster.IndicatorFrame then return end

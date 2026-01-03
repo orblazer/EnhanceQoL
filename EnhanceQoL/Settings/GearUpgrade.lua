@@ -161,7 +161,7 @@ addon.functions.SettingsCreateMultiDropdown(cGearUpgrade, {
 
 addon.functions.SettingsCreateHeadline(cGearUpgrade, AUCTION_CATEGORY_GEMS, { parentSection = expandable })
 
-data = {
+local data = {
 	{
 		var = "enableGemHelper",
 		text = L["enableGemHelper"],

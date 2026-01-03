@@ -231,25 +231,6 @@ table.sort(generalCheckboxes, function(a, b) return tostring(a.text or "") < tos
 applyParentSection(generalCheckboxes, vendorExpandable)
 addon.functions.SettingsCreateCheckboxes(cVendor, generalCheckboxes)
 
-addon.functions.SettingsCreateHeadline(cVendor, L["vendorCraftShopperTitle"] or "Craft Shopper", { parentSection = vendorExpandable })
-addon.functions.SettingsCreateCheckbox(cVendor, {
-	var = "vendorCraftShopperEnable",
-	text = L["vendorCraftShopperEnable"],
-	desc = L["vendorCraftShopperEnableDesc"],
-	func = function(value)
-		addon.db["vendorCraftShopperEnable"] = value and true or false
-		if addon.Vendor and addon.Vendor.CraftShopper then
-			if value and addon.Vendor.CraftShopper.EnableCraftShopper then
-				addon.Vendor.CraftShopper.EnableCraftShopper()
-			elseif not value and addon.Vendor.CraftShopper.DisableCraftShopper then
-				addon.Vendor.CraftShopper.DisableCraftShopper()
-			end
-		end
-	end,
-	default = false,
-	parentSection = vendorExpandable,
-})
-
 addon.functions.SettingsCreateHeadline(cVendor, L["vendorWillBeSold"] or "Auto-Sell", { parentSection = vendorExpandable })
 
 local qualities = {

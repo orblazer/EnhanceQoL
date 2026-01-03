@@ -43,6 +43,8 @@
 - **Items & Inventory**
   - Bag display options and item level targets now use multi-select dropdowns with tooltips.
   - Dialog auto-confirm options are grouped into a single multi-select dropdown.
+- **Vendors & Services**
+  - Section renamed to “Repairs and Shopping” and Craft Shopper moved into it.
 - **Minimap**
   - Square minimap layout now anchors the mail icon to the top-left of the minimap.
   - Button Sink labels and tooltips refreshed for clarity.
