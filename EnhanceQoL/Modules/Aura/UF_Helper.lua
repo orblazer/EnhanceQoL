@@ -20,6 +20,8 @@ local EnumPowerType = Enum and Enum.PowerType
 local BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 local abs = math.abs
 local floor = math.floor
+local UnitThreatSituation = UnitThreatSituation
+local UnitExists = UnitExists
 
 local atlasByPower = {
 	LUNAR_POWER = "Unit_Druid_AstralPower_Fill",
@@ -72,6 +74,133 @@ function H.resolveBorderTexture(key)
 		if tex and tex ~= "" then return tex end
 	end
 	return key
+end
+
+local function ensureHighlightFrame(frame)
+	if not frame then return nil end
+	local highlight = frame._ufHighlight
+	if not highlight then
+		highlight = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+		highlight:EnableMouse(false)
+		frame._ufHighlight = highlight
+	end
+	highlight:SetFrameStrata(frame:GetFrameStrata())
+	local baseLevel = frame:GetFrameLevel() or 0
+	highlight:SetFrameLevel(baseLevel + 4)
+	highlight:ClearAllPoints()
+	highlight:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+	highlight:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+	return highlight
+end
+
+function H.buildHighlightConfig(cfg, def)
+	local hcfg = (cfg and cfg.highlight) or {}
+	local hdef = (def and def.highlight) or {}
+	local enabled = hcfg.enabled
+	if enabled == nil then enabled = hdef.enabled end
+	if enabled ~= true then return nil end
+	local mouseover = hcfg.mouseover
+	if mouseover == nil then mouseover = hdef.mouseover end
+	if mouseover == nil then mouseover = true end
+	local aggro = hcfg.aggro
+	if aggro == nil then aggro = hdef.aggro end
+	if aggro == nil then aggro = true end
+	local texture = hcfg.texture or hdef.texture or "DEFAULT"
+	local size = hcfg.size
+	if size == nil then size = hdef.size end
+	size = tonumber(size) or 1
+	if size < 1 then size = 1 end
+	local color = hcfg.color
+	if type(color) ~= "table" then color = hdef.color end
+	if type(color) ~= "table" then color = { 1, 0, 0, 1 } end
+	return {
+		enabled = true,
+		mouseover = mouseover == true,
+		aggro = aggro == true,
+		texture = texture,
+		size = size,
+		color = color,
+	}
+end
+
+function H.applyHighlightStyle(st, highlightCfg)
+	if not st or not st.barGroup then return end
+	if not highlightCfg or highlightCfg.enabled ~= true then
+		local highlight = st.barGroup._ufHighlight
+		if highlight then
+			highlight:SetBackdrop(nil)
+			highlight:Hide()
+		end
+		st._highlightFrame = nil
+		return
+	end
+	local highlight = ensureHighlightFrame(st.barGroup)
+	if not highlight then return end
+	st._highlightFrame = highlight
+	local size = highlightCfg.size or 1
+	if size < 1 then size = 1 end
+	local insetVal = highlightCfg.inset
+	if insetVal == nil then insetVal = size end
+	local color = highlightCfg.color or { 1, 0, 0, 1 }
+	highlight:SetBackdrop({
+		bgFile = "Interface\\Buttons\\WHITE8x8",
+		edgeFile = H.resolveBorderTexture(highlightCfg.texture),
+		edgeSize = size,
+		insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
+	})
+	highlight:SetBackdropColor(0, 0, 0, 0)
+	highlight:SetBackdropBorderColor(color[1] or 1, color[2] or 0, color[3] or 0, color[4] or 1)
+	highlight:Hide()
+end
+
+local function hasAggro(unit)
+	if not UnitThreatSituation or not unit then return false end
+	if UnitExists and not UnitExists(unit) then return false end
+	local threat = UnitThreatSituation(unit)
+	return threat and threat >= 2
+end
+
+function H.updateHighlight(st, unit, playerUnit)
+	if not st or not st.barGroup then return end
+	local cfg = st._highlightCfg
+	local highlight = st.barGroup._ufHighlight
+	if not cfg or cfg.enabled ~= true then
+		if highlight then highlight:Hide() end
+		return
+	end
+	if not highlight then
+		H.applyHighlightStyle(st, cfg)
+		highlight = st.barGroup._ufHighlight
+		if not highlight then return end
+	end
+	local show = false
+	if cfg.mouseover and st._hovered then
+		show = true
+	elseif cfg.aggro and (unit == (playerUnit or "player") or unit == "pet") and hasAggro(unit) then
+		show = true
+	end
+	if show then
+		local color = cfg.color or { 1, 0, 0, 1 }
+		highlight:SetBackdropBorderColor(color[1] or 1, color[2] or 0, color[3] or 0, color[4] or 1)
+		highlight:Show()
+	else
+		highlight:Hide()
+	end
+end
+
+function H.updateAllHighlights(states, unitTokens, maxBossFrames)
+	if type(states) ~= "table" or type(unitTokens) ~= "table" then return end
+	local playerUnit = unitTokens.PLAYER or "player"
+	H.updateHighlight(states[playerUnit], playerUnit, playerUnit)
+	if unitTokens.TARGET then H.updateHighlight(states[unitTokens.TARGET], unitTokens.TARGET, playerUnit) end
+	if unitTokens.TARGET_TARGET then H.updateHighlight(states[unitTokens.TARGET_TARGET], unitTokens.TARGET_TARGET, playerUnit) end
+	if unitTokens.FOCUS then H.updateHighlight(states[unitTokens.FOCUS], unitTokens.FOCUS, playerUnit) end
+	if unitTokens.PET then H.updateHighlight(states[unitTokens.PET], unitTokens.PET, playerUnit) end
+	local maxBoss = tonumber(maxBossFrames) or 0
+	for i = 1, maxBoss do
+		local unit = "boss" .. i
+		H.updateHighlight(states[unit], unit, playerUnit)
+	end
 end
 
 function H.resolveTexture(key)

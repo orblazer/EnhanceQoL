@@ -634,6 +634,7 @@ local function buildUnitSettings(unit)
 	end
 	local refresh = refreshSelf
 	local isPlayer = unit == "player"
+	local isPet = unit == "pet"
 	local classHasResource = isPlayer and classResourceClasses[addon.variables and addon.variables.unitClass]
 	local copyOptions = availableCopySources(unit)
 	local visibilityOptions = getVisibilityRuleOptions(unit)
@@ -762,9 +763,7 @@ local function buildUnitSettings(unit)
 		},
 	})
 
-	local function isBorderEnabled()
-		return getValue(unit, { "border", "enabled" }, (def.border and def.border.enabled) ~= false) ~= false
-	end
+	local function isBorderEnabled() return getValue(unit, { "border", "enabled" }, (def.border and def.border.enabled) ~= false) ~= false end
 
 	local borderTexture = checkboxDropdown(L["Border texture"] or "Border texture", borderOptions, function()
 		local border = getValue(unit, { "border" }, def.border or {})
@@ -860,6 +859,83 @@ local function buildUnitSettings(unit)
 		end)
 	end, (def.border and def.border.detachedPowerOffset) or (def.border and def.border.offset) or (def.border and def.border.edgeSize) or 1, "frame", true)
 	list[#list + 1] = detachedBorderOffset
+
+	local highlightDef = def.highlight or {}
+	list[#list + 1] = checkboxColor({
+		name = L["UFHighlightBorder"] or "Highlight border",
+		parentId = "frame",
+		defaultChecked = highlightDef.enabled == true,
+		isChecked = function() return getValue(unit, { "highlight", "enabled" }, highlightDef.enabled == true) == true end,
+		onChecked = function(val)
+			local highlight = getValue(unit, { "highlight" }, highlightDef)
+			highlight.enabled = val and true or false
+			setValue(unit, { "highlight" }, highlight)
+			refresh()
+			refreshSettingsUI()
+		end,
+		getColor = function()
+			local highlight = getValue(unit, { "highlight" }, highlightDef)
+			return toRGBA(highlight.color, highlightDef.color or { 1, 0, 0, 1 })
+		end,
+		onColor = function(color)
+			local highlight = getValue(unit, { "highlight" }, highlightDef)
+			highlight.color = { color.r, color.g, color.b, color.a }
+			setValue(unit, { "highlight" }, highlight)
+			refresh()
+			refreshSettingsUI()
+		end,
+		colorDefault = {
+			r = (highlightDef.color and highlightDef.color[1]) or 1,
+			g = (highlightDef.color and highlightDef.color[2]) or 0,
+			b = (highlightDef.color and highlightDef.color[3]) or 0,
+			a = (highlightDef.color and highlightDef.color[4]) or 1,
+		},
+	})
+
+	local function isHighlightEnabled() return getValue(unit, { "highlight", "enabled" }, highlightDef.enabled == true) == true end
+	local function isHighlightAggroEnabled() return isHighlightEnabled() and (isPlayer or isPet) end
+
+	list[#list + 1] = checkbox(
+		L["UFHighlightMouseover"] or "Highlight on mouseover",
+		function() return getValue(unit, { "highlight", "mouseover" }, highlightDef.mouseover ~= false) == true end,
+		function(val)
+			setValue(unit, { "highlight", "mouseover" }, val and true or false)
+			refresh()
+		end,
+		highlightDef.mouseover ~= false,
+		"frame",
+		isHighlightEnabled
+	)
+
+	if isPlayer or isPet then
+		list[#list + 1] = checkbox(L["UFHighlightAggro"] or "Highlight on aggro", function() return getValue(unit, { "highlight", "aggro" }, highlightDef.aggro ~= false) == true end, function(val)
+			setValue(unit, { "highlight", "aggro" }, val and true or false)
+			refresh()
+		end, highlightDef.aggro ~= false, "frame", isHighlightAggroEnabled)
+	end
+
+	local highlightTexture = checkboxDropdown(
+		L["UFHighlightTexture"] or "Highlight texture",
+		borderOptions,
+		function() return getValue(unit, { "highlight", "texture" }, highlightDef.texture or "DEFAULT") end,
+		function(val)
+			setValue(unit, { "highlight", "texture" }, val or "DEFAULT")
+			refresh()
+		end,
+		highlightDef.texture or "DEFAULT",
+		"frame"
+	)
+	highlightTexture.isEnabled = isHighlightEnabled
+	list[#list + 1] = highlightTexture
+
+	local highlightSizeSetting = slider(L["UFHighlightSize"] or "Highlight size", 1, 64, 1, function() return getValue(unit, { "highlight", "size" }, highlightDef.size or 2) end, function(val)
+		debounced(unit .. "_highlightSize", function()
+			setValue(unit, { "highlight", "size" }, val or highlightDef.size or 2)
+			refresh()
+		end)
+	end, highlightDef.size or 2, "frame", true)
+	highlightSizeSetting.isEnabled = isHighlightEnabled
+	list[#list + 1] = highlightSizeSetting
 
 	local portraitDef = def.portrait or {}
 	list[#list + 1] = { name = L["UFPortrait"] or "Portrait", kind = settingType.Collapsible, id = "portrait", defaultCollapsed = true }
@@ -1925,9 +2001,7 @@ local function buildUnitSettings(unit)
 			-OFFSET_RANGE,
 			OFFSET_RANGE,
 			1,
-			function()
-				return getValue(unit, { "cast", "iconOffset", "x" }, (castDef.iconOffset and castDef.iconOffset.x) or -4)
-			end,
+			function() return getValue(unit, { "cast", "iconOffset", "x" }, (castDef.iconOffset and castDef.iconOffset.x) or -4) end,
 			function(val)
 				setValue(unit, { "cast", "iconOffset", "x" }, val or -4)
 				refresh()

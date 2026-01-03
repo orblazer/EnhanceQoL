@@ -13,6 +13,7 @@
   - Optional reverse-fill absorb bar in UF.
   - Detached power bar can use its own border (texture/size/offset).
   - Cast bar icon offset slider for Target/Focus/Boss frames.
+  - Optional border highlight for mouseover/aggro.
   - Edit Mode shows sample auras for frames with auras enabled.
 - **Misc**
   - Auto-accept summons.

@@ -199,6 +199,14 @@ local defaults = {
 			detachedPowerSize = nil,
 			detachedPowerOffset = nil,
 		},
+		highlight = {
+			enabled = false,
+			mouseover = true,
+			aggro = true,
+			texture = "DEFAULT",
+			size = 2,
+			color = { 1, 0, 0, 1 },
+		},
 		health = {
 			useCustomColor = false,
 			useClassColor = false,
@@ -2818,9 +2826,7 @@ local function layoutFrame(cfg, unit)
 		local pStrata = st.power.GetFrameStrata and st.power:GetFrameStrata() or st.frame:GetFrameStrata()
 		st.powerGroup:SetFrameStrata(pStrata or "MEDIUM")
 	end
-	if st.powerGroup and st.powerGroup.SetFrameLevel then
-		st.powerGroup:SetFrameLevel((st.power and st.power.GetFrameLevel and st.power:GetFrameLevel()) or 0)
-	end
+	if st.powerGroup and st.powerGroup.SetFrameLevel then st.powerGroup:SetFrameLevel((st.power and st.power.GetFrameLevel and st.power:GetFrameLevel()) or 0) end
 
 	st.status:ClearAllPoints()
 	if st.barGroup then st.barGroup:ClearAllPoints() end
@@ -2952,6 +2958,7 @@ local function layoutFrame(cfg, unit)
 		end
 		setBackdrop(st.powerGroup, powerBorderCfg)
 	end
+	UFHelper.applyHighlightStyle(st, st._highlightCfg)
 
 	if (unit == UNIT.PLAYER or unit == "target" or isBossUnit(unit)) and st.auraContainer then
 		st.auraContainer:ClearAllPoints()
@@ -3008,6 +3015,8 @@ local function ensureFrames(unit)
 	st.frame:SetAttribute("*type1", "target")
 	st.frame:SetAttribute("*type2", "togglemenu")
 	st.frame:HookScript("OnEnter", function(self)
+		st._hovered = true
+		UFHelper.updateHighlight(st, unit, UNIT.PLAYER)
 		local cfg = ensureDB(unit)
 		if not (cfg and cfg.showTooltip) then return end
 		if not GameTooltip or GameTooltip:IsForbidden() then return end
@@ -3018,7 +3027,13 @@ local function ensureFrames(unit)
 		end
 	end)
 	st.frame:HookScript("OnLeave", function()
+		st._hovered = false
+		UFHelper.updateHighlight(st, unit, UNIT.PLAYER)
 		if GameTooltip and not GameTooltip:IsForbidden() then GameTooltip:Hide() end
+	end)
+	st.frame:HookScript("OnHide", function()
+		st._hovered = false
+		UFHelper.updateHighlight(st, unit, UNIT.PLAYER)
 	end)
 	st.frame:RegisterForClicks("AnyUp")
 	st.frame:Hide()
@@ -3245,6 +3260,7 @@ end
 
 local function applyConfig(unit)
 	local cfg = ensureDB(unit)
+	local def = defaultsFor(unit)
 	states[unit] = states[unit] or {}
 	local st = states[unit]
 	st.cfg = cfg
@@ -3256,7 +3272,10 @@ local function applyConfig(unit)
 			if st.portraitHolder then st.portraitHolder:Hide() end
 			if st.portraitSeparator then st.portraitSeparator:Hide() end
 			if st.auraContainer then hideAuraContainers(st) end
+			if st.barGroup and st.barGroup._ufHighlight then st.barGroup._ufHighlight:Hide() end
+			st._hovered = false
 		end
+		if st then st._highlightCfg = nil end
 		applyVisibilityDriver(unit, false)
 		if unit == UNIT.PLAYER then applyFrameRuleOverride(BLIZZ_FRAME_NAMES.player, false) end
 		if unit == UNIT.TARGET then applyFrameRuleOverride(BLIZZ_FRAME_NAMES.target, false) end
@@ -3272,6 +3291,7 @@ local function applyConfig(unit)
 	ensureFrames(unit)
 	st = states[unit]
 	st.cfg = cfg
+	st._highlightCfg = UFHelper.buildHighlightConfig(cfg, def)
 	applyVisibilityDriver(unit, cfg.enabled)
 	if unit == UNIT.PLAYER then applyFrameRuleOverride(BLIZZ_FRAME_NAMES.player, true) end
 	if unit == UNIT.TARGET then applyFrameRuleOverride(BLIZZ_FRAME_NAMES.target, true) end
@@ -3279,7 +3299,11 @@ local function applyConfig(unit)
 	if unit == UNIT.FOCUS then applyFrameRuleOverride(BLIZZ_FRAME_NAMES.focus, true) end
 	if unit == UNIT.PET then applyFrameRuleOverride(BLIZZ_FRAME_NAMES.pet, true) end
 	applyBars(cfg, unit)
-	if not InCombatLockdown() then layoutFrame(cfg, unit) end
+	if not InCombatLockdown() then
+		layoutFrame(cfg, unit)
+	else
+		UFHelper.applyHighlightStyle(st, st._highlightCfg)
+	end
 	updateStatus(cfg, unit)
 	updateNameAndLevel(cfg, unit)
 	updateHealth(cfg, unit)
@@ -3296,6 +3320,7 @@ local function applyConfig(unit)
 		if st.barGroup then st.barGroup:Show() end
 		if st.status then st.status:Show() end
 	end
+	UFHelper.updateHighlight(st, unit, UNIT.PLAYER)
 	if unit == UNIT.TARGET and st.castBar then
 		if cfg.cast and cfg.cast.enabled ~= false and UnitExists(UNIT.TARGET) then
 			setCastInfoFromUnit(UNIT.TARGET)
@@ -3532,6 +3557,7 @@ local function updateBossFrames(force)
 				end
 			end
 		end
+		UFHelper.updateHighlight(st, unit, UNIT.PLAYER)
 	end
 	anchorBossContainer(cfg)
 	layoutBossFrames(cfg)
@@ -3558,6 +3584,8 @@ local unitEvents = {
 	"UNIT_FLAGS",
 	"UNIT_CONNECTION",
 	"UNIT_FACTION",
+	"UNIT_THREAT_SITUATION_UPDATE",
+	"UNIT_THREAT_LIST_UPDATE",
 	"UNIT_AURA",
 	"UNIT_TARGET",
 	"UNIT_SPELLCAST_START",
@@ -3789,6 +3817,7 @@ local function updateTargetTargetFrame(cfg, forceApply)
 	checkRaidTargetIcon(UNIT.TARGET_TARGET, st)
 	updateUnitStatusIndicator(cfg, UNIT.TARGET_TARGET)
 	updatePortrait(cfg, UNIT.TARGET_TARGET)
+	UFHelper.updateHighlight(st, UNIT.TARGET_TARGET, UNIT.PLAYER)
 	ensureToTTicker()
 	applyVisibilityRules(UNIT.TARGET_TARGET)
 end
@@ -3843,6 +3872,7 @@ local function updateFocusFrame(cfg, forceApply)
 	UFHelper.updatePvPIndicator(st, UNIT.FOCUS, cfg, defaultsFor(UNIT.FOCUS), not forceApply)
 	updateUnitStatusIndicator(cfg, UNIT.FOCUS)
 	updatePortrait(cfg, UNIT.FOCUS)
+	UFHelper.updateHighlight(st, UNIT.FOCUS, UNIT.PLAYER)
 	applyVisibilityRules(UNIT.FOCUS)
 end
 
@@ -3859,7 +3889,7 @@ function UF.UpdateAllPvPIndicators()
 end
 
 local function onEvent(self, event, unit, arg1)
-	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and not allowedEventUnit[unit] then return end
+	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and not allowedEventUnit[unit] and event ~= "UNIT_THREAT_SITUATION_UPDATE" and event ~= "UNIT_THREAT_LIST_UPDATE" then return end
 	if (unitEventsMap[event] or portraitEventsMap[event]) and unit and isBossUnit(unit) and not isBossFrameSettingEnabled() then return end
 	if event == "PLAYER_ENTERING_WORLD" then
 		local playerCfg = getCfg(UNIT.PLAYER)
@@ -3882,6 +3912,7 @@ local function onEvent(self, event, unit, arg1)
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
 		updateUnitStatusIndicator(petCfg, UNIT.PET)
 		UF.UpdateAllPvPIndicators()
+		UFHelper.updateAllHighlights(states, UNIT, maxBossFrames)
 		updateAllRaidTargetIcons()
 		if bossCfg.enabled then
 			updateBossFrames(true)
@@ -3956,6 +3987,7 @@ local function onEvent(self, event, unit, arg1)
 		end
 		checkRaidTargetIcon(unitToken, st)
 		updatePortrait(targetCfg, unitToken)
+		UFHelper.updateHighlight(st, unitToken, UNIT.PLAYER)
 		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 		if focusCfg.enabled then updateFocusFrame(focusCfg) end
 		updateUnitStatusIndicator(targetCfg, UNIT.TARGET)
@@ -4168,6 +4200,9 @@ local function onEvent(self, event, unit, arg1)
 		end
 	elseif event == "UNIT_FACTION" then
 		UFHelper.updatePvPIndicator(states[unit], unit, getCfg(unit), defaultsFor(unit), true)
+	elseif event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
+		UFHelper.updateHighlight(states[UNIT.PLAYER], UNIT.PLAYER, UNIT.PLAYER)
+		UFHelper.updateHighlight(states[UNIT.PET], UNIT.PET, UNIT.PLAYER)
 	elseif portraitEventsMap[event] then
 		if unit == UNIT.PLAYER then updatePortrait(getCfg(UNIT.PLAYER), UNIT.PLAYER) end
 		if unit == UNIT.TARGET then updatePortrait(getCfg(UNIT.TARGET), UNIT.TARGET) end
@@ -4217,6 +4252,7 @@ local function onEvent(self, event, unit, arg1)
 		end
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
 		UFHelper.updatePvPIndicator(states[UNIT.FOCUS], UNIT.FOCUS, focusCfg, defaultsFor(UNIT.FOCUS), true)
+		UFHelper.updateHighlight(states[UNIT.FOCUS], UNIT.FOCUS, UNIT.PLAYER)
 	elseif event == "PLAYER_UPDATE_RESTING" then
 		updateRestingIndicator(getCfg(UNIT.PLAYER))
 	elseif event == "GROUP_ROSTER_UPDATE" then
