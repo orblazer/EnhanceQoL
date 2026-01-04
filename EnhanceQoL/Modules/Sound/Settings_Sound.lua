@@ -31,11 +31,11 @@ local function AllChildrenArePureNumbers(tbl)
 	return hasEntries and true or false
 end
 
-local cSound = addon.SettingsLayout.rootSYSTEM
+local cSound = addon.SettingsLayout.rootSOUND
 addon.SettingsLayout.soundCategory = cSound
 
 local soundExpandable = addon.functions.SettingsCreateExpandableSection(cSound, {
-	name = SOUND or SOUND_LABEL or "Sound",
+	name = L["soundMuteSection"] or "Sounds to mute",
 	expanded = false,
 	colorizeTitle = false,
 })

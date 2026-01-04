@@ -9,7 +9,7 @@ end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Mouse")
 
-local cMouse = addon.SettingsLayout.rootUI
+local cMouse = addon.SettingsLayout.rootGENERAL
 
 local expandable = addon.functions.SettingsCreateExpandableSection(cMouse, {
 	name = MOUSE_LABEL,

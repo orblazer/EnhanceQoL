@@ -1,6 +1,7 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_Sound", "enUS", true)
 
 L["soundMuteExplained"] = "Enabling any setting below will mute the associated sound effect"
+L["soundMuteSection"] = "Sounds to mute"
 
 L["monk"] = "Monk"
 

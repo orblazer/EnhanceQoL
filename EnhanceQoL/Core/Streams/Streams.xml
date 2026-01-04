@@ -10,4 +10,5 @@
         <Script file="Stream_MythicKey.lua"/>
         <Script file="Stream_Stats.lua"/>
         <Script file="Stream_Talentbuilt.lua"/>
+        <Script file="Stream_Volume.lua"/>
 </Ui>

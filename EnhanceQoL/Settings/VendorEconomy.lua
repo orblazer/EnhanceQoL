@@ -47,43 +47,11 @@ local data = {
 			},
 		},
 	},
-	{
-		var = "sellAllJunk",
-		text = L["sellAllJunk"],
-		func = function(v)
-			addon.db["sellAllJunk"] = v
-			if v then addon.functions.checkBagIgnoreJunk() end
-		end,
-		desc = L["sellAllJunkDesc"],
-	},
 }
 
 applyParentSection(data, vendorsExpandable)
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cVendorEconomy, data)
-
-local craftTitle = (LVendor and LVendor["vendorCraftShopperTitle"]) or "Craft Shopper"
-local craftEnableText = (LVendor and LVendor["vendorCraftShopperEnable"]) or "Enable Craft Shopper"
-local craftEnableDesc = LVendor and LVendor["vendorCraftShopperEnableDesc"] or nil
-
-addon.functions.SettingsCreateHeadline(cVendorEconomy, craftTitle, { parentSection = vendorsExpandable })
-addon.functions.SettingsCreateCheckbox(cVendorEconomy, {
-	var = "vendorCraftShopperEnable",
-	text = craftEnableText,
-	desc = craftEnableDesc,
-	func = function(value)
-		addon.db["vendorCraftShopperEnable"] = value and true or false
-		if addon.Vendor and addon.Vendor.CraftShopper then
-			if value and addon.Vendor.CraftShopper.EnableCraftShopper then
-				addon.Vendor.CraftShopper.EnableCraftShopper()
-			elseif not value and addon.Vendor.CraftShopper.DisableCraftShopper then
-				addon.Vendor.CraftShopper.DisableCraftShopper()
-			end
-		end
-	end,
-	default = false,
-	parentSection = vendorsExpandable,
-})
 
 local merchantExpandable = addon.functions.SettingsCreateExpandableSection(cVendorEconomy, {
 	name = L["MerchantUI"],
@@ -170,6 +138,29 @@ data = {
 applyParentSection(data, auctionHouseExpandable)
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cVendorEconomy, data)
+
+local craftTitle = (LVendor and LVendor["vendorCraftShopperTitle"]) or "Craft Shopper"
+local craftEnableText = (LVendor and LVendor["vendorCraftShopperEnable"]) or "Enable Craft Shopper"
+local craftEnableDesc = LVendor and LVendor["vendorCraftShopperEnableDesc"] or nil
+
+addon.functions.SettingsCreateHeadline(cVendorEconomy, craftTitle, { parentSection = auctionHouseExpandable })
+addon.functions.SettingsCreateCheckbox(cVendorEconomy, {
+	var = "vendorCraftShopperEnable",
+	text = craftEnableText,
+	desc = craftEnableDesc,
+	func = function(value)
+		addon.db["vendorCraftShopperEnable"] = value and true or false
+		if addon.Vendor and addon.Vendor.CraftShopper then
+			if value and addon.Vendor.CraftShopper.EnableCraftShopper then
+				addon.Vendor.CraftShopper.EnableCraftShopper()
+			elseif not value and addon.Vendor.CraftShopper.DisableCraftShopper then
+				addon.Vendor.CraftShopper.DisableCraftShopper()
+			end
+		end
+	end,
+	default = false,
+	parentSection = auctionHouseExpandable,
+})
 
 local mailboxExpandable = addon.functions.SettingsCreateExpandableSection(addon.SettingsLayout.rootSOCIAL, {
 	name = MINIMAP_TRACKING_MAILBOX,

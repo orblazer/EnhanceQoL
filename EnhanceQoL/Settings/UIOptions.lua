@@ -49,6 +49,32 @@ local function collectRuleOptions(kind)
 	return options
 end
 
+local function isEQoLUnitEnabled(unit)
+	if not addon.Aura then return false end
+	local db = addon.db and addon.db.ufFrames
+	if not db then return false end
+	if unit == "boss" then
+		for i = 1, 5 do
+			local cfg = db["boss" .. i]
+			if cfg and cfg.enabled then return true end
+		end
+		return false
+	end
+	local cfg = db[unit]
+	return cfg and cfg.enabled == true
+end
+
+local function shouldShowBlizzardFrameVisibility(info)
+	if not addon.Aura then return true end
+	if not info or not info.name then return true end
+	if info.name == "PlayerFrame" then return not isEQoLUnitEnabled("player") end
+	if info.name == "TargetFrame" then return not isEQoLUnitEnabled("target") end
+	if info.name == "FocusFrame" then return not isEQoLUnitEnabled("focus") end
+	if info.name == "PetFrame" then return not isEQoLUnitEnabled("pet") end
+	if info.name == "BossTargetFrameContainer" then return not isEQoLUnitEnabled("boss") end
+	return true
+end
+
 local ACTIONBAR_RULE_OPTIONS = collectRuleOptions("actionbar")
 local function notifyFrameRuleLocked(label)
 	local base = L["visibilityRule_lockedByUF"] or "Visibility is controlled by Enhanced Unit Frames. Disable them to change this setting."
@@ -642,11 +668,18 @@ local function createFrameCategory()
 	end
 	table.sort(frames, function(a, b) return (a.text or a.name or "") < (b.text or b.name or "") end)
 
+	local function expandWith(predicate)
+		return function()
+			if expandable and expandable.IsExpanded and expandable:IsExpanded() == false then return false end
+			return predicate()
+		end
+	end
+
 	for _, info in ipairs(frames) do
 		if info.var and info.name then
-			local exp = expandable
 			local options = getFrameRuleOptions(info)
 			if #options > 0 then
+				local function shouldShow() return shouldShowBlizzardFrameVisibility(info) end
 				local init = addon.functions.SettingsCreateMultiDropdown(category, {
 					var = info.var .. "_visibility",
 					text = info.text or info.name or info.var,
@@ -656,21 +689,8 @@ local function createFrameCategory()
 						return cfg and cfg[key] == true
 					end,
 					setSelectedFunc = function(key, shouldSelect) setFrameRule(info, key, shouldSelect) end,
-					isEnabled = function()
-						if not addon.Aura then return true end
-
-						local db = addon.db.ufFrames
-						if not db then return true end
-
-						if info.name == "PlayerFrame" and db.player and db.player.enabled then
-							return false
-						elseif info.name == "TargetFrame" and db.target and db.target.enabled then
-							return false
-						end
-
-						return true
-					end,
-					parentSection = exp,
+					isEnabled = function() return shouldShow() end,
+					parentSection = expandWith(shouldShow),
 				})
 			end
 		end

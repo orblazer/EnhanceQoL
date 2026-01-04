@@ -11,7 +11,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_SharedMedia")
 addon.SharedMedia = addon.SharedMedia or {}
 addon.SharedMedia.functions = addon.SharedMedia.functions or {}
 
-local cSharedMedia = addon.SettingsLayout.rootSYSTEM
+local cSharedMedia = addon.SettingsLayout.rootSOUND
 addon.SettingsLayout.sharedMediaCategory = cSharedMedia
 
 local sharedMediaExpandable = addon.functions.SettingsCreateExpandableSection(cSharedMedia, {

@@ -550,11 +550,8 @@ data = {
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cMapNav, data)
 
-local buttonSinkExpandable = addon.functions.SettingsCreateExpandableSection(cMapNav, {
-	name = L["MinimapButtonSinkGroup"],
-	expanded = false,
-	colorizeTitle = false,
-})
+addon.functions.SettingsCreateHeadline(cMapNav, L["MinimapButtonSinkGroup"], { parentSection = mapExpandable })
+local buttonSinkSection = mapExpandable
 
 data = {
 	{
@@ -567,7 +564,7 @@ data = {
 			if addon.functions.applyMinimapButtonMouseover then addon.functions.applyMinimapButtonMouseover() end
 		end,
 		default = false,
-		parentSection = buttonSinkExpandable,
+		parentSection = buttonSinkSection,
 		children = {
 			{
 				var = "useMinimapButtonBinIcon",
@@ -593,7 +590,7 @@ data = {
 				end,
 				parent = true,
 				notify = "enableMinimapButtonBin",
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				var = "buttonSinkAnchorPreference",
@@ -649,7 +646,7 @@ data = {
 				end,
 				notify = "enableMinimapButtonBin",
 				sType = "dropdown",
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				var = "useMinimapButtonBinMouseover",
@@ -672,7 +669,7 @@ data = {
 				end,
 				parent = true,
 				notify = "enableMinimapButtonBin",
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				var = "lockMinimapButtonBin",
@@ -694,7 +691,7 @@ data = {
 				end,
 				parent = true,
 				notify = "enableMinimapButtonBin",
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				var = "minimapButtonBinHideBorder",
@@ -712,7 +709,7 @@ data = {
 						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
 				end,
 				parent = true,
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				var = "minimapButtonBinHideBackground",
@@ -730,7 +727,7 @@ data = {
 						and addon.SettingsLayout.elements["enableMinimapButtonBin"].setting:GetValue() == true
 				end,
 				parent = true,
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				var = "minimapButtonBinColumns",
@@ -757,12 +754,12 @@ data = {
 				max = 10,
 				step = 1,
 				default = 4,
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 			{
 				text = "|cff99e599" .. L["ignoreMinimapSinkHole"] .. "|r",
 				sType = "hint",
-				parentSection = buttonSinkExpandable,
+				parentSection = buttonSinkSection,
 			},
 		},
 	},
@@ -807,7 +804,7 @@ addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 	parent = true,
 	element = addon.SettingsLayout.elements["enableMinimapButtonBin"] and addon.SettingsLayout.elements["enableMinimapButtonBin"].element,
 	parentCheck = isMinimapButtonBinEnabled,
-	parentSection = buttonSinkExpandable,
+	parentSection = buttonSinkSection,
 	optionfunc = function()
 		local buttons = (addon.variables and addon.variables.bagButtonState) or {}
 		local list = {}

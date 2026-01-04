@@ -1,6 +1,6 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_Vendor", "enUS", true)
 
-L["SellingAndShopping"] = "Selling & Shopping"
+L["SellingAndShopping"] = "Vendor Options"
 L["MerchantWindowClosed"] = "Merchant window is closed. Stopping sales"
 
 -- General

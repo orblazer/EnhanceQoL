@@ -26,6 +26,7 @@
   - Auto-accept resurrection requests.
   - Auto-release in PvP/BGs.
   - Latency stream: configurable ping colors + display mode (FPS/Latency).
+  - Master volume stream: DataPanel popup slider for Sound_MasterVolume.
   - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
   - Added missing Dalaran teleport ring variants.
 - **Chat**
@@ -49,12 +50,14 @@
 
 - **Settings UI**
   - Root categories now use a consistent expandable section layout.
+  - UI root renamed to Display.
   - Social now contains Chat settings under the Social root.
-  - System root adds dedicated accordions for CVar, Sound, and Shared Media.
-  - Economy root reorganized into Vendors & Services, Merchant UI, Auction House, Mailbox, and Gold & Tracking.
-  - Vendor module settings moved under Economy with separate Selling & Shopping and Destroy sections.
+  - System root focuses on CVars; Sound + Shared Media moved to a dedicated Sound root.
+  - Economy root reorganized into Repair Options, Vendor Options, Merchant UI, Auction House, Mailbox, and Gold & Tracking.
+  - Vendor module settings moved under Economy as Vendor Options, with Destroy as a subsection.
   - Quest settings moved to Gameplay with a single Questing accordion.
   - Frame visibility rules now have a global fade amount slider.
+  - Blizzard frame options now hide when EQoL frames are enabled (Health Text, Castbars, Visibility rules).
 - **UF Plus / Resource Bars**
   - Brewmaster no longer shows the unused Mana bar.
   - Removed the "Gap between bars" unit frame setting (detached power bar replaces this use case).
@@ -64,10 +67,13 @@
   - Bag display options and item level targets now use multi-select dropdowns with tooltips.
   - Dialog auto-confirm options are grouped into a single multi-select dropdown.
 - **Vendors & Services**
-  - Section renamed to “Repairs and Shopping” and Craft Shopper moved into it.
+  - Section renamed to “Repair Options”.
+  - Craft Shopper moved under Auction House.
+  - Auto-sell junk moved under Vendor Options.
 - **Minimap**
   - Square minimap layout now anchors the mail icon to the top-left of the minimap.
   - Button Sink labels and tooltips refreshed for clarity.
+  - Button Sink settings moved under Minimap & Map.
 - **Mythic+ Teleports**
   - Teleports now collapse to owned items when multiple variants exist (ex. Kirin Tor Rings); tooltip shows `X other variants available`.
 - **Tooltip**

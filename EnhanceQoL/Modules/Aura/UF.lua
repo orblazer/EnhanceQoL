@@ -3380,15 +3380,32 @@ local function updateNameAndLevel(cfg, unit)
 	if cfg and cfg.enabled == false then return end
 	if st.nameText then
 		local scfg = cfg.status or {}
-		local class = select(2, UnitClass(unit))
 		local nc
+		local nr, ng, nb, na
+		local isPlayerUnit = UnitIsPlayer and UnitIsPlayer(unit)
 		if scfg.nameColorMode == "CUSTOM" then
 			nc = scfg.nameColor or { 1, 1, 1, 1 }
+			nr, ng, nb, na = nc[1] or 1, nc[2] or 1, nc[3] or 1, nc[4] or 1
 		else
-			nc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+			if isPlayerUnit then
+				local class = select(2, UnitClass(unit))
+				nc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+				if nc then
+					nr, ng, nb, na = nc.r or nc[1], nc.g or nc[2], nc.b or nc[3], nc.a or nc[4] or 1
+				end
+			elseif shouldUseNPCColors(unit) then
+				local fallback = NORMAL_FONT_COLOR
+				nr = (fallback and (fallback.r or fallback[1])) or 1
+				ng = (fallback and (fallback.g or fallback[2])) or 0.82
+				nb = (fallback and (fallback.b or fallback[3])) or 0
+				na = (fallback and (fallback.a or fallback[4])) or 1
+			end
+		end
+		if not nr then
+			nr, ng, nb, na = 1, 1, 1, 1
 		end
 		st.nameText:SetText(UnitName(unit) or "")
-		st.nameText:SetTextColor(nc and (nc.r or nc[1]) or 1, nc and (nc.g or nc[2]) or 1, nc and (nc.b or nc[3]) or 1, nc and (nc.a or nc[4]) or 1)
+		st.nameText:SetTextColor(nr, ng, nb, na)
 	end
 	if st.levelText then
 		local scfg = cfg.status or {}

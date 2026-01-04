@@ -12,7 +12,7 @@ local db
 
 local function buildSettings()
 	local categoryLabel = L["Move"] or "Mover"
-	local cLayout = addon.SettingsLayout.rootUI
+	local cLayout = addon.SettingsLayout.rootGENERAL
 
 	local expandable = addon.functions.SettingsCreateExpandableSection(cLayout, {
 		name = categoryLabel,
