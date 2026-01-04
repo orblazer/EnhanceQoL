@@ -3714,6 +3714,7 @@ local function initUI()
 		end
 
 		EventUtil.ContinueOnAddOnLoaded("Blizzard_TrainerUI", function()
+			if not addon.db or not addon.db.showTrainAllButton then return end
 			if not ClassTrainerFrame or not ClassTrainerTrainButton then return end
 			addon.variables = addon.variables or {}
 			local button = addon.variables.trainAllButton
