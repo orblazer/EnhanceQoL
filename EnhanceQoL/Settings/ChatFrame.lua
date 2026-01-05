@@ -14,13 +14,31 @@ end
 local cChatFrame = addon.SettingsLayout.rootSOCIAL
 addon.SettingsLayout.chatframeCategory = cChatFrame
 
-local chatExpandable = addon.functions.SettingsCreateExpandableSection(cChatFrame, {
-	name = CHAT,
+local chatWindowExpandable = addon.functions.SettingsCreateExpandableSection(cChatFrame, {
+	name = L["ChatWindow"] or "Chat Window",
 	expanded = false,
 	colorizeTitle = false,
 })
 
-addon.functions.SettingsCreateHeadline(cChatFrame, COMMUNITIES_ADD_TO_CHAT_DROP_DOWN_TITLE, { parentSection = chatExpandable })
+local chatIMExpandable = addon.functions.SettingsCreateExpandableSection(cChatFrame, {
+	name = L["InstantMessenger"] or "Instant Messenger",
+	expanded = false,
+	colorizeTitle = false,
+})
+
+local chatHistoryExpandable = addon.functions.SettingsCreateExpandableSection(cChatFrame, {
+	name = L["CH_TITLE_HISTORY"] or "Chat History",
+	expanded = false,
+	colorizeTitle = false,
+})
+
+local chatBubblesExpandable = addon.functions.SettingsCreateExpandableSection(cChatFrame, {
+	name = L["ChatBubbles"] or "Chat Bubbles",
+	expanded = false,
+	colorizeTitle = false,
+})
+
+addon.functions.SettingsCreateHeadline(cChatFrame, COMMUNITIES_ADD_TO_CHAT_DROP_DOWN_TITLE, { parentSection = chatWindowExpandable })
 
 local data = {
 	{
@@ -191,11 +209,9 @@ local data = {
 	},
 }
 
-applyParentSection(data, chatExpandable)
+applyParentSection(data, chatWindowExpandable)
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cChatFrame, data)
-
-addon.functions.SettingsCreateHeadline(cChatFrame, CHAT_BUBBLES_TEXT, { parentSection = chatExpandable })
 
 data = {
 	{
@@ -232,12 +248,11 @@ data = {
 	},
 }
 
-applyParentSection(data, chatExpandable)
+applyParentSection(data, chatBubblesExpandable)
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cChatFrame, data)
 
-addon.functions.SettingsCreateHeadline(cChatFrame, L["Instant Chats"], { parentSection = chatExpandable })
-addon.functions.SettingsCreateText(cChatFrame, "|cff99e599" .. L["RightClickCloseTab"] .. "|r", { parentSection = chatExpandable })
+addon.functions.SettingsCreateText(cChatFrame, "|cff99e599" .. L["RightClickCloseTab"] .. "|r", { parentSection = chatIMExpandable })
 
 data = {
 	{
@@ -385,7 +400,7 @@ data = {
 	},
 }
 
-applyParentSection(data, chatExpandable)
+applyParentSection(data, chatIMExpandable)
 table.sort(data[1].children, function(a, b) return a.text < b.text end)
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cChatFrame, data)
@@ -422,7 +437,7 @@ data = {
 	end,
 	parent = true,
 	element = addon.SettingsLayout.elements["enableChatIM"].element,
-	parentSection = chatExpandable,
+	parentSection = chatIMExpandable,
 	default = "",
 	var = "ChatIMHistoryClear",
 	type = Settings.VarType.String,
@@ -435,7 +450,7 @@ data = {
 	parentCheck = function()
 		return addon.SettingsLayout.elements["enableChatIM"] and addon.SettingsLayout.elements["enableChatIM"].setting and addon.SettingsLayout.elements["enableChatIM"].setting:GetValue() == true
 	end,
-	parentSection = chatExpandable,
+	parentSection = chatIMExpandable,
 	func = function()
 		StaticPopupDialogs["EQOL_CLEAR_IM_HISTORY"] = StaticPopupDialogs["EQOL_CLEAR_IM_HISTORY"]
 			or {
@@ -455,8 +470,6 @@ data = {
 	end,
 }
 addon.functions.SettingsCreateButton(cChatFrame, data)
-
-addon.functions.SettingsCreateHeadline(cChatFrame, L["CH_TITLE_HISTORY"], { parentSection = chatExpandable })
 
 local chatHistoryStrataOptions = {}
 local strataOrder = {
@@ -788,7 +801,7 @@ data = {
 	},
 }
 
-applyParentSection(data, chatExpandable)
+applyParentSection(data, chatHistoryExpandable)
 addon.functions.SettingsCreateCheckboxes(cChatFrame, data)
 ----- REGION END
 

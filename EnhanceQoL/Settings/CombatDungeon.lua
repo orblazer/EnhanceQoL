@@ -376,7 +376,7 @@ function addon.functions.initDungeonFrame()
 	local expandable = addon.SettingsLayout.gameplayConvenienceSection
 	if not expandable then
 		expandable = addon.functions.SettingsCreateExpandableSection(addon.SettingsLayout.characterInspectCategory, {
-			name = L["Convenience"],
+			name = L["MacrosAndConsumables"] or "Macros & Consumables",
 			expanded = false,
 			colorizeTitle = false,
 		})
@@ -881,7 +881,7 @@ if not sectionDeathRes then
 	addon.SettingsLayout.gameplayDeathResSection = sectionDeathRes
 end
 
--- GENERAL
+addon.functions.SettingsCreateHeadline(cChar, L["ReleaseTimer"], { parentSection = sectionDeathRes })
 
 data = {
 	var = "timeoutRelease",
@@ -1056,6 +1056,8 @@ local function isAutoAcceptResurrectionEnabled()
 		and addon.SettingsLayout.elements["autoAcceptResurrection"].setting:GetValue() == true
 end
 
+addon.functions.SettingsCreateHeadline(cChar, L["Resurrection"], { parentSection = sectionDeathRes })
+
 addon.functions.SettingsCreateCheckbox(cChar, {
 	var = "autoAcceptResurrection",
 	text = L["autoAcceptResurrection"],
@@ -1091,6 +1093,8 @@ addon.functions.SettingsCreateCheckbox(cChar, {
 local function isAutoReleasePvPEnabled()
 	return addon.SettingsLayout.elements["autoReleasePvP"] and addon.SettingsLayout.elements["autoReleasePvP"].setting and addon.SettingsLayout.elements["autoReleasePvP"].setting:GetValue() == true
 end
+
+addon.functions.SettingsCreateHeadline(cChar, L["PvPAutoRelease"], { parentSection = sectionDeathRes })
 
 addon.functions.SettingsCreateCheckbox(cChar, {
 	var = "autoReleasePvP",

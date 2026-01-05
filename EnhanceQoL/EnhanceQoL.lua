@@ -3414,6 +3414,7 @@ local function initUI()
 	addon.functions.InitDBValue("enableMinimapButtonBin", false)
 	addon.functions.InitDBValue("frameVisibilityFadeStrength", 1)
 	addon.functions.InitDBValue("buttonsink", {})
+	addon.functions.InitDBValue("customMinimapButtons", {})
 	addon.functions.InitDBValue("buttonSinkAnchorPreference", "AUTO")
 	addon.functions.InitDBValue("minimapButtonBinColumns", DEFAULT_BUTTON_SINK_COLUMNS)
 	addon.functions.InitDBValue("minimapButtonBinHideBackground", false)
@@ -4061,6 +4062,168 @@ local function initUI()
 		end
 	end
 
+	local CUSTOM_MINIMAP_BUTTON_LOW_REGION = {
+		["AllTheThings-Minimap"] = true,
+	}
+	local CUSTOM_MINIMAP_BUTTON_BYPASS = {
+		SexyMapZoneTextButton = true,
+		Narci_MinimapButton = true,
+	}
+	local CUSTOM_MINIMAP_BUTTON_ICON_OVERRIDES = {
+		["AllTheThings-Minimap"] = "Interface\\AddOns\\AllTheThings\\assets\\logo_tiny",
+	}
+	local CUSTOM_MINIMAP_BUTTON_OWN_LDB = {
+		["LibDBIcon10_" .. addonName] = true,
+		["LibDBIcon10_" .. addonName .. "_LootSpec"] = true,
+		["LibDBIcon10_" .. addonName .. "_ButtonSinkMap"] = true,
+	}
+
+	local function reanchorCustomTooltip(tip, anchorButton)
+		if not tip or not anchorButton or not Minimap then return end
+		tip:ClearAllPoints()
+		if Minimap:GetCenter() * Minimap:GetEffectiveScale() > (GetScreenWidth() * UIParent:GetEffectiveScale() / 2) then
+			tip:SetPoint("TOPRIGHT", anchorButton, "BOTTOMRIGHT", 0, -6)
+		else
+			tip:SetPoint("TOPLEFT", anchorButton, "BOTTOMLEFT", 0, -6)
+		end
+	end
+
+	local function getCustomButtonTexture(name, button)
+		local icon = _G[name .. "Icon"]
+		if icon and icon.GetObjectType and icon:GetObjectType() == "Texture" then
+			local tex = icon:GetTexture()
+			if tex then return tex end
+		end
+		if not button or not button.GetRegions then return nil end
+		for i = 1, select("#", button:GetRegions()) do
+			local region = select(i, button:GetRegions())
+			if region and region.GetTexture then
+				local width = region:GetWidth()
+				if not width or width == 0 then width = select(1, region:GetSize()) end
+				if width and width < 30 then
+					local tex = region:GetTexture()
+					if tex then return tex end
+				end
+			end
+		end
+		return nil
+	end
+
+	local function hideCustomMinimapButton(button, name)
+		if not button or not name then return end
+		button:Hide()
+		addon.variables = addon.variables or {}
+		addon.variables.customMinimapButtonHooks = addon.variables.customMinimapButtonHooks or {}
+		if not addon.variables.customMinimapButtonHooks[name] then
+			button:HookScript("OnShow", function(self) self:Hide() end)
+			addon.variables.customMinimapButtonHooks[name] = true
+		end
+	end
+
+	local function createCustomMinimapButton(name, button)
+		if not LDB or not LDBIcon or not name then return end
+		addon.variables = addon.variables or {}
+		addon.variables.customMinimapButtonOriginals = addon.variables.customMinimapButtonOriginals or {}
+		if addon.variables.customMinimapButtonOriginals[name] then
+			hideCustomMinimapButton(button, name)
+			return
+		end
+		if LDBIcon.IsRegistered and LDBIcon:IsRegistered(name) then return end
+		if LDB.GetDataObjectByName and LDB:GetDataObjectByName(name) then return end
+
+		local icon = CUSTOM_MINIMAP_BUTTON_ICON_OVERRIDES[name] or getCustomButtonTexture(name, button) or "Interface\\HELPFRAME\\HelpIcon-KnowledgeBase"
+		local dataObject = LDB:NewDataObject(name, {
+			type = "data source",
+			text = name,
+			icon = icon,
+			OnClick = function(_, mouseButton)
+				local original = _G[name]
+				if not original then return end
+				if original.Click then
+					original:Click(mouseButton)
+					return
+				end
+				if original.GetScript then
+					local onClick = original:GetScript("OnClick")
+					if onClick then
+						onClick(original, mouseButton)
+						return
+					end
+					local onMouseUp = original:GetScript("OnMouseUp")
+					if onMouseUp then onMouseUp(original, mouseButton) end
+				end
+			end,
+			OnEnter = function(self)
+				local original = _G[name]
+				if not original or not original.GetScript then return end
+				local onEnter = original:GetScript("OnEnter")
+				if not onEnter then return end
+				if name == "AllTheThings-Minimap" then
+					onEnter(original, true)
+					reanchorCustomTooltip(GameTooltip, self)
+				else
+					onEnter(original)
+				end
+			end,
+			OnLeave = function(self)
+				local original = _G[name]
+				if not original or not original.GetScript then return end
+				local onLeave = original:GetScript("OnLeave")
+				if onLeave then onLeave(original) end
+			end,
+		})
+
+		addon.db.customMinimapButtons[name] = addon.db.customMinimapButtons[name] or {}
+		LDBIcon:Register(name, dataObject, addon.db.customMinimapButtons[name])
+		addon.variables.customMinimapButtonOriginals[name] = true
+		hideCustomMinimapButton(button, name)
+	end
+
+	local function isRealLibDBIconButton(childName, child)
+		if not childName or not childName:match("^LibDBIcon10_") then return false end
+		if not LDBIcon or not LDBIcon.GetMinimapButton then return false end
+		local ldbName = childName:gsub("^LibDBIcon10_", "")
+		return LDBIcon:GetMinimapButton(ldbName) == child
+	end
+
+	function addon.functions.scanCustomMinimapButtons()
+		if not Minimap or not LDB or not LDBIcon then return end
+		addon.variables = addon.variables or {}
+		addon.variables.customMinimapButtonOriginals = addon.variables.customMinimapButtonOriginals or {}
+		for _, child in ipairs({ Minimap:GetChildren() }) do
+			local name = child and child.GetName and child:GetName()
+			if name and child:IsObjectType("Button") then
+				if addon.variables.customMinimapButtonOriginals[name] then
+					hideCustomMinimapButton(child, name)
+				elseif CUSTOM_MINIMAP_BUTTON_OWN_LDB[name] then
+					-- Skip our own LDB minimap buttons.
+				elseif not (addon.variables.buttonSink and child:GetParent() == addon.variables.buttonSink) then
+					if not CUSTOM_MINIMAP_BUTTON_BYPASS[name] then
+						local isSecure = type(issecurevariable) == "function" and issecurevariable(name)
+						if not isSecure then
+							local regions = child:GetNumRegions()
+							if (regions and regions >= 3) or CUSTOM_MINIMAP_BUTTON_LOW_REGION[name] then
+								if not isRealLibDBIconButton(name, child) then createCustomMinimapButton(name, child) end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	function addon.functions.ensureCustomMinimapButtons()
+		if not addon.db or not addon.db.minimapButtonsMouseover then return end
+		addon.variables = addon.variables or {}
+		if addon.variables.customMinimapButtonTicker then return end
+		addon.functions.scanCustomMinimapButtons()
+		addon.variables.customMinimapButtonTicker = C_Timer.NewTicker(2, addon.functions.scanCustomMinimapButtons, 8)
+		C_Timer.After(0.1, addon.functions.scanCustomMinimapButtons)
+		C_Timer.After(17, function()
+			if addon.variables then addon.variables.customMinimapButtonTicker = nil end
+		end)
+	end
+
 	local function setLibDBIconMouseover(name, enable, button)
 		if not LDBIcon or not name then return end
 		if LDBIcon.ShowOnEnter then
@@ -4152,38 +4315,43 @@ local function initUI()
 	function addon.functions.gatherMinimapButtons()
 		for _, child in ipairs({ Minimap:GetChildren() }) do
 			if child:IsObjectType("Button") and child:GetName() then
-				local btnName = child:GetName():gsub("^LibDBIcon10_", ""):gsub(".*_LibDBIcon_", "")
-				if
-					not (
-						btnName == "MinimapZoomIn"
-						or btnName == "MinimapZoomOut"
-						or btnName == "MiniMapWorldMapButton"
-						or btnName == "MiniMapTracking"
-						or btnName == "GameTimeFrame"
-						or btnName == "MinimapMailFrame"
-						or btnName:match("^HandyNotesPin")
-						or btnName:match("^TTMinimapButton")
-						or btnName == addonName .. "_ButtonSinkMap"
-						or btnName == "ZygorGuidesViewerMapIcon"
-					)
-				then
-					local pData = addon.variables.bagButtonPoint[btnName] or {}
-					if not pData.point then
-						local point, relativeTo, relativePoint, xOfs, yOfs = child:GetPoint()
-						pData.point = point
-						pData.relativeTo = relativeTo
-						pData.relativePoint = relativePoint
-						pData.xOfs = xOfs
-						pData.yOfs = yOfs
-					end
-					pData.strata = pData.strata or child:GetFrameStrata()
-					pData.level = pData.level or child:GetFrameLevel()
-					addon.variables.bagButtonPoint[btnName] = pData
-					if (child.db and child.db.hide) or not child:IsVisible() then
-						addon.variables.bagButtonState[btnName] = false
-					else
-						addon.variables.bagButtonState[btnName] = true
-						addon.variables.bagButtons[btnName] = child
+				local childName = child:GetName()
+				if addon.variables.customMinimapButtonOriginals and addon.variables.customMinimapButtonOriginals[childName] then
+					if child:IsVisible() then child:Hide() end
+				else
+					local btnName = childName:gsub("^LibDBIcon10_", ""):gsub(".*_LibDBIcon_", "")
+					if
+						not (
+							btnName == "MinimapZoomIn"
+							or btnName == "MinimapZoomOut"
+							or btnName == "MiniMapWorldMapButton"
+							or btnName == "MiniMapTracking"
+							or btnName == "GameTimeFrame"
+							or btnName == "MinimapMailFrame"
+							or btnName:match("^HandyNotesPin")
+							or btnName:match("^TTMinimapButton")
+							or btnName == addonName .. "_ButtonSinkMap"
+							or btnName == "ZygorGuidesViewerMapIcon"
+						)
+					then
+						local pData = addon.variables.bagButtonPoint[btnName] or {}
+						if not pData.point then
+							local point, relativeTo, relativePoint, xOfs, yOfs = child:GetPoint()
+							pData.point = point
+							pData.relativeTo = relativeTo
+							pData.relativePoint = relativePoint
+							pData.xOfs = xOfs
+							pData.yOfs = yOfs
+						end
+						pData.strata = pData.strata or child:GetFrameStrata()
+						pData.level = pData.level or child:GetFrameLevel()
+						addon.variables.bagButtonPoint[btnName] = pData
+						if (child.db and child.db.hide) or not child:IsVisible() then
+							addon.variables.bagButtonState[btnName] = false
+						else
+							addon.variables.bagButtonState[btnName] = true
+							addon.variables.bagButtons[btnName] = child
+						end
 					end
 				end
 			end
@@ -4191,27 +4359,26 @@ local function initUI()
 	end
 
 	local function shouldEnableMinimapButtonMouseover() return addon.db and addon.db.minimapButtonsMouseover end
+	local function shouldEnableMouseoverForButton(name)
+		if not shouldEnableMinimapButtonMouseover() then return false end
+		if addon.db and addon.db["enableMinimapButtonBin"] and not addon.db["ignoreMinimapButtonBin_" .. name] then return false end
+		return true
+	end
 	function addon.functions.applyMinimapButtonMouseover()
 		if not LDBIcon then return end
 
+		if addon.functions.ensureCustomMinimapButtons then addon.functions.ensureCustomMinimapButtons() end
 		addon.functions.gatherMinimapButtons()
 
 		addon.variables = addon.variables or {}
-		local enable = shouldEnableMinimapButtonMouseover()
 		for name, button in pairs(addon.variables.bagButtons) do
-			local enableit = enable
-			if addon.db["enableMinimapButtonBin"] and not addon.db["ignoreMinimapButtonBin_" .. name] then enableit = false end
-			setLibDBIconMouseover(name, enableit, button)
+			setLibDBIconMouseover(name, shouldEnableMouseoverForButton(name), button)
 		end
 		if not addon.variables.minimapButtonMouseoverHooked then
 			if LDBIcon.RegisterCallback then
-				LDBIcon.RegisterCallback(addon, "LibDBIcon_IconCreated", function(_, button, name)
-					if shouldEnableMinimapButtonMouseover() then setLibDBIconMouseover(name, true) end
-				end)
+				LDBIcon.RegisterCallback(addon, "LibDBIcon_IconCreated", function(_, button, name) setLibDBIconMouseover(name, shouldEnableMouseoverForButton(name)) end)
 			else
-				hooksecurefunc(LDBIcon, "Register", function(self, name)
-					if shouldEnableMinimapButtonMouseover() then setLibDBIconMouseover(name, true) end
-				end)
+				hooksecurefunc(LDBIcon, "Register", function(self, name) setLibDBIconMouseover(name, shouldEnableMouseoverForButton(name)) end)
 			end
 			addon.variables.minimapButtonMouseoverHooked = true
 		end

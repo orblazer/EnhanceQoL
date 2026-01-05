@@ -13,7 +13,7 @@ local cQuest = addon.SettingsLayout.rootGAMEPLAY
 addon.SettingsLayout.questCategory = cQuest
 
 local questingExpandable = addon.functions.SettingsCreateExpandableSection(cQuest, {
-	name = L["Questing"] or "Questing",
+	name = L["QuestingAndCinematics"] or "Questing & Cinematics",
 	newTagID = "Questing",
 	expanded = false,
 	colorizeTitle = false,
@@ -204,7 +204,7 @@ local function ShowRemoveIgnoredQuestNPCDialog(selectionKey)
 	StaticPopup_Show(REMOVE_IGNORED_QUEST_NPC_DIALOG, npcName or tostring(npcID), nil, npcID)
 end
 
-local data = {
+local questingData = {
 	{
 		var = "autoChooseQuest",
 		text = L["autoChooseQuest"],
@@ -287,6 +287,9 @@ local data = {
 		func = function(key) addon.db["questWowheadLink"] = key end,
 		default = false,
 	},
+}
+
+local cinematicData = {
 	{
 		var = "autoCancelCinematic",
 		text = L["autoCancelCinematic"],
@@ -315,6 +318,9 @@ local data = {
 		end,
 		default = false,
 	},
+}
+
+local trackerData = {
 	{
 		var = "questTrackerShowQuestCount",
 		text = L["questTrackerShowQuestCount"],
@@ -379,9 +385,17 @@ local data = {
 	},
 }
 
-applyParentSection(data, questingExpandable)
-table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cQuest, data)
+addon.functions.SettingsCreateHeadline(cQuest, L["Questing"], { parentSection = questingExpandable })
+applyParentSection(questingData, questingExpandable)
+addon.functions.SettingsCreateCheckboxes(cQuest, questingData)
+
+addon.functions.SettingsCreateHeadline(cQuest, L["Cinematics"], { parentSection = questingExpandable })
+applyParentSection(cinematicData, questingExpandable)
+addon.functions.SettingsCreateCheckboxes(cQuest, cinematicData)
+
+addon.functions.SettingsCreateHeadline(cQuest, L["questTrackerOptions"], { parentSection = questingExpandable })
+applyParentSection(trackerData, questingExpandable)
+addon.functions.SettingsCreateCheckboxes(cQuest, trackerData)
 
 ----- REGION END
 

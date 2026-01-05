@@ -33,7 +33,7 @@ local function buildDrinkMacroSettings()
 	local convenienceSection = addon.SettingsLayout.gameplayConvenienceSection
 	if not convenienceSection then
 		convenienceSection = addon.functions.SettingsCreateExpandableSection(cDrink, {
-			name = (LCore and LCore["Convenience"]) or "Convenience",
+			name = (LCore and LCore["MacrosAndConsumables"]) or "Macros & Consumables",
 			expanded = false,
 			colorizeTitle = false,
 		})
