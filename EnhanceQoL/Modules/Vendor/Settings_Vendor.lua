@@ -180,25 +180,16 @@ local function buildSettings()
 		colorizeTitle = false,
 	})
 
-	local autoSellExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
-		name = L["vendorAutoSellRules"] or "Vendor - Auto-Sell Rules",
-		expanded = false,
-		colorizeTitle = false,
-	})
-
-	local includeExcludeExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
-		name = L["vendorIncludeExclude"] or "Vendor - Include / Exclude",
-		expanded = false,
-		colorizeTitle = false,
-	})
-
-	local destroyQueueExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
-		name = L["vendorDestroyQueue"] or "Vendor - Destroy Queue",
-		expanded = false,
-		colorizeTitle = false,
-	})
-
 	local generalCheckboxes = {
+		{
+			var = "sellAllJunk",
+			text = (LMain and LMain["sellAllJunk"]) or "Automatically sell all junk items",
+			desc = (LMain and LMain["sellAllJunkDesc"]) or "Sells all poor-quality items whenever a merchant window opens",
+			func = function(value)
+				addon.db["sellAllJunk"] = value and true or false
+				if value then addon.functions.checkBagIgnoreJunk() end
+			end,
+		},
 		{
 			var = "vendorSwapAutoSellShift",
 			text = L["vendorSwapAutoSellShift"],
@@ -217,13 +208,9 @@ local function buildSettings()
 			func = function(value) addon.db["vendorAltClickInclude"] = value and true or false end,
 		},
 		{
-			var = "sellAllJunk",
-			text = (LMain and LMain["sellAllJunk"]) or "Automatically sell all junk items",
-			desc = (LMain and LMain["sellAllJunkDesc"]) or "Sells all poor-quality items whenever a merchant window opens",
-			func = function(value)
-				addon.db["sellAllJunk"] = value and true or false
-				if value then addon.functions.checkBagIgnoreJunk() end
-			end,
+			var = "vendorShowSellTooltip",
+			text = L["vendorShowSellTooltip"],
+			func = function(value) addon.db["vendorShowSellTooltip"] = value and true or false end,
 		},
 		{
 			var = "vendorShowSellOverlay",
@@ -247,15 +234,15 @@ local function buildSettings()
 				},
 			},
 		},
-		{
-			var = "vendorShowSellTooltip",
-			text = L["vendorShowSellTooltip"],
-			func = function(value) addon.db["vendorShowSellTooltip"] = value and true or false end,
-		},
 	}
-	table.sort(generalCheckboxes, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
 	applyParentSection(generalCheckboxes, quickActionsExpandable)
 	addon.functions.SettingsCreateCheckboxes(cVendor, generalCheckboxes)
+
+	local autoSellExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
+		name = L["vendorAutoSellRules"] or "Vendor - Auto-Sell Rules",
+		expanded = false,
+		colorizeTitle = false,
+	})
 
 	local qualities = {
 		{ q = 1, key = "Common" },
@@ -386,7 +373,6 @@ local function buildSettings()
 			})
 		end
 
-		table.sort(qualityCheckboxes, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
 		applyParentSection(qualityCheckboxes, autoSellExpandable)
 		addon.functions.SettingsCreateCheckboxes(cVendor, qualityCheckboxes)
 
@@ -412,6 +398,12 @@ local function buildSettings()
 		syncBindFilters(quality, tabName)
 		addon.Vendor.variables.itemQualityFilter[quality] = addon.db["vendor" .. tabName .. "Enable"]
 	end
+
+	local includeExcludeExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
+		name = L["vendorIncludeExclude"] or "Vendor - Include / Exclude",
+		expanded = false,
+		colorizeTitle = false,
+	})
 
 	addon.functions.SettingsCreateHeadline(cVendor, L["Include"] or "Include", { parentSection = includeExcludeExpandable })
 	addon.functions.SettingsCreateText(cVendor, L["vendorAddItemToInclude"], { parentSection = includeExcludeExpandable })
@@ -469,6 +461,12 @@ local function buildSettings()
 		parentSection = includeExcludeExpandable,
 	})
 
+	local destroyQueueExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
+		name = L["vendorDestroyQueue"] or "Vendor - Destroy Queue",
+		expanded = false,
+		colorizeTitle = false,
+	})
+
 	local destroySection = destroyQueueExpandable
 
 	local destroyChildren = {
@@ -524,7 +522,6 @@ local function buildSettings()
 			set = function(value) removeItemFromList("vendorIncludeDestroyList", value) end,
 		},
 	}
-	table.sort(destroyChildren, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
 	local destroyEntries = {
 		{
 			var = "vendorDestroyEnable",

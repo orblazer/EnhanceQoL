@@ -1,6 +1,10 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL_Vendor", "enUS", true)
 
 L["SellingAndShopping"] = "Vendor Options"
+L["vendorQuickActions"] = "Vendor - Quick Actions"
+L["vendorAutoSellRules"] = "Vendor - Auto-Sell Rules"
+L["vendorIncludeExclude"] = "Vendor - Include / Exclude"
+L["vendorDestroyQueue"] = "Vendor - Destroy Queue"
 L["MerchantWindowClosed"] = "Merchant window is closed. Stopping sales"
 
 -- General
