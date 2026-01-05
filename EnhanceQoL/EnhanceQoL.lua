@@ -4188,6 +4188,7 @@ local function initUI()
 						or btnName == "GameTimeFrame"
 						or btnName == "MinimapMailFrame"
 						or btnName:match("^HandyNotesPin")
+						or btnName:match("^TTMinimapButton")
 						or btnName == addonName .. "_ButtonSinkMap"
 						or btnName == "ZygorGuidesViewerMapIcon"
 					)
