@@ -14,7 +14,7 @@ local mapExpandable = addon.functions.SettingsCreateExpandableSection(cMapNav, {
 	colorizeTitle = false,
 })
 
-addon.functions.SettingsCreateHeadline(cMapNav, MINIMAP_LABEL, { parentSection = mapExpandable })
+addon.functions.SettingsCreateHeadline(cMapNav, L["MapBasics"] or "Map Basics", { parentSection = mapExpandable })
 
 local data = {
 	{
@@ -32,6 +32,37 @@ local data = {
 		default = false,
 		parentSection = mapExpandable,
 	},
+	{
+		var = "showWorldMapCoordinates",
+		text = L["showWorldMapCoordinates"],
+		desc = L["showWorldMapCoordinatesDesc"],
+		func = function(value)
+			addon.db["showWorldMapCoordinates"] = value
+			if value then
+				addon.functions.EnableWorldMapCoordinates()
+			else
+				addon.functions.DisableWorldMapCoordinates()
+			end
+		end,
+		default = false,
+		parentSection = mapExpandable,
+	},
+	{
+		var = "mapFade",
+		text = L["mapFade"],
+		get = function() return getCVarOptionState("mapFade") end,
+		func = function(value) setCVarOptionState("mapFade", value) end,
+		default = false,
+		parentSection = mapExpandable,
+	},
+}
+
+table.sort(data, function(a, b) return a.text < b.text end)
+addon.functions.SettingsCreateCheckboxes(cMapNav, data)
+
+addon.functions.SettingsCreateHeadline(cMapNav, L["SquareMinimap"] or "Square Minimap", { parentSection = mapExpandable })
+
+data = {
 	{
 		var = "enableSquareMinimap",
 		text = L["SquareMinimap"],
@@ -132,6 +163,14 @@ local data = {
 			},
 		},
 	},
+}
+
+table.sort(data, function(a, b) return a.text < b.text end)
+addon.functions.SettingsCreateCheckboxes(cMapNav, data)
+
+addon.functions.SettingsCreateHeadline(cMapNav, L["MinimapButtonsAndCluster"] or "Minimap Buttons & Cluster", { parentSection = mapExpandable })
+
+data = {
 	{
 		var = "minimapButtonsMouseover",
 		text = L["minimapButtonsMouseover"],
@@ -194,38 +233,7 @@ addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 	end,
 })
 
-addon.functions.SettingsCreateHeadline(cMapNav, WORLD_MAP, { parentSection = mapExpandable })
-
-data = {
-	{
-		var = "showWorldMapCoordinates",
-		text = L["showWorldMapCoordinates"],
-		desc = L["showWorldMapCoordinatesDesc"],
-		func = function(value)
-			addon.db["showWorldMapCoordinates"] = value
-			if value then
-				addon.functions.EnableWorldMapCoordinates()
-			else
-				addon.functions.DisableWorldMapCoordinates()
-			end
-		end,
-		default = false,
-		parentSection = mapExpandable,
-	},
-	{
-		var = "mapFade",
-		text = L["mapFade"],
-		get = function() return getCVarOptionState("mapFade") end,
-		func = function(value) setCVarOptionState("mapFade", value) end,
-		default = false,
-		parentSection = mapExpandable,
-	},
-}
-
-table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cMapNav, data)
-
-addon.functions.SettingsCreateHeadline(cMapNav, SPECIALIZATION, { parentSection = mapExpandable })
+addon.functions.SettingsCreateHeadline(cMapNav, L["LootspecAndLandingPage"] or "Lootspec & Landing Page", { parentSection = mapExpandable })
 
 data = {
 	{
@@ -243,14 +251,6 @@ data = {
 		default = false,
 		parentSection = mapExpandable,
 	},
-}
-
-table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cMapNav, data)
-
-addon.functions.SettingsCreateHeadline(cMapNav, L["LandingPage"], { parentSection = mapExpandable })
-
-data = {
 	{
 		var = "enableLandingPageMenu",
 		text = L["enableLandingPageMenu"],
@@ -332,7 +332,7 @@ addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 	setSelectedFunc = setIgnoreStateLandingPage,
 })
 
-addon.functions.SettingsCreateHeadline(cMapNav, L["showInstanceDifficulty"], { parentSection = mapExpandable })
+addon.functions.SettingsCreateHeadline(cMapNav, L["InstanceDifficultyIndicator"] or "Instance Difficulty Indicator", { parentSection = mapExpandable })
 
 data = {
 	{
@@ -560,7 +560,7 @@ data = {
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cMapNav, data)
 
-addon.functions.SettingsCreateHeadline(cMapNav, L["MinimapButtonSinkGroup"], { parentSection = mapExpandable })
+addon.functions.SettingsCreateHeadline(cMapNav, L["MinimapButtonBin"] or "Minimap Button Bin", { parentSection = mapExpandable })
 local buttonSinkSection = mapExpandable
 
 data = {

@@ -1305,6 +1305,46 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					name = L["Reverse absorb fill"] or "Reverse absorb fill",
+					kind = settingType.Checkbox,
+					field = "absorbReverseFill",
+					parentId = "absorb",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.absorbReverseFill == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbReverseFill = value and true or false
+						if c.absorbReverseFill then c.absorbOverfill = false end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+					default = false,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Absorb overfill"] or "Absorb overfill",
+					kind = settingType.Checkbox,
+					field = "absorbOverfill",
+					parentId = "absorb",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.absorbOverfill == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.absorbOverfill = value and true or false
+						if c.absorbOverfill then c.absorbReverseFill = false end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+					default = false,
+				}
+
+				settingsList[#settingsList + 1] = {
 					name = L["Show sample absorb"] or "Show sample absorb",
 					kind = settingType.Checkbox,
 					field = "absorbSample",
@@ -2222,17 +2262,21 @@ local function buildSpecToggles(specIndex, specName, available, expandable)
 	}
 end
 
+local settingsBuilt = false
 local function buildSettings()
+	if settingsBuilt then return end
 	local cat = addon.SettingsLayout.rootUI
 
 	if not cat then return end
 
-	local expandable = addon.functions.SettingsCreateExpandableSection(cat, {
-		name = L["Resource Bars"],
-		expanded = false,
-		colorizeTitle = false,
-		newTagID = "ResourceBars"
-	})
+	local expandable = addon.SettingsLayout.uiBarsResourcesExpandable
+	if not expandable then
+		return
+	end
+
+	settingsBuilt = true
+
+	addon.functions.SettingsCreateHeadline(cat, L["Resource Bars"], { parentSection = expandable })
 
 	local data = {
 		{
@@ -2334,8 +2378,6 @@ local function buildSettings()
 	end
 
 	addon.functions.SettingsCreateCheckboxes(cat, data)
-
-	if addon.functions and addon.functions.SettingsCreateClassSpecificResourceBars then addon.functions.SettingsCreateClassSpecificResourceBars(cat, expandable) end
 
 	do -- Profile export/import
 		local classKey = addon.variables.unitClass or "UNKNOWN"
@@ -2487,4 +2529,5 @@ local function buildSettings()
 	registerEditModeBars()
 end
 
-buildSettings()
+addon.Aura.functions = addon.Aura.functions or {}
+addon.Aura.functions.AddResourceBarsSettings = buildSettings

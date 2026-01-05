@@ -70,10 +70,12 @@ Submodules\Merchant.lua
 Submodules\HealthText.lua
 Submodules\Mailbox.lua
 Submodules\Mailbox.xml
+Modules\Aura\Locales\[TextLocale].lua
+Modules\Aura\Init.lua
+Modules\Aura\ResourceBars.lua
 Settings\SettingsUI.xml
 
 # Aura
-Modules\Aura\Locales\[TextLocale].lua
 Modules\Aura\Aura.xml
 
 # Mouse

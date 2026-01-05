@@ -138,11 +138,22 @@ local cUIInput = addon.SettingsLayout.rootUI
 local framesExpandable = addon.SettingsLayout.uiFramesExpandable
 if not framesExpandable then
 	framesExpandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
-		name = L["visibilityKindFrames"],
+		name = L["VisibilityAndFadingFrames"] or "Visibility & Fading (Frames)",
 		expanded = false,
 		colorizeTitle = false,
 	})
 	addon.SettingsLayout.uiFramesExpandable = framesExpandable
+end
+
+local barsResourcesExpandable = addon.SettingsLayout.uiBarsResourcesExpandable
+if not barsResourcesExpandable then
+	barsResourcesExpandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
+		name = L["BarsAndResources"] or "Bars & Resources",
+		expanded = false,
+		colorizeTitle = false,
+		newTagID = "ResourceBars",
+	})
+	addon.SettingsLayout.uiBarsResourcesExpandable = barsResourcesExpandable
 end
 
 local verticalScale = 11 / 17
@@ -321,7 +332,7 @@ function addon.functions.SettingsCreateClassSpecificResourceBars(category, paren
 	addon.functions.SettingsCreateCheckboxes(category, data)
 end
 
-addon.functions.SettingsCreateHeadline(cUIInput, L["XP_Rep"], { parentSection = framesExpandable })
+addon.functions.SettingsCreateHeadline(cUIInput, L["XP_Rep"], { parentSection = barsResourcesExpandable })
 
 local data = {
 	{
@@ -338,7 +349,7 @@ local data = {
 			EQOL_UpdateStatusBars(MainStatusTrackingBarContainer, height, width, scale)
 			EQOL_UpdateStatusBars(SecondaryStatusTrackingBarContainer, height, width, scale)
 		end,
-		parentSection = framesExpandable,
+		parentSection = barsResourcesExpandable,
 		children = {
 			{
 				var = "modifyXPRepBarWidth",
@@ -365,7 +376,7 @@ local data = {
 				parent = true,
 				default = 571,
 				sType = "slider",
-				parentSection = framesExpandable,
+				parentSection = barsResourcesExpandable,
 			},
 			{
 				var = "modifyXPRepBarHeight",
@@ -392,7 +403,7 @@ local data = {
 				parent = true,
 				default = 17,
 				sType = "slider",
-				parentSection = framesExpandable,
+				parentSection = barsResourcesExpandable,
 			},
 			{
 				var = "modifyXPRepBarScale",
@@ -415,15 +426,22 @@ local data = {
 				parent = true,
 				default = 1,
 				sType = "slider",
-				parentSection = framesExpandable,
+				parentSection = barsResourcesExpandable,
 			},
 		},
 	},
 }
 addon.functions.SettingsCreateCheckboxes(cUIInput, data)
 
+if addon.functions and addon.functions.SettingsCreateClassSpecificResourceBars then
+	addon.functions.SettingsCreateClassSpecificResourceBars(cUIInput, barsResourcesExpandable)
+end
+if addon.Aura and addon.Aura.functions and addon.Aura.functions.AddResourceBarsSettings then
+	addon.Aura.functions.AddResourceBarsSettings()
+end
+
 local interfaceExpandable = addon.functions.SettingsCreateExpandableSection(cUIInput, {
-	name = L["InterfaceTweaks"],
+	name = L["PopupsAndUITweaks"] or "Popups & UI Tweaks",
 	expanded = false,
 	colorizeTitle = false,
 })
@@ -436,10 +454,10 @@ data = {
 		parentSection = interfaceExpandable,
 	},
 	{
-		var = "NameplatePersonalShowInCombat",
-		text = L["NameplatePersonalShowInCombat"],
-		get = function() return getCVarOptionState("NameplatePersonalShowInCombat") end,
-		func = function(value) setCVarOptionState("NameplatePersonalShowInCombat", value) end,
+		var = "ffxDeath",
+		text = L["ffxDeath"],
+		get = function() return getCVarOptionState("ffxDeath") end,
+		func = function(value) setCVarOptionState("ffxDeath", value) end,
 		default = false,
 		parentSection = interfaceExpandable,
 	},

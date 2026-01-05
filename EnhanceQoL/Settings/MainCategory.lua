@@ -3,7 +3,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local SettingsLib = LibStub("LibEQOLSettingsMode-1.0")
 
 local rootCategories = {
-	{ id = "UI", label = _G["DISPLAY"] },
+	{ id = "UI", label = _G["INTERFACE_LABEL"] },
 	{ id = "GENERAL", label = _G["GENERAL"] },
 	{ id = "GAMEPLAY", label = _G["SETTING_GROUP_GAMEPLAY"] },
 	{ id = "SOCIAL", label = _G["SOCIAL_LABEL"] },

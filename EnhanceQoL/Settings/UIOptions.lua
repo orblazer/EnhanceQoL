@@ -554,7 +554,7 @@ local function createActionBarCategory()
 	local category = addon.SettingsLayout.rootUI
 
 	local expandable = addon.functions.SettingsCreateExpandableSection(category, {
-		name = ACTIONBARS_LABEL,
+		name = L["ActionBarsAndButtons"] or "Action Bars & Buttons",
 		expanded = false,
 		colorizeTitle = false,
 	})
@@ -663,7 +663,7 @@ local function createFrameCategory()
 	local category = addon.SettingsLayout.rootUI
 
 	local expandable = addon.functions.SettingsCreateExpandableSection(category, {
-		name = L["visibilityKindFrames"],
+		name = L["VisibilityAndFadingFrames"] or "Visibility & Fading (Frames)",
 		newTagID = "VisibilityFrames",
 		expanded = false,
 		colorizeTitle = false,
@@ -733,7 +733,22 @@ local function createFrameCategory()
 		parentSection = expandable,
 	})
 
-	local displayCVarData = {
+end
+
+function addon.functions.initUIOptions() end
+
+local function createNameplatesCategory()
+	local category = addon.SettingsLayout.rootUI
+	local label = L["NameplatesAndNames"] or "Nameplates & Names"
+
+	local expandable = addon.functions.SettingsCreateExpandableSection(category, {
+		name = label,
+		expanded = false,
+		colorizeTitle = false,
+	})
+	addon.SettingsLayout.uiNameplatesExpandable = expandable
+
+	local nameplateData = {
 		{
 			var = "ShowClassColorInNameplate",
 			text = L["ShowClassColorInNameplate"],
@@ -743,26 +758,10 @@ local function createFrameCategory()
 			parentSection = expandable,
 		},
 		{
-			var = "ShowTargetCastbar",
-			text = L["ShowTargetCastbar"],
-			get = function() return getCVarOptionState("ShowTargetCastbar") end,
-			func = function(value) setCVarOptionState("ShowTargetCastbar", value) end,
-			default = false,
-			parentSection = expandable,
-		},
-		{
-			var = "raidFramesDisplayClassColor",
-			text = L["raidFramesDisplayClassColor"],
-			get = function() return getCVarOptionState("raidFramesDisplayClassColor") end,
-			func = function(value) setCVarOptionState("raidFramesDisplayClassColor", value) end,
-			default = false,
-			parentSection = expandable,
-		},
-		{
-			var = "pvpFramesDisplayClassColor",
-			text = L["pvpFramesDisplayClassColor"],
-			get = function() return getCVarOptionState("pvpFramesDisplayClassColor") end,
-			func = function(value) setCVarOptionState("pvpFramesDisplayClassColor", value) end,
+			var = "NameplatePersonalShowInCombat",
+			text = L["NameplatePersonalShowInCombat"],
+			get = function() return getCVarOptionState("NameplatePersonalShowInCombat") end,
+			func = function(value) setCVarOptionState("NameplatePersonalShowInCombat", value) end,
 			default = false,
 			parentSection = expandable,
 		},
@@ -782,18 +781,31 @@ local function createFrameCategory()
 			default = false,
 			parentSection = expandable,
 		},
-		{
-			var = "ffxDeath",
-			text = L["ffxDeath"],
-			get = function() return getCVarOptionState("ffxDeath") end,
-			func = function(value) setCVarOptionState("ffxDeath", value) end,
-			default = false,
-			parentSection = expandable,
-		},
 	}
 
-	table.sort(displayCVarData, function(a, b) return a.text < b.text end)
-	addon.functions.SettingsCreateCheckboxes(category, displayCVarData)
+	table.sort(nameplateData, function(a, b) return a.text < b.text end)
+	addon.functions.SettingsCreateCheckboxes(category, nameplateData)
+end
+
+local function createCastbarCategory()
+	local category = addon.SettingsLayout.rootUI
+	local label = L["CastbarsAndCooldowns"] or "Castbars & Cooldowns"
+
+	local expandable = addon.functions.SettingsCreateExpandableSection(category, {
+		name = label,
+		expanded = false,
+		colorizeTitle = false,
+	})
+	addon.SettingsLayout.uiCastbarsExpandable = expandable
+
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "ShowTargetCastbar",
+		text = L["ShowTargetCastbar"],
+		get = function() return getCVarOptionState("ShowTargetCastbar") end,
+		func = function(value) setCVarOptionState("ShowTargetCastbar", value) end,
+		default = false,
+		parentSection = expandable,
+	})
 
 	addon.functions.SettingsCreateCheckbox(category, {
 		var = "cooldownViewerEnabled",
@@ -807,7 +819,22 @@ local function createFrameCategory()
 	createCooldownViewerDropdowns(category, expandable)
 end
 
-function addon.functions.initUIOptions() end
+local function ensureBarsResourcesCategory()
+	local category = addon.SettingsLayout.rootUI
+	local expandable = addon.SettingsLayout.uiBarsResourcesExpandable
+	if expandable then return end
+
+	expandable = addon.functions.SettingsCreateExpandableSection(category, {
+		name = L["BarsAndResources"] or "Bars & Resources",
+		expanded = false,
+		colorizeTitle = false,
+		newTagID = "ResourceBars",
+	})
+	addon.SettingsLayout.uiBarsResourcesExpandable = expandable
+end
 
 createActionBarCategory()
 createFrameCategory()
+createNameplatesCategory()
+createCastbarCategory()
+ensureBarsResourcesCategory()
