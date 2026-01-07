@@ -887,3 +887,16 @@ end)
 
 -- Legacy UI removed; AceGUI builds UI on demand via /rq
 addon.Query.frame = eventFrame
+-- for _, v in pairs(EssentialCooldownViewer.oldGridSettings.layoutChildren) do
+-- 	if v.OnSpellActivationOverlayGlowShowEvent then
+-- 		hooksecurefunc(v, "OnSpellActivationOverlayGlowShowEvent", function(self)
+-- 			-- print("Hide Glow on ", v:GetSpellID())
+-- 			-- C_Timer.After(0, function() ActionButtonSpellAlertManager:HideAlert(self) end)
+-- 		end)
+-- 	end
+-- end
+
+-- hooksecurefunc(ActionButtonSpellAlertManager, "ShowAlert", function(self, actionButton, alertType)
+-- 	if not actionButton.GetSpellID and not actionButton.cooldownID then return end
+-- 	ActionButtonSpellAlertManager:HideAlert(actionButton)
+-- end)
