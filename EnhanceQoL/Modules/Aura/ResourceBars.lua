@@ -2001,9 +2001,9 @@ function updateHealthBar(evt)
 				if style == "PERCENT" then
 					text = percentStr
 				elseif style == "CURRENT" then
-					text = AbbreviateLargeNumbers(curHealth)
+					text = AbbreviateNumbers(curHealth)
 				else -- CURMAX
-					text = AbbreviateLargeNumbers(curHealth) .. " / " .. (AbbreviateLargeNumbers(maxHealth))
+					text = AbbreviateNumbers(curHealth) .. " / " .. (AbbreviateNumbers(maxHealth))
 				end
 				if not addon.variables.isMidnight and healthBar._lastText ~= text then
 					healthBar.text:SetText(text)
@@ -2863,7 +2863,7 @@ function updatePowerBar(type, runeSlot)
 				elseif style == "CURRENT" then
 					text = tostring(curPower)
 				else
-					text = AbbreviateLargeNumbers(curPower) .. " / " .. (AbbreviateLargeNumbers(maxHealth))
+					text = AbbreviateNumbers(curPower) .. " / " .. (AbbreviateNumbers(maxHealth))
 				end
 				if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then
 					bar.text:SetText(text)
@@ -3085,14 +3085,14 @@ function updatePowerBar(type, runeSlot)
 				if isSoulShards then
 					text = formatSoulShardValue(displayCur)
 				else
-					text = AbbreviateLargeNumbers(curPower)
+					text = AbbreviateNumbers(curPower)
 					text = tostring(curPower)
 				end
 			else -- CURMAX
 				if isSoulShards then
 					text = formatSoulShardValue(displayCur) .. " / " .. formatSoulShardValue(displayMax)
 				else
-					text = AbbreviateLargeNumbers(curPower) .. " / " .. (AbbreviateLargeNumbers(maxPower))
+					text = AbbreviateNumbers(curPower) .. " / " .. (AbbreviateNumbers(maxPower))
 				end
 			end
 			if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then

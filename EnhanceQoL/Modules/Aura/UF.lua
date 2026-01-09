@@ -285,6 +285,26 @@ local defaults = {
 				texCoords = { 0.5, 1, 0, 0.5 }, -- combat icon region
 			},
 		},
+		cast = {
+			enabled = false,
+			width = 220,
+			height = 16,
+			anchor = "BOTTOM", -- or "TOP"
+			offset = { x = 0, y = -4 },
+			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
+			showName = true,
+			nameOffset = { x = 6, y = 0 },
+			showDuration = true,
+			durationOffset = { x = -6, y = 0 },
+			font = nil,
+			fontSize = 12,
+			showIcon = true,
+			iconSize = 22,
+			iconOffset = { x = -4, y = 0 },
+			texture = "DEFAULT",
+			color = { 0.9, 0.7, 0.2, 1 },
+			notInterruptibleColor = DEFAULT_NOT_INTERRUPTIBLE_COLOR,
+		},
 		resting = {
 			enabled = true,
 			size = 20,
@@ -3271,7 +3291,7 @@ local function ensureFrames(unit)
 		st.absorb = nil
 		if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
 	end
-	if (unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) and not st.castBar then
+	if (unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) and not st.castBar then
 		st.castBar = CreateFrame("StatusBar", info.healthName .. "Cast", st.frame, "BackdropTemplate")
 		st.castBar:SetStatusBarDesaturated(true)
 		st.castTextLayer = CreateFrame("Frame", nil, st.castBar)
@@ -3385,7 +3405,7 @@ local function applyBars(cfg, unit)
 	elseif st.overAbsorbGlow then
 		st.overAbsorbGlow:Hide()
 	end
-	if st.castBar and (unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) then
+	if st.castBar and (unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) then
 		local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
 		local ccfg = cfg.cast or defc
 		st.castBar:SetStatusBarTexture(UFHelper.resolveCastTexture((ccfg.texture or defc.texture or "DEFAULT")))
@@ -3526,6 +3546,14 @@ local function applyConfig(unit)
 		if st.status then st.status:Show() end
 	end
 	UFHelper.updateHighlight(st, unit, UNIT.PLAYER)
+	if unit == UNIT.PLAYER and st.castBar then
+		if cfg.cast and cfg.cast.enabled ~= false then
+			setCastInfoFromUnit(UNIT.PLAYER)
+		else
+			stopCast(UNIT.PLAYER)
+			st.castBar:Hide()
+		end
+	end
 	if unit == UNIT.TARGET and st.castBar then
 		if cfg.cast and cfg.cast.enabled ~= false and UnitExists(UNIT.TARGET) then
 			setCastInfoFromUnit(UNIT.TARGET)
@@ -4498,14 +4526,22 @@ local function onEvent(self, event, unit, arg1)
 		local totCfg = getCfg(UNIT.TARGET_TARGET)
 		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+		if unit == UNIT.PLAYER then setCastInfoFromUnit(UNIT.PLAYER) end
 		if unit == UNIT.TARGET then setCastInfoFromUnit(UNIT.TARGET) end
 		if unit == UNIT.FOCUS then setCastInfoFromUnit(UNIT.FOCUS) end
 		if isBossUnit(unit) then setCastInfoFromUnit(unit) end
 	elseif event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_FAILED" then
+		if unit == UNIT.PLAYER then UF.ShowCastInterrupt(UNIT.PLAYER, event) end
 		if unit == UNIT.TARGET then UF.ShowCastInterrupt(UNIT.TARGET, event) end
 		if unit == UNIT.FOCUS then UF.ShowCastInterrupt(UNIT.FOCUS, event) end
 		if isBossUnit(unit) then UF.ShowCastInterrupt(unit, event) end
 	elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+		if unit == UNIT.PLAYER then
+			if not (states[UNIT.PLAYER] and states[UNIT.PLAYER].castInterruptActive) then
+				stopCast(UNIT.PLAYER)
+				if shouldShowSampleCast(unit) then setSampleCast(unit) end
+			end
+		end
 		if unit == UNIT.TARGET then
 			if not (states[UNIT.TARGET] and states[UNIT.TARGET].castInterruptActive) then
 				stopCast(UNIT.TARGET)
@@ -4590,6 +4626,7 @@ local function ensureEventHandling()
 				UF.UpdateAllRoleIndicators(false)
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
+				if states[UNIT.PLAYER] and states[UNIT.PLAYER].castBar then setCastInfoFromUnit(UNIT.PLAYER) end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
 				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
 			end)
@@ -4604,6 +4641,7 @@ local function ensureEventHandling()
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
 				if ensureDB("target").enabled then fullScanTargetAuras(UNIT.TARGET) end
+				if states[UNIT.PLAYER] and states[UNIT.PLAYER].castBar then setCastInfoFromUnit(UNIT.PLAYER) end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
 				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
 			end)

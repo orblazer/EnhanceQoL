@@ -2145,7 +2145,7 @@ local function buildUnitSettings(unit)
 		list[#list + 1] = roleOffsetY
 	end
 
-	if unit == "target" or unit == "focus" or isBoss then
+	if unit == "player" or unit == "target" or unit == "focus" or isBoss then
 		local castDef = def.cast or {}
 		list[#list + 1] = { name = L["CastBar"] or "Cast Bar", kind = settingType.Collapsible, id = "cast", defaultCollapsed = true }
 		local function isCastEnabled() return getValue(unit, { "cast", "enabled" }, castDef.enabled ~= false) ~= false end
