@@ -4,6 +4,41 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL")
 
 local NumSockets = C_ItemSocketInfo and C_ItemSocketInfo.GetNumSockets or GetNumSockets
 local TypeSockets = C_ItemSocketInfo and C_ItemSocketInfo.GetSocketTypes or GetSocketTypes
+local wipe = wipe
+local tinsert = table.insert
+local tremove = table.remove
+
+local TRACKED_SOCKET_SLOTS = {
+	[1] = true, -- Head
+	[2] = true, -- Neck
+	[6] = true, -- Waist
+	[9] = true, -- Wrist
+	[11] = true, -- Finger 1
+	[12] = true, -- Finger 2
+}
+
+local TRACKED_GEM_TYPES = {
+	{ key = "Blasphemite", icon = 630620 },
+	{ key = "Amber", icon = 5931396 },
+	{ key = "Onyx", icon = 5931393 },
+	{ key = "Sapphire", icon = 5931403 },
+	{ key = "Emerald", icon = 5931390 },
+	{ key = "Ruby", icon = 5931400 },
+}
+
+local TRACKER_ICON_SIZE = 32
+local TRACKER_ICON_PAD = 4
+local TRACKER_LABEL_HEIGHT = 12
+local TRACKER_LABEL_SPACING = 2
+local TRACKER_LABEL_MAX = 6
+local TRACKER_ANCHOR_X = -2
+local TRACKER_ANCHOR_Y = -(40 + TRACKER_LABEL_HEIGHT + TRACKER_LABEL_SPACING)
+local TRACKER_UPDATE_DELAY = 1.0
+
+local TRACKED_GEM_BY_KEY = {}
+for _, entry in ipairs(TRACKED_GEM_TYPES) do
+	TRACKED_GEM_BY_KEY[entry.key] = entry
+end
 
 local GEM_TYPE_INFO = {}
 GEM_TYPE_INFO["Yellow"] = 9
@@ -47,14 +82,200 @@ specialGems[213749] = "Prismatic" -- Determined Bloodstone
 local frame = CreateFrame("Frame")
 
 local gemButtons = {}
+local gemButtonPool = {}
+local gemLayoutQueued = false
+local gemTrackerButtons = {}
+local gemTrackerQueued = false
+local gemTrackerHooked = false
+local gemTrackerDirty = true
+local gemSocketHooked = false
 -- helper to refresh / clear buttons
 local function clearGemButtons()
 	if not gemButtons then return end
 	for _, btn in ipairs(gemButtons) do
 		btn:ClearAllPoints()
 		btn:Hide()
+		btn.itemLink = nil
+		btn.bag = nil
+		btn.slot = nil
+		btn.itemName = nil
+		btn:SetParent(UIParent)
+		tinsert(gemButtonPool, btn)
 	end
 	wipe(gemButtons)
+end
+
+local function ensureGemTracker()
+	if EnhanceQoLGemTracker then return EnhanceQoLGemTracker end
+	if not PaperDollFrame then return nil end
+	local tracker = CreateFrame("Frame", "EnhanceQoLGemTracker", PaperDollFrame)
+	tracker:SetFrameStrata("HIGH")
+	tracker:SetSize((#TRACKED_GEM_TYPES * TRACKER_ICON_SIZE) + ((#TRACKED_GEM_TYPES - 1) * TRACKER_ICON_PAD), TRACKER_ICON_SIZE + TRACKER_LABEL_HEIGHT + TRACKER_LABEL_SPACING)
+	tracker:SetPoint("TOPRIGHT", PaperDollFrame, "BOTTOMRIGHT", 0, 0)
+
+	for index, info in ipairs(TRACKED_GEM_TYPES) do
+		local btn = CreateFrame("Frame", nil, tracker)
+		btn:SetSize(TRACKER_ICON_SIZE, TRACKER_ICON_SIZE + TRACKER_LABEL_HEIGHT + TRACKER_LABEL_SPACING)
+		btn:SetPoint("TOPRIGHT", tracker, "TOPRIGHT", -((index - 1) * (TRACKER_ICON_SIZE + TRACKER_ICON_PAD)), 0)
+
+		local iconFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+		iconFrame:SetSize(TRACKER_ICON_SIZE, TRACKER_ICON_SIZE)
+		iconFrame:SetPoint("TOP", btn, "TOP", 0, 0)
+
+		iconFrame:SetBackdrop({
+			bgFile = "Interface\\Buttons\\WHITE8X8",
+			edgeFile = "Interface\\Buttons\\WHITE8X8",
+			edgeSize = 1,
+			insets = { left = 0, right = 0, top = 0, bottom = 0 },
+		})
+		iconFrame:SetBackdropColor(0, 0, 0, 0.25)
+		iconFrame:SetBackdropBorderColor(0, 0, 0, 1)
+
+		local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+		icon:SetPoint("TOPLEFT", iconFrame, "TOPLEFT", 1, -1)
+		icon:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -1, 1)
+		icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		icon:SetTexture(info.icon)
+		btn.icon = icon
+
+		local glow = iconFrame:CreateTexture(nil, "OVERLAY")
+		glow:SetTexture("Interface\\SpellActivationOverlay\\IconAlert")
+		glow:SetBlendMode("ADD")
+		glow:SetAlpha(0.6)
+		glow:SetAllPoints(iconFrame)
+		glow:Hide()
+		btn.glow = glow
+
+		local count = iconFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		count:SetPoint("BOTTOMRIGHT", -1, 1)
+		btn.count = count
+
+		local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		label:SetPoint("TOP", iconFrame, "BOTTOM", 0, -TRACKER_LABEL_SPACING)
+		label:SetJustifyH("CENTER")
+		local labelText = info.key
+		if labelText and #labelText > TRACKER_LABEL_MAX then labelText = labelText:sub(1, TRACKER_LABEL_MAX) end
+		label:SetText(labelText or "")
+		btn.label = label
+
+		gemTrackerButtons[info.key] = btn
+	end
+
+	EnhanceQoLGemTracker = tracker
+	return tracker
+end
+
+local function parseGemType(gemName)
+	if not gemName then return nil, nil end
+	local prefix, gemType = gemName:match("^([^%s]+)%s+([^%s]+)")
+	if gemType and TRACKED_GEM_BY_KEY[gemType] then return prefix, gemType end
+	for key in pairs(TRACKED_GEM_BY_KEY) do
+		if gemName:find(key, 1, true) then return nil, key end
+	end
+	return nil, nil
+end
+
+local updateGemTracker
+
+local function queueGemTrackerUpdate(delay)
+	if gemTrackerQueued or not C_Timer then return end
+	gemTrackerQueued = true
+	C_Timer.After(delay or 0.2, function()
+		gemTrackerQueued = false
+		if addon.db and addon.db["enableGemHelper"] then
+			if updateGemTracker then updateGemTracker() end
+		end
+	end)
+end
+
+local function markGemTrackerDirty(delay)
+	gemTrackerDirty = true
+	local useDelay = delay
+	if useDelay == nil then useDelay = TRACKER_UPDATE_DELAY end
+	if PaperDollFrame and PaperDollFrame:IsShown() then queueGemTrackerUpdate(useDelay) end
+end
+
+local function hookSocketingFrame()
+	if gemSocketHooked or not ItemSocketingFrame then return end
+	gemSocketHooked = true
+	ItemSocketingFrame:HookScript("OnHide", function()
+		if addon.db and addon.db["enableGemHelper"] then markGemTrackerDirty() end
+	end)
+end
+
+updateGemTracker = function()
+	if not addon.db or not addon.db["enableGemHelper"] then
+		if EnhanceQoLGemTracker then EnhanceQoLGemTracker:Hide() end
+		gemTrackerDirty = true
+		return
+	end
+	if not PaperDollFrame or not PaperDollFrame:IsShown() then return end
+	if ItemSocketingFrame and ItemSocketingFrame:IsShown() then hookSocketingFrame() end
+
+	local tracker = ensureGemTracker()
+	if not tracker then return end
+	tracker:Show()
+
+	local gemsByType = {}
+	local needsRetry = false
+	for slotID in pairs(TRACKED_SOCKET_SLOTS) do
+		local itemLink = GetInventoryItemLink("player", slotID)
+		if itemLink then
+			local numSockets = C_Item.GetItemNumSockets(itemLink) or 0
+			for i = 1, numSockets do
+				local gemID = C_Item.GetItemGemID(itemLink, i)
+				if gemID then
+					local gemName = C_Item.GetItemNameByID(gemID)
+					if not gemName then
+						needsRetry = true
+					else
+						local _, gemType = parseGemType(gemName)
+						if gemType then
+							local entry = gemsByType[gemType]
+							if not entry then
+								entry = { count = 0, icon = C_Item.GetItemIconByID(gemID) }
+								gemsByType[gemType] = entry
+							end
+							entry.count = entry.count + 1
+						end
+					end
+				end
+			end
+		end
+	end
+
+	for _, info in ipairs(TRACKED_GEM_TYPES) do
+		local btn = gemTrackerButtons[info.key]
+		if btn then
+			local data = gemsByType[info.key]
+			if data then
+				btn.icon:SetTexture(data.icon or info.icon)
+				btn.icon:SetDesaturated(false)
+				btn.glow:Hide()
+				btn.count:SetText(data.count and data.count > 1 and tostring(data.count) or "")
+			else
+				btn.icon:SetTexture(info.icon)
+				btn.icon:SetDesaturated(true)
+				btn.glow:Show()
+				btn.count:SetText("")
+			end
+		end
+	end
+
+	if needsRetry then
+		gemTrackerDirty = true
+		queueGemTrackerUpdate()
+	else
+		gemTrackerDirty = false
+	end
+end
+
+local function hookGemTracker()
+	if gemTrackerHooked or not PaperDollFrame then return end
+	gemTrackerHooked = true
+	PaperDollFrame:HookScript("OnShow", function()
+		if addon.db and addon.db["enableGemHelper"] then updateGemTracker() end
+	end)
 end
 
 local function createGemHelper()
@@ -74,49 +295,62 @@ local function createGemHelper()
 end
 
 local function createButton(parent, itemTexture, itemLink, bag, slot, locked)
-	local button = CreateFrame("Button", nil, parent)
-	button:SetSize(32, 32) -- position will be applied later in layoutButtons()
+	local button = tremove(gemButtonPool)
+	if not button then
+		button = CreateFrame("Button", nil, parent)
+		button:SetSize(32, 32) -- position will be applied later in layoutButtons()
 
-	-- Hintergrund
-	local bg = button:CreateTexture(nil, "BACKGROUND")
-	bg:SetAllPoints(button)
-	bg:SetColorTexture(0, 0, 0, 0.8)
+		local bg = button:CreateTexture(nil, "BACKGROUND")
+		bg:SetAllPoints(button)
+		bg:SetColorTexture(0, 0, 0, 0.8)
+		button.bg = bg
 
-	-- Icon
-	local icon = button:CreateTexture(nil, "ARTWORK")
-	icon:SetAllPoints(button)
-	icon:SetTexture(itemTexture)
-	button.icon = icon
+		local icon = button:CreateTexture(nil, "ARTWORK")
+		icon:SetAllPoints(button)
+		button.icon = icon
 
-	button:RegisterForClicks("AnyUp", "AnyDown")
+		button:RegisterForClicks("AnyUp", "AnyDown")
+		button:SetScript("OnClick", function(self)
+			if not self.bag or not self.slot then return end
+			ClearCursor()
+			C_Container.PickupContainerItem(self.bag, self.slot)
+
+			self.icon:SetDesaturated(true)
+			self.icon:SetAlpha(0.5)
+			self:EnableMouse(false)
+		end)
+	else
+		button:SetParent(parent)
+	end
+
+	button:SetSize(32, 32)
+	button.itemLink = itemLink
+	button.bag = bag
+	button.slot = slot
+	button.icon:SetTexture(itemTexture)
 
 	if locked then
-		icon:SetDesaturated(true)
-		icon:SetAlpha(0.5)
+		button.icon:SetDesaturated(true)
+		button.icon:SetAlpha(0.5)
 		button:EnableMouse(false)
 	else
-		icon:SetDesaturated(false)
-		icon:SetAlpha(1)
+		button.icon:SetDesaturated(false)
+		button.icon:SetAlpha(1)
 		button:EnableMouse(true)
 	end
-	-- Tooltip
-	-- TODO we can't change tooltip in midnight beta for now
+
 	if not addon.variables.isMidnight then
 		button:SetScript("OnEnter", function(self)
+			if not self.itemLink then return end
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetHyperlink(itemLink)
+			GameTooltip:SetHyperlink(self.itemLink)
 			GameTooltip:Show()
 		end)
 		button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	else
+		button:SetScript("OnEnter", nil)
+		button:SetScript("OnLeave", nil)
 	end
-	button:SetScript("OnClick", function(self)
-		ClearCursor()
-		C_Container.PickupContainerItem(bag, slot)
-
-		icon:SetDesaturated(true)
-		icon:SetAlpha(0.5)
-		button:EnableMouse(false)
-	end)
 
 	return button
 end
@@ -159,6 +393,15 @@ local function layoutButtons()
 
 	local neededHeight = usedRows * (BH + PAD) + PAD
 	if neededHeight > EnhanceQoLGemHelper:GetHeight() then EnhanceQoLGemHelper:SetHeight(neededHeight) end
+end
+
+local function queueLayoutButtons()
+	if gemLayoutQueued or not C_Timer then return end
+	gemLayoutQueued = true
+	C_Timer.After(0, function()
+		gemLayoutQueued = false
+		layoutButtons()
+	end)
 end
 
 local function checkGems()
@@ -205,6 +448,7 @@ local function checkGems()
 						local btn = createButton(EnhanceQoLGemHelper, icon, itemLink, bag, slot, locked)
 						btn.itemName = itemName
 						tinsert(gemButtons, btn)
+						queueLayoutButtons()
 					end)
 				end
 			end
@@ -214,19 +458,42 @@ local function checkGems()
 end
 
 local function eventHandler(self, event, unit, arg1, arg2, ...)
-	if addon.db["enableGemHelper"] then
-		if event == "SOCKET_INFO_UPDATE" then
-			if ItemSocketingFrame then
-				createGemHelper()
-				checkGems()
-			end
-		elseif event == "CURSOR_CHANGED" then
-			if ItemSocketingFrame and ItemSocketingFrame:IsShown() and arg2 == 1 then checkGems() end
+	if event == "ADDON_LOADED" then
+		local loadedAddon = unit
+		if loadedAddon == "Blizzard_CharacterUI" then hookGemTracker() end
+		return
+	end
+
+	if not addon.db or not addon.db["enableGemHelper"] then
+		if EnhanceQoLGemHelper then EnhanceQoLGemHelper:Hide() end
+		if EnhanceQoLGemTracker then EnhanceQoLGemTracker:Hide() end
+		return
+	end
+
+	if event == "SOCKET_INFO_UPDATE" then
+		if ItemSocketingFrame then
+			hookSocketingFrame()
+			createGemHelper()
+			checkGems()
 		end
+	elseif event == "CURSOR_CHANGED" then
+		if ItemSocketingFrame and ItemSocketingFrame:IsShown() and arg2 == 1 then checkGems() end
+	elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+		markGemTrackerDirty()
+	elseif event == "SOCKET_INFO_ACCEPT" then
+		markGemTrackerDirty()
+	elseif event == "PLAYER_ENTERING_WORLD" then
+		gemTrackerDirty = true
 	end
 end
 
 frame:RegisterEvent("SOCKET_INFO_UPDATE")
 frame:RegisterEvent("CURSOR_CHANGED")
+frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+frame:RegisterEvent("SOCKET_INFO_ACCEPT")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("ADDON_LOADED")
 frame:SetScript("OnEvent", eventHandler)
 frame:Hide()
+
+hookGemTracker()

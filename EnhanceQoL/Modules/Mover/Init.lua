@@ -250,6 +250,7 @@ function addon.Mover.functions.RegisterFrame(def)
 		keepTwoPointSize = def.keepTwoPointSize,
 		ignoreFramePositionManager = def.ignoreFramePositionManager,
 		userPlaced = def.userPlaced,
+		skipOnHide = def.skipOnHide,
 		settingKey = def.settingKey or makeSettingKey(def.id),
 	}
 
@@ -388,15 +389,11 @@ function addon.Mover.functions.UpdateScaleWheelCaptureState()
 	local captureFrame = addon.Mover.variables.scaleCaptureFrame
 	if not captureFrame then return end
 	if db and db.enabled and db.scaleEnabled and scaleModifierPressed() then
-		if captureFrame:GetScript("OnUpdate") == nil then
-			captureFrame:SetScript("OnUpdate", addon.Mover.functions.CheckScaleWheelCapture)
-		end
+		if captureFrame:GetScript("OnUpdate") == nil then captureFrame:SetScript("OnUpdate", addon.Mover.functions.CheckScaleWheelCapture) end
 		addon.Mover.functions.CheckScaleWheelCapture()
 	else
 		captureFrame:EnableMouseWheel(false)
-		if captureFrame:GetScript("OnUpdate") ~= nil then
-			captureFrame:SetScript("OnUpdate", nil)
-		end
+		if captureFrame:GetScript("OnUpdate") ~= nil then captureFrame:SetScript("OnUpdate", nil) end
 	end
 end
 
@@ -949,16 +946,18 @@ function addon.Mover.functions.createHooks(frame, entry)
 		if not self._eqolDefaultPoints then captureDefaultPoints(self) end
 		addon.Mover.functions.applyFrameSettings(self, resolved)
 	end)
-	frame:HookScript("OnHide", function(self)
-		if db.positionPersistence ~= "close" then return end
-		if not isEntryActive(resolved) then return end
-		if self._eqol_isDragging or self._eqol_isApplying then return end
-		if InCombatLockdown() and self:IsProtected() then return end
-		if not self._eqolDefaultPoints then return end
-		self._eqol_isApplying = true
-		applyDefaultPoints(self)
-		self._eqol_isApplying = nil
-	end)
+	if not resolved.skipOnHide then
+		frame:HookScript("OnHide", function(self)
+			if db.positionPersistence ~= "close" then return end
+			if not isEntryActive(resolved) then return end
+			if self._eqol_isDragging or self._eqol_isApplying then return end
+			if InCombatLockdown() and self:IsProtected() then return end
+			if not self._eqolDefaultPoints then return end
+			self._eqol_isApplying = true
+			applyDefaultPoints(self)
+			self._eqol_isApplying = nil
+		end)
+	end
 
 	frame._eqolLayoutHooks = true
 	addon.Mover.variables.combatQueue[frame] = nil

@@ -264,7 +264,7 @@ local function scheduleCooldownSweep(changedSpell)
 end
 
 local LSM = LibStub("LibSharedMedia-3.0")
-local getSpellCooldown = C_Spell and C_Spell.GetSpellCooldown or GetSpellCooldown
+local getSpellCooldown = C_Spell.GetSpellCooldownDuration or C_Spell and C_Spell.GetSpellCooldown or GetSpellCooldown
 
 local function CDResetScript(self)
 	local icon = self:GetParent().icon
@@ -1155,16 +1155,23 @@ function updateBuff(catId, id, changedId, firstScan)
 				frame.cd:SetReverse(false)
 				if buff.showCooldown then
 					local spellInfo = getSpellCooldown(id)
-					if spellInfo then
+					if addon.variables.isMidnight then
+						if spellInfo then
+							frame.cd:SetCooldownFromDurationObject(spellInfo)
+							frame.cd:SetAlpha(1)
+							frame.cd:SetScript("OnCooldownDone", CDResetScript)
+						else
+							frame.cd:Clear()
+							frame.cd:SetScript("OnCooldownDone", nil)
+							frame.icon:SetDesaturated(false)
+							frame.icon:SetAlpha(1)
+						end
+					elseif spellInfo then
 						local cdStart = spellInfo.startTime
 						local cdDur = spellInfo.duration
 						local cdEnable = spellInfo.isEnabled
 						local modRate = spellInfo.modRate
-						if issecretvalue and issecretvalue(cdEnable) then
-							frame.cd:SetCooldownFromExpirationTime(spellInfo.endTime, cdDur, modRate)
-							frame.cd:SetAlphaFromBoolean(cdEnable, 0.5, 1)
-							frame.cd:SetScript("OnCooldownDone", CDResetScript)
-						elseif cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
+						if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
 							frame.cd:SetCooldown(cdStart, cdDur, modRate)
 							frame.icon:SetDesaturated(true)
 							frame.icon:SetAlpha(0.5)

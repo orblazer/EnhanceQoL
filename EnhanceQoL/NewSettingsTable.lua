@@ -1,26 +1,46 @@
 local addonName, addon = ...
 
 addon.variables.NewVersionTableEQOL = {
-	["EQOL_UI"] = true,
-	["EQOL_GENERAL"] = true,
-	["EQOL_GAMEPLAY"] = true,
-	["EQOL_SOCIAL"] = true,
-	["EQOL_Questing"] = true,
-	["EQOL_MapNavigation"] = true,
-	["EQOL_SocialGeneral"] = true,
-	["EQOL_DeathResurrect"] = true,
-	["EQOL_VisibilityFrames"] = true,
+	-- Root categories touched in 7.1.0
+	-- ["EQOL_UI"] = true,
+	-- ["EQOL_GENERAL"] = true,
+	-- ["EQOL_GAMEPLAY"] = true,
+	-- ["EQOL_SOUND"] = true,
+
+	-- -- UI: Action bars
+	-- ["EQOL_actionBarBorderStyle"] = true,
+	-- ["EQOL_actionBarBorderEdgeSize"] = true,
+	-- ["EQOL_actionBarBorderPadding"] = true,
+	-- ["EQOL_actionBarCountFontOverride"] = true,
+	-- ["EQOL_actionBarCountFontFace"] = true,
+	-- ["EQOL_actionBarCountFontOutline"] = true,
+	-- ["EQOL_actionBarCountFontSize"] = true,
+
+	-- -- UI: UF Plus
+	-- ["EQOL_ufUseCustomClassColors"] = true,
+
+	-- -- General: Inventory + character frame
+	-- ["EQOL_bagSortOrderEnabled"] = true,
+	-- ["EQOL_bagSortOrderDirection"] = true,
+	-- ["EQOL_bagLootOrderEnabled"] = true,
+	-- ["EQOL_bagLootOrderDirection"] = true,
+	-- ["EQOL_enhancedRarityGlow"] = true,
+	-- ["EQOL_charframe_display"] = true,
 	-- ["EQOL_GearUpgrades"] = true,
-	["EQOL_Mailbox"] = true,
-	["EQOL_PopupsAndUITweaks"] = true,
-	["EQOL_autoAcceptSummon"] = true,
-	["EQOL_autoAcceptResurrection"] = true,
-	["EQOL_autoReleasePvP"] = true,
-	["EQOL_quickSkipCinematic"] = true,
-	["EQOL_questTrackerMinimizeButtonOnly"] = true,
-	["EQOL_minimapButtonsMouseover"] = true,
-	["EQOL_unclampMinimapCluster"] = true,
-	["EQOL_mailboxRememberLastRecipient"] = true,
-	["EQOL_frameVisibilityFadeStrength"] = true,
-	["EQOL_uiScalePreset"] = true,
+
+	-- -- Gameplay: Combat logging + mounts
+	-- ["EQOL_autoCombatLog"] = true,
+	-- ["EQOL_combatLogDelayedStop"] = true,
+	-- ["EQOL_combatLogDungeonDifficulties"] = true,
+	-- ["EQOL_combatLogRaidDifficulties"] = true,
+	-- ["EQOL_combatLogPvp"] = true,
+	-- ["EQOL_combatLogScenario"] = true,
+	-- ["EQOL_combatLogDelve"] = true,
+	-- ["EQOL_randomMountUseAll"] = true,
+
+	-- -- Sound: extra sounds
+	-- ["EQOL_soundExtraEnabled"] = true,
+
+	-- -- UI: resource bars preview updates
+	-- ["EQOL_ResourceBars"] = true,
 }

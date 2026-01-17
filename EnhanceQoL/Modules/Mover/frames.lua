@@ -76,6 +76,8 @@ local frames = {
 		group = "system",
 		names = { "GameMenuFrame" },
 		addon = "Blizzard_GameMenu",
+		handlesRelative = { "Header" },
+		skipOnHide = true,
 		defaultEnabled = true,
 	},
 	{

@@ -168,10 +168,8 @@ local data = {
 		text = L["enableGemHelper"],
 		func = function(value)
 			addon.db["enableGemHelper"] = value and true or false
-			if not value and EnhanceQoLGemHelper then
-				EnhanceQoLGemHelper:Hide()
-				EnhanceQoLGemHelper = nil
-			end
+			if not value and EnhanceQoLGemHelper then EnhanceQoLGemHelper:Hide() end
+			if not value and EnhanceQoLGemTracker then EnhanceQoLGemTracker:Hide() end
 		end,
 		get = function() return addon.db["enableGemHelper"] end,
 		desc = L["enableGemHelperDesc"],
