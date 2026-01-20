@@ -4831,6 +4831,7 @@ local function onEvent(self, event, unit, ...)
 			if bossCfg.enabled then updateHealth(bossCfg, unit) end
 		end
 	elseif event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
+		if unit ~= "player" and unit ~= "pet" then return end
 		UFHelper.updateHighlight(states[UNIT.PLAYER], UNIT.PLAYER, UNIT.PLAYER)
 		UFHelper.updateHighlight(states[UNIT.PET], UNIT.PET, UNIT.PLAYER)
 	elseif portraitEventsMap[event] then
