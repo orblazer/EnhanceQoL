@@ -51,6 +51,7 @@ EnhanceQoL.lua
 Core\DataHub.lua
 Core\DataPanel.lua
 Core\MovementSpeedStat.lua
+Core\CharacterStatsFormatting.lua
 Core\Streams\Streams.xml
 Submodules\GemHelper.lua
 Submodules\ContainerActions.lua

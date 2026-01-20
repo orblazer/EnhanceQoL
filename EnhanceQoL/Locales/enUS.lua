@@ -120,6 +120,8 @@ L["gearDisplayOptionGemTooltipDesc"] = "Show gem tooltips on sockets."
 L["gearDisplayOptionDurabilityDesc"] = "Show durability on the character frame."
 L["gearDisplayOptionCatalystDesc"] = "Show Catalyst charges on the character frame."
 L["gearDisplayOptionMovementSpeedDesc"] = "Show movement speed on the character frame."
+L["gearDisplayOptionStatsFormat"] = "Stat formatting"
+L["gearDisplayOptionStatsFormatDesc"] = "Show rating and percent together for secondary stats."
 
 -- Category titles
 L["UI"] = "UI"

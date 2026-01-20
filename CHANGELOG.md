@@ -42,6 +42,7 @@
 
 - Resource Bars: Font dropdown selection no longer resets on click (fonts are selectable again).
 - Resource Bars: Class color and max-color overrides now apply correctly to resource bars.
+- Resource Bars: max-color caused lua errors in secret environments
 - DataPanels: Volume stream right-click no longer requires the context menu modifier.
 - Talents: Filter out the internal TalentLoadoutManager placeholder loadout in selection lists.
 - UF Plus: Aura icon tooltips now show for private/secret auras via auraInstanceID fallback.

@@ -300,6 +300,9 @@ end
 function ActionTracker:AddEntry(spellID)
 	if not spellID then return end
 
+	local ignoreList = self.ignoreList
+	if ignoreList and ignoreList[spellID] then return end
+
 	local texture = C_Spell.GetSpellTexture(spellID)
 	if not texture then return end
 

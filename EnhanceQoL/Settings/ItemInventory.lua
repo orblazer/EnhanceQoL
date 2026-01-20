@@ -1459,6 +1459,7 @@ function addon.functions.initItemInventory()
 	addon.functions.InitDBValue("showEnchantOnCharframe", false)
 	addon.functions.InitDBValue("showCatalystChargesOnCharframe", false)
 	addon.functions.InitDBValue("movementSpeedStatEnabled", false)
+	addon.functions.InitDBValue("characterStatsFormattingEnabled", false)
 	addon.functions.InitDBValue("bagFilterFrameData", {})
 	addon.functions.InitDBValue("closeBagsOnAuctionHouse", false)
 	addon.functions.InitDBValue("showDurabilityOnCharframe", false)
@@ -1507,6 +1508,7 @@ function addon.functions.initItemInventory()
 	-- Add Cataclyst charges in char frame
 	addon.functions.createCatalystFrame()
 	if addon.MovementSpeedStat and addon.MovementSpeedStat.Refresh then addon.MovementSpeedStat.Refresh() end
+	if addon.CharacterStatsFormatting and addon.CharacterStatsFormatting.Refresh then addon.CharacterStatsFormatting.Refresh() end
 	-- add durability icon on charframe
 
 	addon.general.durabilityIconFrame = CreateFrame("Button", nil, PaperDollFrame, "BackdropTemplate")
