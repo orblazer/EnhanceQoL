@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.3.1] - 2026-01-21
+
+### 🐛 Fixed
+
+- Tooltip: Guard against secret values when scanning unit tooltip lines (prevents combat mouseover errors).
+- Action Tracker: No longer misses the first cast when enabled after login.
+- Resource Bars: Max color changes now rebuild the Midnight curve immediately.
+
+---
+
 ## [7.3.0] - 2026-01-21
 
 ### ⏰ Temporarily disabled

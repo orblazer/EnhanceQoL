@@ -4575,6 +4575,12 @@ function ResourceBars.Refresh()
 	-- Apply styling updates without forcing a full rebuild
 	if healthBar then
 		local hCfg = getBarSettings("HEALTH") or {}
+		if hCfg.useMaxColor then
+			SetColorCurvePoints(hCfg.maxColor or RB.WHITE)
+		else
+			SetColorCurvePoints()
+		end
+		wasMax = hCfg.useMaxColor == true
 		healthBar._cfg = hCfg
 		healthBar:SetStatusBarTexture(resolveTexture(hCfg))
 		configureSpecialTexture(healthBar, "HEALTH", hCfg)
