@@ -99,6 +99,7 @@ L["No saved loadouts"] = "No saved loadouts"
 L["Open Talents"] = "Open talents"
 L["Loot spec click hint"] = "Left-click to change loot and active specialization"
 L["Default loot spec"] = "Default"
+L["Truncate loot spec"] = "Truncate loot spec"
 L["Mythic+ Key"] = "Mythic+ Key"
 L["No Keystone"] = "No Keystone"
 L["Mythic+ Rating"] = "Mythic+ Rating"
@@ -373,6 +374,7 @@ L["hideHitIndicatorPlayer"] = "Hide floating combat text (damage and healing) ov
 L["hideHitIndicatorPet"] = "Hide floating combat text (damage and healing) over your pet"
 L["SellJunkIgnoredBag"] = "You have ignored junk on %d bags.\nThis may prevent selling all junk items automatically."
 L["enableGemHelper"] = "Enable Gem-Socket Helper"
+L["gemHelperHideTracker"] = "Hide socketed gem tracker"
 
 -- Chat History
 L["ChatWindow"] = "Chat Window"
@@ -437,6 +439,7 @@ L["TL_STATUS_COMPLETED"] = "Completed"
 L["TL_STATUS_CANCELLED"] = "Cancelled"
 L["TL_CLEAR_CONFIRM"] = "Delete all log entries?"
 L["enableGemHelperDesc"] = "Displays a helper panel when you open the socketing UI.\nLeft-click a gem to pick it up."
+L["gemHelperHideTrackerDesc"] = "Hide the tracker above the character frame that summarizes currently socketed gems."
 
 L["deleteItemFillDialog"] = 'Add "%s" to delete dialog'
 L["deleteItemFillDialogDesc"] = "Automatically fills the required text when destroying items"

@@ -33,6 +33,7 @@ local DEFAULT_PREVIEW_COUNT = 6
 local MAX_PREVIEW_COUNT = 12
 local PREVIEW_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local PREVIEW_ICON_SIZE = 36
+local PREVIEW_COUNT_FONT_MIN = 12
 local OFFSET_RANGE = 200
 local EXAMPLE_COOLDOWN_PERCENT = 0.55
 local VALID_DIRECTIONS = {
@@ -629,12 +630,18 @@ local function createIconFrame(parent)
 	icon.cooldown:SetAllPoints(icon)
 	icon.cooldown:SetHideCountdownNumbers(true)
 
-	icon.count = icon:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-	icon.count:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -1, 1)
+	icon.overlay = CreateFrame("Frame", nil, icon)
+	icon.overlay:SetAllPoints(icon)
+	icon.overlay:SetFrameStrata(icon.cooldown:GetFrameStrata() or icon:GetFrameStrata())
+	icon.overlay:SetFrameLevel((icon.cooldown:GetFrameLevel() or icon:GetFrameLevel()) + 5)
+	icon.overlay:EnableMouse(false)
+
+	icon.count = icon.overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+	icon.count:SetPoint("BOTTOMRIGHT", icon.overlay, "BOTTOMRIGHT", -1, 1)
 	icon.count:Hide()
 
-	icon.charges = icon:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-	icon.charges:SetPoint("TOP", icon, "TOP", 0, -1)
+	icon.charges = icon.overlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+	icon.charges:SetPoint("TOP", icon.overlay, "TOP", 0, -1)
 	icon.charges:Hide()
 
 	icon.previewGlow = icon:CreateTexture(nil, "OVERLAY")
@@ -1269,6 +1276,9 @@ local function ensureEditor()
 	local cbItemCount = createCheck(right, L["CooldownPanelShowItemCount"] or "Show item count")
 	cbItemCount:SetPoint("TOPLEFT", cbCooldownText, "BOTTOMLEFT", 0, -4)
 
+	local cbShowWhenEmpty = createCheck(right, L["CooldownPanelShowWhenEmpty"] or "Show when empty")
+	cbShowWhenEmpty:SetPoint("TOPLEFT", cbItemCount, "BOTTOMLEFT", 0, -4)
+
 	local cbGlow = createCheck(right, L["CooldownPanelGlowReady"] or "Glow when ready")
 	cbGlow:SetPoint("TOPLEFT", cbStacks, "BOTTOMLEFT", 0, -4)
 
@@ -1403,6 +1413,7 @@ local function ensureEditor()
 			cbCharges = cbCharges,
 			cbStacks = cbStacks,
 			cbItemCount = cbItemCount,
+			cbShowWhenEmpty = cbShowWhenEmpty,
 			cbGlow = cbGlow,
 			glowDuration = glowDuration,
 			removeEntry = removeEntry,
@@ -1545,6 +1556,7 @@ local function ensureEditor()
 	bindEntryToggle(cbStacks, "showStacks")
 	bindEntryToggle(cbCooldownText, "showCooldownText")
 	bindEntryToggle(cbItemCount, "showItemCount")
+	bindEntryToggle(cbShowWhenEmpty, "showWhenEmpty")
 	bindEntryToggle(cbGlow, "glowReady")
 	bindEntrySlider(glowDuration, "glowDuration", 0, 30)
 
@@ -1741,6 +1753,10 @@ local function getPreviewLayout(panel, previewFrame, count)
 	local baseLayout = (panel and panel.layout) or Helper.PANEL_LAYOUT_DEFAULTS
 	local previewLayout = Helper.CopyTableShallow(baseLayout)
 	previewLayout.iconSize = PREVIEW_ICON_SIZE
+	local stackSize = tonumber(previewLayout.stackFontSize or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.stackFontSize
+	previewLayout.stackFontSize = math.max(stackSize, PREVIEW_COUNT_FONT_MIN)
+	local chargesSize = tonumber(previewLayout.chargesFontSize or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize) or Helper.PANEL_LAYOUT_DEFAULTS.chargesFontSize
+	previewLayout.chargesFontSize = math.max(chargesSize, PREVIEW_COUNT_FONT_MIN)
 
 	if not previewFrame or not count or count < 1 then return previewLayout end
 
@@ -1846,6 +1862,7 @@ local function layoutInspectorToggles(inspector, entry)
 		hideToggle(inspector.cbCharges)
 		hideToggle(inspector.cbStacks)
 		hideToggle(inspector.cbItemCount)
+		hideToggle(inspector.cbShowWhenEmpty)
 		hideToggle(inspector.cbGlow)
 		if inspector.glowDuration then
 			inspector.glowDuration:Hide()
@@ -1874,14 +1891,17 @@ local function layoutInspectorToggles(inspector, entry)
 		place(inspector.cbCharges, true)
 		place(inspector.cbStacks, true)
 		place(inspector.cbItemCount, false)
+		place(inspector.cbShowWhenEmpty, false)
 	elseif entry.type == "ITEM" then
 		place(inspector.cbCharges, false)
 		place(inspector.cbStacks, false)
 		place(inspector.cbItemCount, true)
+		place(inspector.cbShowWhenEmpty, true)
 	else
 		place(inspector.cbCharges, false)
 		place(inspector.cbStacks, false)
 		place(inspector.cbItemCount, false)
+		place(inspector.cbShowWhenEmpty, false)
 	end
 	place(inspector.cbGlow, true)
 	if inspector.glowDuration then
@@ -1923,6 +1943,7 @@ local function refreshInspector(editor, panel, entry)
 		inspector.cbCharges:SetChecked(entry.showCharges and true or false)
 		inspector.cbStacks:SetChecked(entry.showStacks and true or false)
 		inspector.cbItemCount:SetChecked(entry.type == "ITEM" and entry.showItemCount ~= false)
+		inspector.cbShowWhenEmpty:SetChecked(entry.type == "ITEM" and entry.showWhenEmpty == true)
 		inspector.cbGlow:SetChecked(entry.glowReady and true or false)
 		if inspector.glowDuration then
 			local duration = clampInt(entry.glowDuration, 0, 30, 0)
@@ -2164,6 +2185,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local showCharges = entry.showCharges == true
 			local showStacks = entry.showStacks == true
 			local showItemCount = entry.type == "ITEM" and entry.showItemCount ~= false
+			local showWhenEmpty = entry.type == "ITEM" and entry.showWhenEmpty == true
 			local alwaysShow = entry.alwaysShow ~= false
 			local glowReady = entry.glowReady ~= false
 			local glowDuration = clampInt(entry.glowDuration, 0, 30, 0)
@@ -2179,6 +2201,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local readyNow = false
 			local cooldownEnabledOk = true
 			local cooldownActive = false
+			local emptyItem = false
 
 			if entry.type == "SPELL" and entry.spellID then
 				if IsSpellKnown and not IsSpellKnown(entry.spellID) then
@@ -2220,18 +2243,24 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					if not show and showStacks and stackCount then show = true end
 				end
 			elseif entry.type == "ITEM" and entry.itemID then
-				if hasItem(entry.itemID) and itemHasUseSpell(entry.itemID) then
-					if showCooldown then
+				local ownsItem = hasItem(entry.itemID)
+				emptyItem = showWhenEmpty and not ownsItem
+				if (ownsItem or showWhenEmpty) and itemHasUseSpell(entry.itemID) then
+					if showCooldown and ownsItem then
 						cooldownStart, cooldownDuration, cooldownEnabled = getItemCooldownInfo(entry.itemID)
 					end
 					if showItemCount and GetItemCountFn then
-						local count = GetItemCountFn(entry.itemID, true)
-						if isSafeGreaterThan(count, 0) then itemCount = count end
+						local count = GetItemCountFn(entry.itemID, true) or 0
+						if isSafeGreaterThan(count, 0) then
+							itemCount = count
+						elseif showWhenEmpty then
+							itemCount = 0
+						end
 					end
 					cooldownEnabledOk = isSafeNotFalse(cooldownEnabled)
 					cooldownActive = showCooldown and cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration)
-					readyNow = showCooldown and not cooldownActive
-					show = alwaysShow
+					readyNow = showCooldown and ownsItem and not cooldownActive
+					show = alwaysShow or showWhenEmpty
 					if not show and showCooldown and cooldownEnabledOk and isCooldownActive(cooldownStart, cooldownDuration) then show = true end
 				end
 			elseif entry.type == "SLOT" and entry.slotID then
@@ -2286,6 +2315,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					readyAt = runtime.readyAt[entryId],
 					stackCount = stackCount,
 					itemCount = itemCount,
+					emptyItem = emptyItem,
 					chargesInfo = chargesInfo,
 					cooldownDurationObject = cooldownDurationObject,
 					cooldownRemaining = cooldownRemaining,
@@ -2346,6 +2376,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			icon.charges:Hide()
 		end
 
+		if data.emptyItem then desaturate = true end
+
 		if not isSafeNumber(cooldownRate) then cooldownRate = 1 end
 		icon.texture:SetDesaturated(desaturate)
 		if data.showCooldown then
@@ -2384,7 +2416,7 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		end
 		icon.texture:SetAlphaFromBoolean(desaturate, 0.5, 1)
 
-		if data.showItemCount and data.itemCount then
+		if data.showItemCount and data.itemCount ~= nil then
 			icon.count:SetText(data.itemCount)
 			icon.count:Show()
 		elseif data.showStacks and data.stackCount then
