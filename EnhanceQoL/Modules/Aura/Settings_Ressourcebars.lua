@@ -507,13 +507,14 @@ local function registerEditModeBars()
 						queueRefresh()
 					end,
 				},
-				{
+			}
+			if barType == "MAELSTROM_WEAPON" then
+				settingsList[#settingsList + 1] = {
 					name = "Use 10-stack bar",
 					kind = settingType.Checkbox,
 					field = "useMaelstromTenStacks",
 					default = false,
 					parentId = "frame",
-					isVisible = function() return barType == "MAELSTROM_WEAPON" end,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.useMaelstromTenStacks == true
@@ -529,8 +530,8 @@ local function registerEditModeBars()
 						end
 						queueRefresh()
 					end,
-				},
-			}
+				}
+			end
 
 			do -- Anchoring
 				local points = { "TOPLEFT", "TOP", "TOPRIGHT", "LEFT", "CENTER", "RIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" }

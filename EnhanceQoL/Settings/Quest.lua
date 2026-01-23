@@ -36,15 +36,21 @@ local OBJECTIVE_TRACKER_MINIMIZE_ANCHORS = {
 }
 
 local function GetQuestTrackerQuestCountText()
-	if not C_QuestLog or not C_QuestLog.GetNumQuestLogEntries then return "" end
-	local _, numQuests = C_QuestLog.GetNumQuestLogEntries()
-	if not numQuests then numQuests = 0 end
+	if not C_QuestLog or not C_QuestLog.GetNumQuestLogEntries or not C_QuestLog.GetInfo then return "" end
+	local numEntries = C_QuestLog.GetNumQuestLogEntries()
+	local visibleQuests = 0
+	if numEntries and numEntries > 0 then
+		for i = 1, numEntries do
+			local info = C_QuestLog.GetInfo(i)
+			if info and not info.isHidden and info.questID and info.questID > 0 then visibleQuests = visibleQuests + 1 end
+		end
+	end
 	local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept()
 	if not maxQuests or maxQuests <= 0 then
-		if numQuests <= 0 then return "" end
-		return tostring(numQuests)
+		if visibleQuests <= 0 then return "" end
+		return tostring(visibleQuests)
 	end
-	return string.format("%d/%d", numQuests, maxQuests)
+	return string.format("%d/%d", visibleQuests, maxQuests)
 end
 
 local function PositionQuestTrackerQuestCount()

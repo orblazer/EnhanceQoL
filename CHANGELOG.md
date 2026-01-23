@@ -10,6 +10,7 @@
 - UF Plus: Added Heal Absorb Bar options (texture, color, sample, reverse fill) for anti-heal displays.
 - Cooldown Viewer: Optional /cdm and /wa9 slash commands to open settings.
 - DataPanels: Combat time stream with optional boss timer (stacked or inline).
+- World Map: Coordinate updates can run faster (down to 0.01s) and cursor coords hide off-map.
 
 ### 🐛 Fixed
 
