@@ -5,6 +5,9 @@
 ### ✨ Added
 
 - Quest Tracker: Minimized '+' anchor now supports bottom corners properly.
+- Cooldown Panels: Item entries can show charges using item uses.
+- DataPanels: Bag Space stream with icon toggle and Free/Max or Free display.
+- DataPanels: Hearthstone stream showing bind location with optional icon.
 - UF Plus: Detached power bar can use a custom strata.
 - UF Plus: Optional handling for empty power bars (max 0) when power is detached.
 - UF Plus: Added Heal Absorb Bar options (texture, color, sample, reverse fill) for anti-heal displays.
