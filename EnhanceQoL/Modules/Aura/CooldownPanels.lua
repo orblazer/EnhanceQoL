@@ -963,6 +963,7 @@ local function createIconFrame(parent)
 			}
 			group:AddButton(icon, regions, "Action", true)
 			icon._eqolMasqueAdded = true
+			icon._eqolMasqueNeedsReskin = true
 		end
 	end
 
@@ -1212,6 +1213,11 @@ local function applyIconLayout(frame, count, layout)
 		end
 
 		icon:SetSize(iconSize, iconSize)
+		if icon._eqolMasqueNeedsReskin then
+			local group = getMasqueGroup()
+			if group and group.ReSkin then group:ReSkin(icon) end
+			icon._eqolMasqueNeedsReskin = nil
+		end
 		if icon.count then
 			icon.count:ClearAllPoints()
 			icon.count:SetPoint(stackAnchor, icon, stackAnchor, stackX, stackY)

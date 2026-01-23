@@ -2704,11 +2704,19 @@ local function getNPCHealthColor(unit)
 	return UFHelper.getNPCColor(key)
 end
 
+local function ensureBossBarsVisible(unit, st)
+	if not isBossUnit(unit) then return end
+	if not UnitExists or not UnitExists(unit) then return end
+	if st.barGroup and not st.barGroup:IsShown() then st.barGroup:Show() end
+	if st.status and not st.status:IsShown() then st.status:Show() end
+end
+
 local function updateHealth(cfg, unit)
 	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	if cfg and cfg.enabled == false then return end
 	local st = states[unit]
 	if not st or not st.health or not st.frame then return end
+	ensureBossBarsVisible(unit, st)
 	local info = UNITS[unit]
 	local allowAbsorb = not (info and info.disableAbsorb)
 	local def = defaultsFor(unit) or {}

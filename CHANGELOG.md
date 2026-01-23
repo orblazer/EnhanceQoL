@@ -4,8 +4,10 @@
 
 ### 🐛 Fixed
 
-- Inspect Frame wasn't movable through _Mover_
-- Some spells where not shown in the new Cooldown Panel
+- Mover: Inspect Frame wasn't movable
+- UF Plus: Dimensius P3 Boss frame wasn't reappearing
+- Cooldown Panels: Some spells where not shown
+- Cooldown Panels: Masque icons now size correctly when adding new entries (no reload needed).
 
 ---
 
