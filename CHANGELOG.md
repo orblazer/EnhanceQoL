@@ -5,6 +5,7 @@
 ### 🐛 Fixed
 
 - Inspect Frame wasn't movable through _Mover_
+- Some spells where not shown in the new Cooldown Panel
 
 ---
 
