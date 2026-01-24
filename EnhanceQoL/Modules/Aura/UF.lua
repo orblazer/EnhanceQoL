@@ -200,7 +200,6 @@ for i = 1, maxBossFrames do
 		healthName = "EQOLUFBoss" .. i .. "Health",
 		powerName = "EQOLUFBoss" .. i .. "Power",
 		statusName = "EQOLUFBoss" .. i .. "Status",
-		disableAbsorb = true,
 	}
 end
 
@@ -2261,8 +2260,21 @@ local function applyBarBackdrop(bar, cfg)
 	bar:SetBackdropColor(col[1] or 0, col[2] or 0, col[3] or 0, col[4] or 0.6)
 end
 
-local function shouldShowSampleAbsorb(unit) return addon.variables.ufSampleAbsorb and addon.variables.ufSampleAbsorb[unit] == true end
-local function shouldShowSampleHealAbsorb(unit) return addon.variables.ufSampleHealAbsorb and addon.variables.ufSampleHealAbsorb[unit] == true end
+local function shouldShowSampleAbsorb(unit)
+	local samples = addon.variables.ufSampleAbsorb
+	if not samples then return false end
+	if samples[unit] == true then return true end
+	if unit and unit:match("^boss%d+$") then return samples.boss == true end
+	return false
+end
+
+local function shouldShowSampleHealAbsorb(unit)
+	local samples = addon.variables.ufSampleHealAbsorb
+	if not samples then return false end
+	if samples[unit] == true then return true end
+	if unit and unit:match("^boss%d+$") then return samples.boss == true end
+	return false
+end
 
 function UF.ClearCastInterruptState(st)
 	if not st then return end

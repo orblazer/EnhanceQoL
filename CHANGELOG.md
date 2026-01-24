@@ -11,6 +11,7 @@
 - UF Plus: Detached power bar can use a custom strata.
 - UF Plus: Optional handling for empty power bars (max 0) when power is detached.
 - UF Plus: Added Heal Absorb Bar options (texture, color, sample, reverse fill) for anti-heal displays.
+- UF Plus: Absorb Bar to boss frames
 - Cooldown Viewer: Optional /cdm and /wa9 slash commands to open settings.
 - DataPanels: Combat time stream with optional boss timer (stacked or inline).
 - World Map: Coordinate updates can run faster (down to 0.01s) and cursor coords hide off-map.
