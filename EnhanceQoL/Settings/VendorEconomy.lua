@@ -277,109 +277,103 @@ function addon.functions.settingsAddGold()
 		expanded = false,
 		colorizeTitle = false,
 	})
+	-- ! Still bugging as of 2026-01-21 - need to disable it
 
-	data = {
-		{
-			var = "enableMoneyTracker",
-			text = L["enableMoneyTracker"],
-			func = function(v) addon.db["enableMoneyTracker"] = v end,
-			desc = L["enableMoneyTrackerDesc"],
-			children = {
-				{
+	-- data = {
+	-- 	{
+	-- 		var = "enableMoneyTracker",
+	-- 		text = L["enableMoneyTracker"],
+	-- 		func = function(v) addon.db["enableMoneyTracker"] = v end,
+	-- 		desc = L["enableMoneyTrackerDesc"],
+	-- 		children = {
+	-- 			{
 
-					var = "showOnlyGoldOnMoney",
-					text = L["showOnlyGoldOnMoney"],
-					func = function(v) addon.db["showOnlyGoldOnMoney"] = v end,
-					parentCheck = function()
-						return addon.SettingsLayout.elements["enableMoneyTracker"]
-							and addon.SettingsLayout.elements["enableMoneyTracker"].setting
-							and addon.SettingsLayout.elements["enableMoneyTracker"].setting:GetValue() == true
-					end,
-					parent = true,
-					default = false,
-					type = Settings.VarType.Boolean,
-					sType = "checkbox",
-				},
-				{
-					listFunc = function()
-						local tracker = addon.db["moneyTracker"] or {}
-						local entries = {}
-						local tList = { [""] = "" }
-						wipe(moneyTrackerOrder)
-						table.insert(moneyTrackerOrder, "")
+	-- 				var = "showOnlyGoldOnMoney",
+	-- 				text = L["showOnlyGoldOnMoney"],
+	-- 				func = function(v) addon.db["showOnlyGoldOnMoney"] = v end,
+	-- 				parentCheck = function()
+	-- 					return addon.SettingsLayout.elements["enableMoneyTracker"]
+	-- 						and addon.SettingsLayout.elements["enableMoneyTracker"].setting
+	-- 						and addon.SettingsLayout.elements["enableMoneyTracker"].setting:GetValue() == true
+	-- 				end,
+	-- 				parent = true,
+	-- 				default = false,
+	-- 				type = Settings.VarType.Boolean,
+	-- 				sType = "checkbox",
+	-- 			},
+	-- 		},
+	-- 	},
+	-- }
 
-						for guid, v in pairs(tracker) do
-							if guid ~= UnitGUID("player") then
-								local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
-								local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
-								local rawSort = string.format("%s-%s", v.name or "", v.realm or ""):lower()
-								entries[#entries + 1] = { key = guid, label = displayName, sortKey = rawSort }
-							end
-						end
+	-- applyParentSection(data, goldExpandable)
+	-- table.sort(data, function(a, b) return a.text < b.text end)
+	-- addon.functions.SettingsCreateCheckboxes(addon.SettingsLayout.rootGENERAL, data)
 
-						table.sort(entries, function(a, b)
-							if a.sortKey == b.sortKey then return a.key < b.key end
-							return a.sortKey < b.sortKey
-						end)
+	addon.functions.SettingsCreateScrollDropdown(addon.SettingsLayout.rootGENERAL, {
+		parentSection = goldExpandable,
+		listFunc = function()
+			local tracker = addon.db["moneyTracker"] or {}
+			local entries = {}
+			local tList = { [""] = "" }
+			wipe(moneyTrackerOrder)
+			table.insert(moneyTrackerOrder, "")
 
-						for _, entry in ipairs(entries) do
-							tList[entry.key] = entry.label
-							table.insert(moneyTrackerOrder, entry.key)
-						end
-						return tList
-					end,
-					order = moneyTrackerOrder,
-					text = L["mailboxRemoveHeader"],
-					get = function() return "" end,
-					set = function(key)
-						if not key or key == "" then return end
-						if not addon.db or not addon.db["moneyTracker"] or not addon.db["moneyTracker"][key] then return end
+			for guid, v in pairs(tracker) do
+				if guid ~= UnitGUID("player") then
+					local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
+					local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
+					local rawSort = string.format("%s-%s", v.name or "", v.realm or ""):lower()
+					entries[#entries + 1] = { key = guid, label = displayName, sortKey = rawSort }
+				end
+			end
 
-						local contact = addon.db["moneyTracker"][key]
-						local classColor = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[contact.class or ""] or { r = 1, g = 1, b = 1 }
-						local displayName =
-							string.format("|cff%02x%02x%02x%s-%s|r", (classColor.r or 1) * 255, (classColor.g or 1) * 255, (classColor.b or 1) * 255, contact.name or "?", contact.realm or "?")
+			table.sort(entries, function(a, b)
+				if a.sortKey == b.sortKey then return a.key < b.key end
+				return a.sortKey < b.sortKey
+			end)
 
-						local dialogKey = "EQOL_MONEY_TRACKER_REMOVE"
-						StaticPopupDialogs[dialogKey] = StaticPopupDialogs[dialogKey]
-							or {
-								text = L["moneyTrackerRemoveConfirm"],
-								button1 = ACCEPT,
-								button2 = CANCEL,
-								timeout = 0,
-								whileDead = true,
-								hideOnEscape = true,
-								preferredIndex = 3,
-							}
+			for _, entry in ipairs(entries) do
+				tList[entry.key] = entry.label
+				table.insert(moneyTrackerOrder, entry.key)
+			end
+			return tList
+		end,
+		order = moneyTrackerOrder,
+		text = L["mailboxRemoveHeader"],
+		get = function() return "" end,
+		set = function(key)
+			if not key or key == "" then return end
+			if not addon.db or not addon.db["moneyTracker"] or not addon.db["moneyTracker"][key] then return end
 
-						StaticPopupDialogs[dialogKey].OnAccept = function(_, guid)
-							if not guid or not addon.db or not addon.db["moneyTracker"] then return end
-							addon.db["moneyTracker"][guid] = nil
-						end
+			local contact = addon.db["moneyTracker"][key]
+			local classColor = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[contact.class or ""] or { r = 1, g = 1, b = 1 }
+			local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (classColor.r or 1) * 255, (classColor.g or 1) * 255, (classColor.b or 1) * 255, contact.name or "?", contact.realm or "?")
 
-						StaticPopup_Show(dialogKey, displayName or key, nil, key)
-					end,
-					parentCheck = function()
-						return addon.SettingsLayout.elements["enableMoneyTracker"]
-							and addon.SettingsLayout.elements["enableMoneyTracker"].setting
-							and addon.SettingsLayout.elements["enableMoneyTracker"].setting:GetValue() == true
-					end,
-					parent = true,
-					default = "",
-					var = "moneyTracker",
-					type = Settings.VarType.String,
-					sType = "scrolldropdown",
-				},
-			},
-		},
-	}
+			local dialogKey = "EQOL_MONEY_TRACKER_REMOVE"
+			StaticPopupDialogs[dialogKey] = StaticPopupDialogs[dialogKey]
+				or {
+					text = L["moneyTrackerRemoveConfirm"],
+					button1 = ACCEPT,
+					button2 = CANCEL,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
 
-	applyParentSection(data, goldExpandable)
-	table.sort(data, function(a, b) return a.text < b.text end)
-	addon.functions.SettingsCreateCheckboxes(addon.SettingsLayout.rootGENERAL, data)
+			StaticPopupDialogs[dialogKey].OnAccept = function(_, guid)
+				if not guid or not addon.db or not addon.db["moneyTracker"] then return end
+				addon.db["moneyTracker"][guid] = nil
+			end
+
+			StaticPopup_Show(dialogKey, displayName or key, nil, key)
+		end,
+		default = "",
+		var = "moneyTracker",
+		type = Settings.VarType.String,
+	})
 end
--- ! Still bugging as of 2026-01-21 - need to disable it
--- addon.functions.settingsAddGold()
+addon.functions.settingsAddGold()
 ----- REGION END
 
 function addon.functions.initVendorEconomy() end

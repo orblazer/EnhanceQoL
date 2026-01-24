@@ -23,6 +23,8 @@
 - UF Plus: Debuff border colors now use the modern dispel color API (DebuffTypeColor removed).
 - World Marker Cycle: Sometimes not working for some users
 - Mount Keybinding: Only Druids should cancel their respective form now
+- Tooltips: Secret error on inspect in restricted environment
+- Money Stream: Missed to add the remove dropdown for characters
 
 ---
 
