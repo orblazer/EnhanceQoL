@@ -255,11 +255,15 @@ function MountActions:PrepareActionButton(btn)
 	end
 	if btn._eqolAction == "random" then
 		local spellID
-		local targetSpellID = getMountedTargetSpellID()
-		if targetSpellID and isMountSpellUsable(targetSpellID) then
-			spellID = targetSpellID
+		if addon.variables.unitClass == "DRUID" and IsPlayerMoving() and C_SpellBook.IsSpellKnown(783) then
+			spellID = 783
 		else
-			spellID = self:GetRandomMountSpell()
+			local targetSpellID = getMountedTargetSpellID()
+			if targetSpellID and isMountSpellUsable(targetSpellID) then
+				spellID = targetSpellID
+			else
+				spellID = self:GetRandomMountSpell()
+			end
 		end
 		local macro = buildMountMacro(spellID or RANDOM_FAVORITE_SPELL_ID)
 		btn:SetAttribute("macrotext1", macro)
