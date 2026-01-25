@@ -1005,6 +1005,16 @@ function addon.functions.initUIOptions()
 	addon.functions.InitDBValue("gcdBarHeight", defaults.height or 18)
 	addon.functions.InitDBValue("gcdBarTexture", defaults.texture or "DEFAULT")
 	addon.functions.InitDBValue("gcdBarColor", defaults.color or { r = 1, g = 0.82, b = 0.2, a = 1 })
+	addon.functions.InitDBValue("gcdBarBackgroundEnabled", defaults.bgEnabled == true)
+	addon.functions.InitDBValue("gcdBarBackgroundTexture", defaults.bgTexture or "SOLID")
+	addon.functions.InitDBValue("gcdBarBackgroundColor", defaults.bgColor or { r = 0, g = 0, b = 0, a = 0 })
+	addon.functions.InitDBValue("gcdBarBorderEnabled", defaults.borderEnabled == true)
+	addon.functions.InitDBValue("gcdBarBorderTexture", defaults.borderTexture or "DEFAULT")
+	addon.functions.InitDBValue("gcdBarBorderColor", defaults.borderColor or { r = 0, g = 0, b = 0, a = 0.8 })
+	addon.functions.InitDBValue("gcdBarBorderSize", defaults.borderSize or 1)
+	addon.functions.InitDBValue("gcdBarBorderOffset", defaults.borderOffset or 0)
+	addon.functions.InitDBValue("gcdBarProgressMode", defaults.progressMode or "REMAINING")
+	addon.functions.InitDBValue("gcdBarFillDirection", defaults.fillDirection or "LEFT")
 
 	if addon.GCDBar and addon.GCDBar.OnSettingChanged then addon.GCDBar:OnSettingChanged(addon.db["gcdBarEnabled"]) end
 

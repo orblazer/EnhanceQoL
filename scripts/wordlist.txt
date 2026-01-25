@@ -386,3 +386,7 @@ Darkflight;180;"[[pbas -60]]";Darkflight;|T366937:16|t
 
 # Zandalari Troll
 Regeneratin;180;"[[pbas -60]]";Regeneratin;|T1850550:16|t
+
+# profession
+New Crafting Order;180;"[[pbas -60]]";New Crafting Order
+Canceled Crafting Order;180;"[[pbas -60]]";Canceled Crafting Order

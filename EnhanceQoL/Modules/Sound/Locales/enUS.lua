@@ -28,6 +28,8 @@ L["soundExtraEventLootUpgrade"] = "Loot upgrade toast"
 L["soundExtraEventRoleCheck"] = "Role check"
 L["soundExtraEventPlayerCountdown"] = "Pull countdown started"
 L["soundExtraEventNewMail"] = "New mail"
+L["soundExtraEventCraftingOrdersNew"] = "Personal crafting order added"
+L["soundExtraEventCraftingOrdersRemoved"] = "Personal crafting order removed"
 
 L["monk"] = "Monk"
 

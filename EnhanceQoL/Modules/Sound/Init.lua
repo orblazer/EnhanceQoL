@@ -43,6 +43,16 @@ addon.Sounds.extraSoundEvents = {
 	{ event = "READY_CHECK", label = "soundExtraEventReadyCheck" },
 	{ event = "PARTY_INVITE_REQUEST", label = "soundExtraEventPartyInvite" },
 	{ event = "GROUP_INVITE_CONFIRMATION", label = "soundExtraEventGroupInviteConfirm" },
+	{
+		event = "CRAFTINGORDERS_PERSONAL_ORDER_NEW",
+		label = "soundExtraEventCraftingOrdersNew",
+		registerEvent = "CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS",
+	},
+	{
+		event = "CRAFTINGORDERS_PERSONAL_ORDER_REMOVED",
+		label = "soundExtraEventCraftingOrdersRemoved",
+		registerEvent = "CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS",
+	},
 }
 
 addon.Sounds.soundFiles = {

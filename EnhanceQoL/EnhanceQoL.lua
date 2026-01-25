@@ -2195,7 +2195,22 @@ local function EnsureActionBarVisibilityWatcher()
 	watcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 	watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 	watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
-	watcher:SetScript("OnEvent", function(_, event) RefreshAllActionBarVisibilityAlpha(nil, event) end)
+	watcher:RegisterEvent("ACTIONBAR_SHOWGRID")
+	watcher:RegisterEvent("ACTIONBAR_HIDEGRID")
+	watcher:SetScript("OnEvent", function(_, event)
+		if event == "ACTIONBAR_SHOWGRID" then
+			addon.variables = addon.variables or {}
+			addon.variables.actionBarShowGrid = true
+			RefreshAllActionBarVisibilityAlpha(true, event)
+			return
+		end
+		if event == "ACTIONBAR_HIDEGRID" then
+			if addon.variables then addon.variables.actionBarShowGrid = nil end
+			RefreshAllActionBarVisibilityAlpha(true, event)
+			return
+		end
+		RefreshAllActionBarVisibilityAlpha(nil, event)
+	end)
 	addon.variables.actionBarVisibilityWatcher = watcher
 end
 

@@ -19,6 +19,8 @@
 - Settings: Moved slash command toggles to General → UI Utilities.
 - Questing: Optional modifier requirement for quest automation (accept/complete).
 - Mouse Ring: Combat-only color/size override and optional extra combat ring overlay.
+- Sound: Personal crafting orders now have extra sound options for New/Removed orders (fires only on changes).
+- Shared Media: 2 new voices for crafting orders (Crafting Order - New, Crafting Order - Canceled).
 
 ### 🐛 Fixed
 

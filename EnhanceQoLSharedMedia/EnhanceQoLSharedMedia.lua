@@ -311,6 +311,10 @@ addon.SharedMedia.sounds = {
 	{ key = "Drink", label = "EQOL: Drink", path = voiceoverPath .. "Drink.ogg" },
 	{ key = "OOM", label = "EQOL: OOM", path = voiceoverPath .. "OOM.ogg" },
 	{ key = "Offhealing active", label = "EQOL: Offhealing active", path = voiceoverPath .. "Offhealing active.ogg" },
+
+	-- Crafting order
+	{ key = "New Crafting Order", label = "EQOL: Crafting Order - New", path = voiceoverPath .. "New Crafting Order.ogg" },
+	{ key = "Canceled Crafting Order", label = "EQOL: Crafting Order - Canceled", path = voiceoverPath .. "Canceled Crafting Order.ogg" },
 }
 
 -- Sort alphabetically, but ignore the leading "EQOL:" prefix (and any following spaces)

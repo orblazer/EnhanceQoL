@@ -77,17 +77,78 @@ local function getExtraEventEntry(eventName)
 end
 
 local extraSoundFrame
-local function playExtraSound(event, ...)
+
+local function playExtraSoundByKey(eventKey, ...)
 	if not addon.db or addon.db.soundExtraEnabled ~= true then return end
-	local entry = getExtraEventEntry(event)
+	local entry = getExtraEventEntry(eventKey)
 	if entry and type(entry.condition) == "function" then
-		if not entry.condition(event, ...) then return end
+		if not entry.condition(eventKey, ...) then return end
 	end
 	local mapping = addon.db.soundExtraEvents
-	local soundName = mapping and mapping[event]
+	local soundName = mapping and mapping[eventKey]
 	if not soundName or soundName == "" then return end
 	local file = resolveExtraSound(soundName)
 	if file then PlaySoundFile(file, "Master") end
+end
+
+local personalOrdersSnapshot
+local craftingOrdersTrackingActive = false
+
+local function getPersonalOrderCounts()
+	if not C_CraftingOrders or not C_CraftingOrders.GetPersonalOrdersInfo then return end
+	local infos = C_CraftingOrders.GetPersonalOrdersInfo()
+	if type(infos) ~= "table" then return end
+	local counts = {}
+	for _, info in ipairs(infos) do
+		local count = tonumber(info.numPersonalOrders) or 0
+		local professionKey = info.profession or info.professionName
+		if professionKey ~= nil then counts[professionKey] = (counts[professionKey] or 0) + count end
+	end
+	return counts
+end
+
+local function diffPersonalOrderCounts(oldCounts, newCounts)
+	local added, removed = 0, 0
+	for key, newCount in pairs(newCounts) do
+		local oldCount = oldCounts[key] or 0
+		if newCount > oldCount then
+			added = added + (newCount - oldCount)
+		elseif newCount < oldCount then
+			removed = removed + (oldCount - newCount)
+		end
+	end
+	for key, oldCount in pairs(oldCounts) do
+		if newCounts[key] == nil and oldCount > 0 then removed = removed + oldCount end
+	end
+	return added, removed, (added > 0 or removed > 0)
+end
+
+local function handleCraftingOrdersUpdate()
+	local newCounts = getPersonalOrderCounts()
+	if not newCounts then return end
+	if not personalOrdersSnapshot then
+		personalOrdersSnapshot = newCounts
+		return
+	end
+	local added, removed, changed = diffPersonalOrderCounts(personalOrdersSnapshot, newCounts)
+	personalOrdersSnapshot = newCounts
+	if not changed then return end
+	if added > 0 then playExtraSoundByKey("CRAFTINGORDERS_PERSONAL_ORDER_NEW") end
+	if removed > 0 then playExtraSoundByKey("CRAFTINGORDERS_PERSONAL_ORDER_REMOVED") end
+end
+
+local function isCraftingOrdersSoundConfigured(mapping)
+	if not mapping then return false end
+	return (mapping["CRAFTINGORDERS_PERSONAL_ORDER_NEW"] and mapping["CRAFTINGORDERS_PERSONAL_ORDER_NEW"] ~= "")
+		or (mapping["CRAFTINGORDERS_PERSONAL_ORDER_REMOVED"] and mapping["CRAFTINGORDERS_PERSONAL_ORDER_REMOVED"] ~= "")
+end
+
+local function playExtraSound(event, ...)
+	if event == "CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS" then
+		handleCraftingOrdersUpdate()
+		return
+	end
+	playExtraSoundByKey(event, ...)
 end
 
 local audioSyncFrame
@@ -112,6 +173,8 @@ end
 function addon.Sounds.functions.UpdateExtraSounds()
 	if not addon.db or addon.db.soundExtraEnabled ~= true then
 		if extraSoundFrame then extraSoundFrame:UnregisterAllEvents() end
+		personalOrdersSnapshot = nil
+		craftingOrdersTrackingActive = false
 		return
 	end
 
@@ -125,11 +188,25 @@ function addon.Sounds.functions.UpdateExtraSounds()
 	local events = addon.Sounds and addon.Sounds.extraSoundEvents
 	if type(events) ~= "table" then return end
 	local mapping = addon.db.soundExtraEvents
+	local craftingOrdersActive = isCraftingOrdersSoundConfigured(mapping)
+	if craftingOrdersActive ~= craftingOrdersTrackingActive then
+		craftingOrdersTrackingActive = craftingOrdersActive
+		personalOrdersSnapshot = nil
+	end
 	for _, entry in ipairs(events) do
 		local eventName = entry and entry.event
 		if type(eventName) == "string" and eventName ~= "" then
 			local soundName = mapping and mapping[eventName]
-			if soundName and soundName ~= "" then extraSoundFrame:RegisterEvent(eventName) end
+			if soundName and soundName ~= "" then
+				local registerEvent = entry.registerEvent or eventName
+				if type(registerEvent) == "table" then
+					for _, eventToRegister in ipairs(registerEvent) do
+						if type(eventToRegister) == "string" and eventToRegister ~= "" then extraSoundFrame:RegisterEvent(eventToRegister) end
+					end
+				elseif type(registerEvent) == "string" and registerEvent ~= "" then
+					extraSoundFrame:RegisterEvent(registerEvent)
+				end
+			end
 		end
 	end
 end
