@@ -3615,6 +3615,19 @@ local function buildUnitSettings(unit)
 		end, auraDef.showDebuffs ~= false, "auras")
 		list[#list].isEnabled = isAuraEnabled
 
+		list[#list + 1] = checkbox(
+			L["Highlight dispellable"] or "Highlight dispellable",
+			function() return getValue(unit, { "auraIcons", "blizzardDispelBorder" }, auraDef.blizzardDispelBorder == true) == true end,
+			function(val)
+				setValue(unit, { "auraIcons", "blizzardDispelBorder" }, val and true or false)
+				refresh()
+				refreshAuras()
+			end,
+			auraDef.blizzardDispelBorder == true,
+			"auras"
+		)
+		list[#list].isEnabled = isAuraEnabled
+
 		list[#list + 1] = slider(
 			L["Cooldown Text Size"] or "Cooldown text size",
 			0,

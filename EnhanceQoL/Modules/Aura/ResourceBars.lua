@@ -106,6 +106,7 @@ local COSMETIC_BAR_KEYS = {
 	"height",
 	"textStyle",
 	"shortNumbers",
+	"percentRounding",
 	"fontSize",
 	"fontFace",
 	"fontOutline",
@@ -119,6 +120,11 @@ local COSMETIC_BAR_KEYS = {
 	"useGradient",
 	"gradientStartColor",
 	"gradientEndColor",
+	"staggerHighColors",
+	"staggerHighThreshold",
+	"staggerExtremeThreshold",
+	"staggerHighColor",
+	"staggerExtremeColor",
 	"useMaelstromFiveColor",
 	"useMaelstromTenStacks",
 	"maelstromFiveColor",
@@ -208,6 +214,17 @@ local function formatNumber(value, useShort)
 	if value == nil then return "0" end
 	if useShort then return AbbreviateNumbers(value) end
 	return tostring(value)
+end
+
+local function formatPercentText(value, cfg)
+	if value == nil then return "0" end
+	local mode = cfg and cfg.percentRounding
+	if mode == "FLOOR" then
+		if C_StringUtil and C_StringUtil.FloorToNearestString then return C_StringUtil.FloorToNearestString(value) end
+		return tostring(floor(value))
+	end
+	if C_StringUtil and C_StringUtil.RoundToNearestString then return C_StringUtil.RoundToNearestString(value) end
+	return tostring(floor(value + 0.5))
 end
 
 local function isSpellKnownSafe(spellId)
@@ -405,14 +422,40 @@ end
 
 RB.STAGGER_YELLOW_THRESHOLD = 0.30
 RB.STAGGER_RED_THRESHOLD = 0.60
+RB.STAGGER_EXTRA_THRESHOLD_HIGH = 200
+RB.STAGGER_EXTRA_THRESHOLD_EXTREME = 300
+RB.STAGGER_EXTRA_COLORS = {
+	high = { r = 0.62, g = 0.2, b = 1.0, a = 1 },
+	extreme = { r = 1.0, g = 0.2, b = 0.8, a = 1 },
+}
 RB.STAGGER_FALLBACK_COLORS = {
 	green = { r = 0.52, g = 1.0, b = 0.52 },
 	yellow = { r = 1.0, g = 0.98, b = 0.72 },
 	red = { r = 1.0, g = 0.42, b = 0.42 },
 }
 
-local function getStaggerStateColor(percent)
+local function getColorComponents(color, fallback)
+	color = color or fallback
+	if not color then return 1, 1, 1, 1 end
+	if color.r then return color.r or 1, color.g or 1, color.b or 1, color.a or 1 end
+	return color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
+end
+
+local function getStaggerStateColor(percent, cfg)
 	local info = (GetPowerBarColor and GetPowerBarColor("STAGGER")) or (PowerBarColor and PowerBarColor["STAGGER"])
+	if cfg and cfg.staggerHighColors == true then
+		local high = tonumber(cfg.staggerHighThreshold) or RB.STAGGER_EXTRA_THRESHOLD_HIGH
+		local extreme = tonumber(cfg.staggerExtremeThreshold) or RB.STAGGER_EXTRA_THRESHOLD_EXTREME
+		if high < 0 then high = 0 end
+		if extreme < high then extreme = high end
+		local highRatio = high / 100
+		local extremeRatio = extreme / 100
+		if percent >= extremeRatio then
+			return getColorComponents(cfg.staggerExtremeColor, RB.STAGGER_EXTRA_COLORS.extreme)
+		elseif percent >= highRatio then
+			return getColorComponents(cfg.staggerHighColor, RB.STAGGER_EXTRA_COLORS.high)
+		end
+	end
 	local key
 	if percent >= RB.STAGGER_RED_THRESHOLD then
 		key = "red"
@@ -421,13 +464,13 @@ local function getStaggerStateColor(percent)
 	else
 		key = "green"
 	end
-	return (info and info[key]) or RB.STAGGER_FALLBACK_COLORS[key] or RB.STAGGER_FALLBACK_COLORS.green
+	return getColorComponents((info and info[key]) or RB.STAGGER_FALLBACK_COLORS[key] or RB.STAGGER_FALLBACK_COLORS.green)
 end
 
 local function getPowerBarColor(type)
 	if type == "STAGGER" then
-		local col = getStaggerStateColor(0)
-		return col.r or 1, col.g or 1, col.b or 1
+		local r, g, b = getStaggerStateColor(0)
+		return r or 1, g or 1, b or 1
 	end
 	if ResourcebarVars.CUSTOM_POWER_COLORS and ResourcebarVars.CUSTOM_POWER_COLORS[type] then
 		local c = ResourcebarVars.CUSTOM_POWER_COLORS[type]
@@ -1635,9 +1678,8 @@ local function applyBarFillColor(bar, cfg, pType)
 		local stagger = (UnitStagger and UnitStagger("player")) or 0
 		local maxHealth = UnitHealthMax("player") or 1
 		local percent = maxHealth > 0 and (stagger / maxHealth) or 0
-		local col = getStaggerStateColor(percent)
-		r, g, b = col.r or 1, col.g or 1, col.b or 1
-		a = col.a or (cfg.barColor and cfg.barColor[4]) or 1
+		r, g, b, a = getStaggerStateColor(percent, cfg)
+		a = a or (cfg.barColor and cfg.barColor[4]) or 1
 	elseif cfg.useBarColor then
 		local color = cfg.barColor or RB.WHITE
 		r, g, b, a = color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
@@ -2017,12 +2059,8 @@ function updateHealthBar(evt)
 		healthBar._lastVal = curHealth
 
 		local percent = getHealthPercent("player", curHealth, maxHealth)
-		local percentStr
-		if addon.variables.isMidnight then
-			percentStr = string.format("%s%%", AbbreviateLargeNumbers(percent))
-		else
-			percentStr = tostring(floor(percent + 0.5))
-		end
+		local percentText = formatPercentText(percent, settings)
+		local percentStr = addon.variables.isMidnight and (percentText .. "%") or percentText
 		if healthBar.text then
 			local style = settings and settings.textStyle or "PERCENT"
 			local useShortNumbers = settings.shortNumbers ~= false
@@ -2728,13 +2766,9 @@ function updatePowerBar(type, runeSlot)
 				end
 				if not colorUpdated then
 					if wantReady then
-						if ResourceBars.RefreshStatusBarGradient then
-							ResourceBars.RefreshStatusBarGradient(sb, cfg, readyR, readyG, readyB, readyA)
-						end
+						if ResourceBars.RefreshStatusBarGradient then ResourceBars.RefreshStatusBarGradient(sb, cfg, readyR, readyG, readyB, readyA) end
 					else
-						if ResourceBars.RefreshStatusBarGradient then
-							ResourceBars.RefreshStatusBarGradient(sb, cfg, cooldownR, cooldownG, cooldownB, cooldownA)
-						end
+						if ResourceBars.RefreshStatusBarGradient then ResourceBars.RefreshStatusBarGradient(sb, cfg, cooldownR, cooldownG, cooldownB, cooldownA) end
 					end
 				end
 				if sb.fs then
@@ -2849,13 +2883,9 @@ function updatePowerBar(type, runeSlot)
 								end
 								if not colorUpdated then
 									if wantReady then
-										if ResourceBars.RefreshStatusBarGradient then
-											ResourceBars.RefreshStatusBarGradient(sb, cfgOnUpdate, rr, rg, rb, ra)
-										end
+										if ResourceBars.RefreshStatusBarGradient then ResourceBars.RefreshStatusBarGradient(sb, cfgOnUpdate, rr, rg, rb, ra) end
 									else
-										if ResourceBars.RefreshStatusBarGradient then
-											ResourceBars.RefreshStatusBarGradient(sb, cfgOnUpdate, cr, cg, cb, ca)
-										end
+										if ResourceBars.RefreshStatusBarGradient then ResourceBars.RefreshStatusBarGradient(sb, cfgOnUpdate, cr, cg, cb, ca) end
 									end
 								end
 								if sb.fs then
@@ -2930,12 +2960,8 @@ function updatePowerBar(type, runeSlot)
 
 		local percent = maxHealth > 0 and (curPower / maxHealth) or 0
 		local percentDisplay = percent * 100
-		local percentStr
-		if addon.variables.isMidnight then
-			percentStr = string.format("%s%%", AbbreviateLargeNumbers(percentDisplay))
-		else
-			percentStr = tostring(floor(percentDisplay + 0.5))
-		end
+		local percentText = formatPercentText(percentDisplay, cfg)
+		local percentStr = addon.variables.isMidnight and (percentText .. "%") or percentText
 		if bar.text then
 			local useShortNumbers = cfg.shortNumbers ~= false
 			if style == "NONE" then
@@ -2975,9 +3001,9 @@ function updatePowerBar(type, runeSlot)
 			local custom = cfg.barColor or RB.WHITE
 			baseR, baseG, baseB, baseA = custom[1] or 1, custom[2] or 1, custom[3] or 1, custom[4] or 1
 		else
-			local col = getStaggerStateColor(percent)
-			baseR, baseG, baseB = col.r or 1, col.g or 1, col.b or 1
-			baseA = col.a or (cfg.barColor and cfg.barColor[4]) or 1
+			local r, g, b, a = getStaggerStateColor(percent, cfg)
+			baseR, baseG, baseB = r or 1, g or 1, b or 1
+			baseA = a or (cfg.barColor and cfg.barColor[4]) or 1
 		end
 		bar._baseColor = bar._baseColor or {}
 		bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = baseR, baseG, baseB, baseA
@@ -3050,7 +3076,8 @@ function updatePowerBar(type, runeSlot)
 		bar._lastVal = shownStacks
 
 		local percent = logicalMax > 0 and (stacks / logicalMax * 100) or 0
-		local percentStr = addon.variables.isMidnight and string.format("%s%%", AbbreviateLargeNumbers(percent)) or tostring(floor(percent + 0.5))
+		local percentText = formatPercentText(percent, cfg)
+		local percentStr = addon.variables.isMidnight and (percentText .. "%") or percentText
 
 		if bar.text then
 			local useShortNumbers = cfg.shortNumbers ~= false
@@ -3174,12 +3201,8 @@ function updatePowerBar(type, runeSlot)
 	end
 	bar._lastVal = curPower
 	local percent = getPowerPercent("player", pType, curPower, maxPower)
-	local percentStr
-	if addon.variables.isMidnight then
-		percentStr = string.format("%s%%", AbbreviateLargeNumbers(percent))
-	else
-		percentStr = tostring(floor(percent + 0.5))
-	end
+	local percentText = formatPercentText(percent, cfg)
+	local percentStr = addon.variables.isMidnight and (percentText .. "%") or percentText
 	if bar.text then
 		local useShortNumbers = cfg.shortNumbers ~= false
 		if style == "NONE" then
@@ -4985,6 +5008,9 @@ ResourceBars.THRESHOLD_THICKNESS = RB.THRESHOLD_THICKNESS
 ResourceBars.THRESHOLD_DEFAULT = RB.THRESHOLD_DEFAULT
 ResourceBars.DEFAULT_THRESHOLDS = RB.DEFAULT_THRESHOLDS
 ResourceBars.DEFAULT_THRESHOLD_COUNT = RB.DEFAULT_THRESHOLD_COUNT
+ResourceBars.STAGGER_EXTRA_THRESHOLD_HIGH = RB.STAGGER_EXTRA_THRESHOLD_HIGH
+ResourceBars.STAGGER_EXTRA_THRESHOLD_EXTREME = RB.STAGGER_EXTRA_THRESHOLD_EXTREME
+ResourceBars.STAGGER_EXTRA_COLORS = RB.STAGGER_EXTRA_COLORS
 ResourceBars.getBarSettings = getBarSettings
 ResourceBars.getAnchor = getAnchor
 ResourceBars.BehaviorOptionsForType = behaviorOptionsForType

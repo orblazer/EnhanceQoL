@@ -18,6 +18,9 @@ local THRESHOLD_THICKNESS = (ResourceBars and ResourceBars.THRESHOLD_THICKNESS) 
 local THRESHOLD_DEFAULT = (ResourceBars and ResourceBars.THRESHOLD_DEFAULT) or { 1, 1, 1, 0.5 }
 local DEFAULT_THRESHOLDS = (ResourceBars and ResourceBars.DEFAULT_THRESHOLDS) or { 25, 50, 75, 90 }
 local DEFAULT_THRESHOLD_COUNT = (ResourceBars and ResourceBars.DEFAULT_THRESHOLD_COUNT) or 3
+local STAGGER_EXTRA_THRESHOLD_HIGH = (ResourceBars and ResourceBars.STAGGER_EXTRA_THRESHOLD_HIGH) or 200
+local STAGGER_EXTRA_THRESHOLD_EXTREME = (ResourceBars and ResourceBars.STAGGER_EXTRA_THRESHOLD_EXTREME) or 300
+local STAGGER_EXTRA_COLORS = (ResourceBars and ResourceBars.STAGGER_EXTRA_COLORS) or { high = { 0.62, 0.2, 1, 1 }, extreme = { 1, 0.2, 0.8, 1 } }
 local SMF = addon.SharedMedia and addon.SharedMedia.functions
 local EQOL_RUNES_BORDER = (ResourceBars and ResourceBars.RUNE_BORDER_ID) or "EQOL_BORDER_RUNES"
 local EQOL_RUNES_BORDER_LABEL = (ResourceBars and ResourceBars.RUNE_BORDER_LABEL) or (SMF and SMF.GetCustomBorder and (SMF.GetCustomBorder(EQOL_RUNES_BORDER) or {}).label) or "EQOL: Runes"
@@ -1671,6 +1674,42 @@ local function registerEditModeBars()
 					default = true,
 				}
 
+				local roundingOptions = {
+					{ key = "ROUND", label = L["Round to nearest"] or "Round to nearest" },
+					{ key = "FLOOR", label = L["Round down"] or "Round down" },
+				}
+				settingsList[#settingsList + 1] = {
+					name = L["Percent rounding"] or "Percent rounding",
+					kind = settingType.Dropdown,
+					height = 120,
+					field = "percentRounding",
+					parentId = "textsettings",
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.percentRounding) or "ROUND"
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.percentRounding = value
+						queueRefresh()
+					end,
+					generator = function(_, root)
+						for _, entry in ipairs(roundingOptions) do
+							root:CreateRadio(entry.label, function()
+								local c = curSpecCfg()
+								return ((c and c.percentRounding) or "ROUND") == entry.key
+							end, function()
+								local c = curSpecCfg()
+								if not c then return end
+								c.percentRounding = entry.key
+								queueRefresh()
+							end)
+						end
+					end,
+					default = "ROUND",
+				}
+
 				settingsList[#settingsList + 1] = {
 					name = HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE,
 					kind = settingType.Slider,
@@ -2198,6 +2237,129 @@ local function registerEditModeBars()
 					end,
 					hasOpacity = true,
 					parentId = "colorsetting",
+				}
+			end
+
+			if barType == "STAGGER" then
+				settingsList[#settingsList + 1] = {
+					name = L["Stagger colors"] or "Stagger colors",
+					kind = settingType.Collapsible,
+					id = "staggercolors",
+					defaultCollapsed = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Use extended stagger colors"] or "Use extended stagger colors",
+					kind = settingType.Checkbox,
+					field = "staggerHighColors",
+					parentId = "staggercolors",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.staggerHighColors == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.staggerHighColors = value and true or false
+						queueRefresh()
+					end,
+					default = false,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Stagger high threshold"] or "Stagger high threshold (%)",
+					kind = settingType.Slider,
+					allowInput = true,
+					field = "staggerHighThreshold",
+					minValue = 100,
+					maxValue = 1000,
+					valueStep = 10,
+					parentId = "staggercolors",
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.staggerHighThreshold) or STAGGER_EXTRA_THRESHOLD_HIGH
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.staggerHighThreshold = value
+						queueRefresh()
+					end,
+					default = STAGGER_EXTRA_THRESHOLD_HIGH,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.staggerHighColors == true
+					end,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Stagger high color"] or "Stagger high color",
+					kind = settingType.Color,
+					parentId = "staggercolors",
+					get = function()
+						local c = curSpecCfg()
+						return toUIColor((c and c.staggerHighColor) or (STAGGER_EXTRA_COLORS and STAGGER_EXTRA_COLORS.high) or { 0.62, 0.2, 1, 1 }, { 0.62, 0.2, 1, 1 })
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.staggerHighColor = toColorArray(value, (STAGGER_EXTRA_COLORS and STAGGER_EXTRA_COLORS.high) or { 0.62, 0.2, 1, 1 })
+						queueRefresh()
+					end,
+					default = { r = 0.62, g = 0.2, b = 1, a = 1 },
+					hasOpacity = true,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.staggerHighColors == true
+					end,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Stagger extreme threshold"] or "Stagger extreme threshold (%)",
+					kind = settingType.Slider,
+					allowInput = true,
+					field = "staggerExtremeThreshold",
+					minValue = 100,
+					maxValue = 1000,
+					valueStep = 10,
+					parentId = "staggercolors",
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.staggerExtremeThreshold) or STAGGER_EXTRA_THRESHOLD_EXTREME
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.staggerExtremeThreshold = value
+						queueRefresh()
+					end,
+					default = STAGGER_EXTRA_THRESHOLD_EXTREME,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.staggerHighColors == true
+					end,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Stagger extreme color"] or "Stagger extreme color",
+					kind = settingType.Color,
+					parentId = "staggercolors",
+					get = function()
+						local c = curSpecCfg()
+						return toUIColor((c and c.staggerExtremeColor) or (STAGGER_EXTRA_COLORS and STAGGER_EXTRA_COLORS.extreme) or { 1, 0.2, 0.8, 1 }, { 1, 0.2, 0.8, 1 })
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.staggerExtremeColor = toColorArray(value, (STAGGER_EXTRA_COLORS and STAGGER_EXTRA_COLORS.extreme) or { 1, 0.2, 0.8, 1 })
+						queueRefresh()
+					end,
+					default = { r = 1, g = 0.2, b = 0.8, a = 1 },
+					hasOpacity = true,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.staggerHighColors == true
+					end,
 				}
 			end
 

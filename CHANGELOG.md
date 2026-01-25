@@ -9,8 +9,11 @@
 - Cooldown Panels: Edit Mode sliders for in-combat and out-of-combat opacity.
 - GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
+- UF Plus: Highlight dispellable debuffs option for aura icons.
 - Resource Bars: Gradient tint controls (start/end) for bar fills.
 - Resource Bars: Rune cooldown text font/size controls and customizable cooldown color.
+- Resource Bars: Percent rounding option for percent text (round to nearest/down).
+- Resource Bars: Optional extended Stagger colors with high/extreme thresholds.
 - Action Tracker: Optional “time since last action” text under icons.
 - Action Tracker: Masque skinning support for tracker icons.
 - Trade Log: Trade history line now shows colorized item names per side (You/Other).

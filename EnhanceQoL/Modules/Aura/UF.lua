@@ -407,6 +407,9 @@ local defaults = {
 			showCooldown = true,
 			showBuffs = true,
 			showDebuffs = true,
+			blizzardDispelBorder = false,
+			blizzardDispelBorderAlpha = 1,
+			blizzardDispelBorderAlphaNot = 0,
 			showTooltip = true,
 			hidePermanentAuras = false,
 			anchor = "BOTTOM",
@@ -1174,6 +1177,8 @@ function AuraUtil.cacheTargetAura(aura, unit)
 	t.duration = aura.duration
 	t.expirationTime = aura.expirationTime
 	t.sourceUnit = aura.sourceUnit
+	t.dispelName = aura.dispelName
+	t.canActivePlayerDispel = aura.canActivePlayerDispel
 end
 
 function AuraUtil.addTargetAuraToOrder(auraInstanceID, unit)
@@ -1242,9 +1247,15 @@ function AuraUtil.ensureAuraButton(container, icons, index, ac)
 		btn.count = btn.overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		btn.count:SetPoint("BOTTOMRIGHT", btn.overlay, "BOTTOMRIGHT", -2, 2)
 		btn.count:SetDrawLayer("OVERLAY", 2)
-		btn.border = btn:CreateTexture(nil, "OVERLAY")
+		btn.border = btn.overlay:CreateTexture(nil, "OVERLAY")
 		btn.border:SetAllPoints(btn)
+		btn.border:SetDrawLayer("OVERLAY", 1)
 		btn.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625) -- debuff overlay segment
+		btn.dispelIcon = btn.overlay:CreateTexture(nil, "OVERLAY")
+		btn.dispelIcon:SetTexture("Interface\\Icons\\Spell_Holy_DispelMagic")
+		btn.dispelIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		btn.dispelIcon:SetDrawLayer("OVERLAY", 1)
+		btn.dispelIcon:Hide()
 		btn.cd:SetReverse(true)
 		btn.cd:SetDrawEdge(true)
 		btn.cd:SetDrawSwipe(true)
@@ -1285,6 +1296,14 @@ function AuraUtil.ensureAuraButton(container, icons, index, ac)
 		if btn.overlay and btn.cd then
 			btn.overlay:SetFrameStrata(btn.cd:GetFrameStrata())
 			btn.overlay:SetFrameLevel(btn.cd:GetFrameLevel() + 5)
+		end
+		if btn.overlay and btn.border and btn.border:GetParent() ~= btn.overlay then
+			btn.border:SetParent(btn.overlay)
+			btn.border:SetDrawLayer("OVERLAY", 1)
+		end
+		if btn.overlay and btn.dispelIcon and btn.dispelIcon:GetParent() ~= btn.overlay then
+			btn.dispelIcon:SetParent(btn.overlay)
+			btn.dispelIcon:SetDrawLayer("OVERLAY", 1)
 		end
 	end
 
@@ -1381,6 +1400,7 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 		btn.count:SetText("")
 		btn.count:Hide()
 	end
+	local dispelR, dispelG, dispelB
 	if btn.border then
 		local useMasqueBorder = btn._eqolMasqueType ~= nil
 		if isDebuff then
@@ -1408,11 +1428,34 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 					r, g, b = fr, fg, fb
 				end
 			end
+			dispelR, dispelG, dispelB = r, g, b
 			btn.border:SetVertexColor(r, g, b, 1)
 			btn.border:Show()
 		else
 			if not useMasqueBorder then btn.border:SetTexture(nil) end
 			btn.border:Hide()
+		end
+	end
+	if btn.dispelIcon then
+		local showIcon = isDebuff and ac and ac.blizzardDispelBorder == true
+		if showIcon then
+			local baseSize = btn:GetWidth()
+			if not baseSize or baseSize <= 0 then baseSize = (ac and ac.size) or 0 end
+			local iconSize = baseSize and baseSize > 0 and (baseSize * 0.4) or 12
+			btn.dispelIcon:ClearAllPoints()
+			btn.dispelIcon:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+			btn.dispelIcon:SetSize(iconSize, iconSize)
+			if dispelR then
+				btn.dispelIcon:SetVertexColor(dispelR, dispelG, dispelB, 1)
+			else
+				btn.dispelIcon:SetVertexColor(1, 1, 1, 1)
+			end
+			local alphaOn = (ac and ac.blizzardDispelBorderAlpha) or 1
+			local alphaOff = (ac and ac.blizzardDispelBorderAlphaNot) or 0
+			btn.dispelIcon:SetAlphaFromBoolean(aura.canActivePlayerDispel, alphaOn, alphaOff)
+			btn.dispelIcon:Show()
+		else
+			btn.dispelIcon:Hide()
 		end
 	end
 	btn:Show()
@@ -1604,6 +1647,7 @@ function AuraUtil.fillSampleAuras(unit, ac, hidePermanent)
 		local iconList = isDebuff and SAMPLE_DEBUFF_ICONS or SAMPLE_BUFF_ICONS
 		local icon = iconList[((idx - 1) % #iconList) + 1]
 		local dispelName = isDebuff and SAMPLE_DISPEL_TYPES[((idx - 1) % #SAMPLE_DISPEL_TYPES) + 1] or nil
+		local canActivePlayerDispel = dispelName == "Magic"
 		local auraId = base - idx
 		auras[auraId] = {
 			auraInstanceID = auraId,
@@ -1614,6 +1658,7 @@ function AuraUtil.fillSampleAuras(unit, ac, hidePermanent)
 			duration = duration,
 			expirationTime = expiration,
 			dispelName = dispelName,
+			canActivePlayerDispel = canActivePlayerDispel,
 			isSample = true,
 		}
 		order[#order + 1] = auraId
@@ -2125,6 +2170,9 @@ do
 		showCooldown = true,
 		showTooltip = true,
 		hidePermanentAuras = false,
+		blizzardDispelBorder = false,
+		blizzardDispelBorderAlpha = 1,
+		blizzardDispelBorderAlphaNot = 0,
 		anchor = "BOTTOM",
 		offset = { x = 0, y = -5 },
 		growth = nil,
