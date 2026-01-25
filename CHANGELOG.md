@@ -7,6 +7,7 @@
 - Mount Keybinding: Option to disable shifting into Travel/Cat Form while mounted for druids using random mount.
 - Cooldown Viewer: Separate fade amount slider for “Show when” visibility rules.
 - Cooldown Panels: Edit Mode sliders for in-combat and out-of-combat opacity.
+- GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
 - UF Plus: Absorb and heal absorb overlay height option capping at max health height
 - Resource Bars: Gradient tint controls (start/end) for bar fills.
 - Resource Bars: Rune cooldown text font/size controls and customizable cooldown color.
@@ -14,6 +15,7 @@
 - Action Tracker: Masque skinning support for tracker icons.
 - Settings: Optional slash commands for Edit Mode (/em, /edit, /editmode) and Quick Keybind Mode (/kb).
 - Settings: Moved slash command toggles to General → UI Utilities.
+- Questing: Optional modifier requirement for quest automation (accept/complete).
 
 ---
 

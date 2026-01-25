@@ -276,13 +276,12 @@ local function tradeStatusIcon(status)
 end
 
 local function buildTradeSummary(state, id)
-	local tradeLabel = TRADE or "Trade"
 	local youLabel = YOU or "You"
 	local otherLabel = OTHER or "Other"
 	local partner = state.partner or UNKNOWN or "Unknown"
 	local youSummary = buildSideSummary(youLabel, #(state.playerItems or {}), formatMoneyText(state.playerMoney))
 	local otherSummary = buildSideSummary(otherLabel, #(state.targetItems or {}), formatMoneyText(state.targetMoney))
-	local base = string.format("%s - %s - %s - %s", tradeLabel, partner, youSummary, otherSummary)
+	local base = string.format("%s - %s - %s", partner, youSummary, otherSummary)
 	local icon = tradeStatusIcon(state.status)
 	if icon ~= "" then base = icon .. " " .. base end
 	return makeLink("eqoltrade", id, base)

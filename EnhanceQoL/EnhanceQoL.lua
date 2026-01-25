@@ -5276,6 +5276,23 @@ local frameLoad = CreateFrame("Frame")
 
 local gossipClicked = {}
 
+local function isQuestAutomationModifierHeld(modifier)
+	if modifier == "SHIFT" then return IsShiftKeyDown() end
+	if modifier == "CTRL" then return IsControlKeyDown() end
+	if modifier == "ALT" then return IsAltKeyDown() end
+	return false
+end
+
+local function shouldAutoChooseQuest()
+	if not addon.db or not addon.db["autoChooseQuest"] then return false end
+	local modifier = addon.db["autoChooseQuestModifier"]
+	if modifier == "SHIFT" or modifier == "CTRL" or modifier == "ALT" then
+		return isQuestAutomationModifierHeld(modifier)
+	end
+	-- Legacy behavior: allow auto questing unless Shift is held
+	return not IsShiftKeyDown()
+end
+
 local function loadSubAddon(name)
 	local subAddonName = name
 
@@ -5401,7 +5418,7 @@ local eventHandlers = {
 		gossipClicked = {} -- clear all already clicked gossips
 	end,
 	["GOSSIP_SHOW"] = function()
-		if addon.db["autoChooseQuest"] and not IsShiftKeyDown() then
+		if shouldAutoChooseQuest() then
 			if nil ~= UnitGUID("npc") and nil ~= addon.db["ignoredQuestNPC"][addon.functions.getIDFromGUID(UnitGUID("npc"))] then return end
 
 			local options = C_GossipInfo.GetOptions()
@@ -5650,7 +5667,7 @@ local eventHandlers = {
 		end
 	end,
 	["QUEST_COMPLETE"] = function()
-		if addon.db["autoChooseQuest"] and not IsShiftKeyDown() then
+		if shouldAutoChooseQuest() then
 			local numQuestRewards = GetNumQuestChoices()
 			if numQuestRewards > 1 then
 			elseif numQuestRewards == 1 then
@@ -5672,7 +5689,7 @@ local eventHandlers = {
 		end
 	end,
 	["QUEST_DETAIL"] = function()
-		if addon.db["autoChooseQuest"] and not IsShiftKeyDown() then
+		if shouldAutoChooseQuest() then
 			if nil ~= UnitGUID("npc") and nil ~= addon.db["ignoredQuestNPC"][addon.functions.getIDFromGUID(UnitGUID("npc"))] then return end
 
 			local id = GetQuestID()
@@ -5681,7 +5698,7 @@ local eventHandlers = {
 		end
 	end,
 	["QUEST_GREETING"] = function()
-		if addon.db["autoChooseQuest"] and not IsShiftKeyDown() then
+		if shouldAutoChooseQuest() then
 			if nil ~= UnitGUID("npc") and nil ~= addon.db["ignoredQuestNPC"][addon.functions.getIDFromGUID(UnitGUID("npc"))] then return end
 			for i = 1, GetNumAvailableQuests() do
 				if addon.db["ignoreTrivialQuests"] and IsAvailableQuestTrivial(i) then
@@ -5695,7 +5712,7 @@ local eventHandlers = {
 		end
 	end,
 	["QUEST_PROGRESS"] = function()
-		if addon.db["autoChooseQuest"] and not IsShiftKeyDown() and IsQuestCompletable() then CompleteQuest() end
+		if shouldAutoChooseQuest() and IsQuestCompletable() then CompleteQuest() end
 	end,
 	["AUCTION_HOUSE_SHOW"] = function()
 		if addon.db["closeBagsOnAuctionHouse"] and not addon.functions.isRestrictedContent() then CloseAllBags() end
