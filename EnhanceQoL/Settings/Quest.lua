@@ -276,10 +276,35 @@ local questingData = {
 	{
 		var = "autoChooseQuest",
 		text = L["autoChooseQuest"],
-		desc = L["interruptWithShift"],
+		desc = L["autoChooseQuestDesc"] or L["interruptWithShift"],
 		func = function(key) addon.db["autoChooseQuest"] = key end,
 		default = false,
 		children = {
+			{
+				var = "autoChooseQuestModifier",
+				text = L["questAutomationModifier"] or "Quest automation modifier",
+				desc = L["questAutomationModifierDesc"],
+				listFunc = function()
+					return {
+						NONE = L["modifierNone"] or "None",
+						SHIFT = L["modifierShift"] or "Shift",
+						CTRL = L["modifierCtrl"] or "Ctrl",
+						ALT = L["modifierAlt"] or "Alt",
+					}
+				end,
+				get = function() return addon.db and addon.db.autoChooseQuestModifier or "NONE" end,
+				set = function(key)
+					if not key or key == "" then key = "NONE" end
+					addon.db["autoChooseQuestModifier"] = key
+				end,
+				parentCheck = function()
+					return addon.SettingsLayout.elements["autoChooseQuest"]
+						and addon.SettingsLayout.elements["autoChooseQuest"].setting
+						and addon.SettingsLayout.elements["autoChooseQuest"].setting:GetValue() == true
+				end,
+				parent = true,
+				sType = "dropdown",
+			},
 			{
 				var = "ignoreDailyQuests",
 				text = L["ignoreDailyQuests"]:format(QUESTS_LABEL),
@@ -510,6 +535,7 @@ addon.functions.SettingsCreateCheckboxes(cQuest, trackerData)
 
 function addon.functions.initQuest()
 	addon.functions.InitDBValue("autoChooseQuest", false)
+	addon.functions.InitDBValue("autoChooseQuestModifier", "NONE")
 	addon.functions.InitDBValue("ignoreTrivialQuests", false)
 	addon.functions.InitDBValue("ignoreDailyQuests", false)
 	addon.functions.InitDBValue("questTrackerShowQuestCount", false)
