@@ -149,24 +149,14 @@ local function getSpellNameByID(spellID)
 	return name
 end
 
-local function getDruidMoveFormSpell()
-	local travelID = 783
-	local catID = 768
-	local isOutdoors = IsOutdoors and IsOutdoors()
-	local isIndoors = IsIndoors and IsIndoors()
-	if isOutdoors then
-		if C_SpellBook.IsSpellKnown(travelID) then return travelID end
-		if C_SpellBook.IsSpellKnown(catID) then return catID end
-		return travelID
-	end
-	if isIndoors then
-		if C_SpellBook.IsSpellKnown(catID) then return catID end
-		if C_SpellBook.IsSpellKnown(travelID) then return travelID end
-		return catID
-	end
-	if C_SpellBook.IsSpellKnown(travelID) then return travelID end
-	if C_SpellBook.IsSpellKnown(catID) then return catID end
-	return travelID
+local function getDruidMoveFormMacro()
+	local travelName = getSpellNameByID(783)
+	local catName = getSpellNameByID(768)
+	if not travelName and not catName then return nil end
+	local travel = travelName or catName
+	local cat = catName or travelName or ""
+	if cat == "" then cat = travel end
+	return "/cancelform\n/cast [swimming][outdoors] " .. travel .. "; [indoors] " .. cat .. "; " .. cat
 end
 
 local function buildMountMacro(spellID)
@@ -268,13 +258,16 @@ function MountActions:PrepareActionButton(btn)
 	if not btn or not btn._eqolAction then return end
 	btn:SetAttribute("type1", "macro")
 	btn:SetAttribute("type", "macro")
-	if btn._eqolAction == "random" and addon.variables.unitClass == "DRUID" and IsMounted and IsMounted() and IsPlayerMoving()
-		and (C_SpellBook.IsSpellKnown(783) or C_SpellBook.IsSpellKnown(768)) then
+	if btn._eqolAction == "random" and addon.variables.unitClass == "DRUID" and IsMounted and IsMounted() and IsPlayerMoving() and (C_SpellBook.IsSpellKnown(783) or C_SpellBook.IsSpellKnown(768)) then
 		if not (IsFlying and IsFlying()) then
-			local macro = buildMountMacro(getDruidMoveFormSpell())
-			btn:SetAttribute("macrotext1", macro)
-			btn:SetAttribute("macrotext", macro)
-			return
+			if not (addon.db and addon.db.randomMountDruidNoShiftWhileMounted) then
+				local macro = getDruidMoveFormMacro()
+				if macro then
+					btn:SetAttribute("macrotext1", macro)
+					btn:SetAttribute("macrotext", macro)
+					return
+				end
+			end
 		end
 	end
 	if IsMounted and IsMounted() then
@@ -283,16 +276,20 @@ function MountActions:PrepareActionButton(btn)
 		return
 	end
 	if btn._eqolAction == "random" then
-		local spellID
 		if addon.variables.unitClass == "DRUID" and IsPlayerMoving() and (C_SpellBook.IsSpellKnown(783) or C_SpellBook.IsSpellKnown(768)) then
-			spellID = getDruidMoveFormSpell()
-		else
-			local targetSpellID = getMountedTargetSpellID()
-			if targetSpellID and isMountSpellUsable(targetSpellID) then
-				spellID = targetSpellID
-			else
-				spellID = self:GetRandomMountSpell()
+			local macro = getDruidMoveFormMacro()
+			if macro then
+				btn:SetAttribute("macrotext1", macro)
+				btn:SetAttribute("macrotext", macro)
+				return
 			end
+		end
+		local spellID
+		local targetSpellID = getMountedTargetSpellID()
+		if targetSpellID and isMountSpellUsable(targetSpellID) then
+			spellID = targetSpellID
+		else
+			spellID = self:GetRandomMountSpell()
 		end
 		local macro = buildMountMacro(spellID or RANDOM_FAVORITE_SPELL_ID)
 		btn:SetAttribute("macrotext1", macro)
@@ -347,7 +344,7 @@ end
 
 function MountActions:EnsureButton(name, action)
 	local btn = _G[name]
-	if not btn then btn = CreateFrame("Button", name, UIParent, "InsecureActionButtonTemplate") end
+	if not btn then btn = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate") end
 	btn:RegisterForClicks("AnyDown")
 	btn:SetAttribute("type1", "macro")
 	btn:SetAttribute("type", "macro")

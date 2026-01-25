@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.7.0] - 2026-01-25
+
+### ✨ Added
+
+- Mount Keybinding: Option to disable shifting into Travel/Cat Form while mounted for druids using random mount.
+
+---
+
 ## [7.6.0] - 2026-01-24
 
 ### ✨ Added

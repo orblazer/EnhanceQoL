@@ -163,45 +163,54 @@ local function getFrameSettingsMaxHeight(frame)
 end
 
 local function FixScrollBarInside(scroll)
-	local sb = scroll and scroll.ScrollBar
-	if not sb or scroll._eqolScrollBarFixed then
-		return
-	end
-	scroll._eqolScrollBarFixed = true
+    local sb = scroll and scroll.ScrollBar
+    if not sb or scroll._eqolScrollBarFixed then return end
+    scroll._eqolScrollBarFixed = true
 
-	sb:ClearAllPoints()
-	sb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", -2, -16)
-	sb:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", -2, 16)
+    local keepW = sb:GetWidth()
+
+    sb:ClearAllPoints()
+    sb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", -2, -16)
+    sb:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", -2, 16)
+
+    if (sb:GetWidth() or 0) < 1 then
+        sb:SetWidth((keepW and keepW > 0) and keepW or 16)
+    end
 end
+
 
 local function UpdateScrollChildWidth(dialog)
-	local scroll = dialog and dialog.SettingsScroll
-	local child = dialog and dialog.Settings
-	if not (scroll and child) then
-		return
-	end
+    local scroll = dialog and dialog.SettingsScroll
+    local child = dialog and dialog.Settings
+    if not (scroll and child) then return end
 
-	local sb = scroll.ScrollBar
-	local sbW = (sb and sb:IsShown() and sb:GetWidth()) or 0
-	local paddingRight = 6
+    local sb = scroll.ScrollBar
+    local sbW = 0
+    if sb and sb:IsShown() then
+        sbW = sb:GetWidth() or 0
+        if sbW < 1 then
+            sbW = 16
+        end
+    end
 
-	local w = (scroll:GetWidth() or 0) - sbW - paddingRight
-	if w < 1 then
-		return
-	end
-	if child._eqolLastWidth ~= w then
-		child._eqolLastWidth = w
-		child:SetWidth(w)
-		for _, row in ipairs({ child:GetChildren() }) do
-			if row and row.SetWidth then
-				row:SetWidth(w)
-				if row.ApplyLayout then
-					row:ApplyLayout()
-				end
-			end
-		end
-	end
+    local paddingRight = 6
+    local w = (scroll:GetWidth() or 0) - sbW - paddingRight
+    if w < 1 then return end
+
+    if child._eqolLastWidth ~= w then
+        child._eqolLastWidth = w
+        child:SetWidth(w)
+        for _, row in ipairs({ child:GetChildren() }) do
+            if row and row.SetWidth then
+                row:SetWidth(w)
+                if row.ApplyLayout then
+                    row:ApplyLayout()
+                end
+            end
+        end
+    end
 end
+
 
 -- Blizzard frames we also toggle via the manager eye (if they exist)
 Internal.managerExtraFrames = Internal.managerExtraFrames
@@ -1449,25 +1458,7 @@ end
 local function buildDropdown()
 	local mixin = {}
 
-	function mixin:ApplyLayout()
-		if not (self.Label and self.Dropdown) then
-			return
-		end
 
-		local rowWidth = self:GetWidth() or 0
-		local labelWidth = self.Label:GetWidth() or 100
-		local leftGap = 5
-		local rightMargin = 2
-		local available = rowWidth - labelWidth - leftGap - rightMargin
-		if available < 1 then
-			return
-		end
-
-		self.Dropdown:SetWidth(available)
-		if self.OldDropdown then
-			self.OldDropdown:SetWidth(available)
-		end
-	end
 
 	function mixin:Setup(data, selection)
 		self.setting = data
@@ -1485,7 +1476,6 @@ local function buildDropdown()
 			self.Dropdown = self.Control.Dropdown
 		end
 
-		self:ApplyLayout()
 		if data.generator then
 			self.Dropdown:SetupMenu(function(owner, rootDescription)
 				if data.height then
@@ -1555,33 +1545,7 @@ end
 local function buildMultiDropdown()
 	local mixin = {}
 
-	function mixin:ApplyLayout()
-		if not (self.Label and self.Dropdown) then
-			return
-		end
 
-		local rowWidth = self:GetWidth() or 0
-		local labelWidth = self.Label:GetWidth() or 100
-		local leftGap = 5
-		local rightMargin = 2
-		local available = rowWidth - labelWidth - leftGap - rightMargin
-		if available < 1 then
-			return
-		end
-
-		self.Dropdown:SetWidth(available)
-		if self.OldDropdown then
-			self.OldDropdown:SetWidth(available)
-		end
-
-		if self.Summary then
-			self.Summary:ClearAllPoints()
-			self.Summary:SetPoint("TOPLEFT", self.Dropdown, "BOTTOMLEFT", 0, -2)
-			self.Summary:SetPoint("TOPRIGHT", self.Dropdown, "BOTTOMRIGHT", 0, -2)
-			self.Summary:SetWidth(available)
-			self.summaryAnchored = true
-		end
-	end
 
 	function mixin:Setup(data, selection)
 		self.setting = data
@@ -1661,7 +1625,6 @@ local function buildMultiDropdown()
 			end
 		end)
 
-		self:ApplyLayout()
 		self:RefreshSummary()
 
 		Util:ApplyTooltip(self, self.Dropdown, data.tooltip)
@@ -2151,32 +2114,7 @@ end
 local function buildDropdownColor()
 	local mixin = {}
 
-	function mixin:ApplyLayout()
-		if not (self.Label and self.Button and self.Dropdown) then
-			return
-		end
-
-		local labelWidth = self.Label:GetWidth() or 100
-		local buttonWidth = self.Button:GetWidth() or COLOR_BUTTON_WIDTH
-		local rowWidth = self:GetWidth() or 0
-		local leftGap = 5
-		local buttonGap = 6
-		local rightMargin = 2
-		local available = rowWidth - labelWidth - buttonWidth - leftGap - buttonGap - rightMargin
-		if available < 1 then
-			return
-		end
-		local targetWidth = math.min(DROPDOWN_COLOR_MAX_WIDTH, available)
-
-		self.Dropdown:ClearAllPoints()
-		self.Dropdown:SetPoint("LEFT", self.Label, "RIGHT", leftGap, 0)
-		self.Dropdown:SetWidth(targetWidth)
-
-		self.Button:ClearAllPoints()
-		self.Button:SetPoint("LEFT", self.Dropdown, "RIGHT", rightMargin, 0)
-
-	end
-
+	
 	function mixin:Setup(data, selection)
 		self.setting = data
 		self.Label:SetText(data.name)
@@ -2202,7 +2140,6 @@ local function buildDropdownColor()
 			self.Control:Show()
 			self.Dropdown = self.Control.Dropdown
 		end
-		self:ApplyLayout()
 
 		local function createEntries(rootDescription)
 			if data.height then
@@ -2339,18 +2276,20 @@ local function buildDropdownColor()
 		local dropdown = control.Dropdown
 		dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
 		dropdown:SetHeight(30)
+		dropdown:SetWidth(175)
 		frame.Dropdown = dropdown
 
 		-- old style control (hidden by default)
 		local oldDropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
 		oldDropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
 		oldDropdown:SetHeight(30)
+		oldDropdown:SetWidth(175)
 		oldDropdown:Hide()
 		frame.OldDropdown = oldDropdown
 
 		local button = CreateFrame("Button", nil, frame)
 		button:SetSize(COLOR_BUTTON_WIDTH, 22)
-		button:SetPoint("RIGHT", frame, "RIGHT", -2, 0)
+		button:SetPoint("LEFT", frame.Dropdown, "RIGHT", 2, 0)
 
 		local border = button:CreateTexture(nil, "BACKGROUND")
 		border:SetColorTexture(0.7, 0.7, 0.7, 1)
@@ -2376,43 +2315,6 @@ end
 
 local function buildSlider()
 	local mixin = {}
-
-	function mixin:ApplyInputLayout()
-		if not (self.Slider and self.Label) then
-			return
-		end
-		local input = self.Input
-		local inputShown = input and input:IsShown()
-		local inputWidth = (input:GetWidth() or 0) or 0
-		local inputGap = 6
-
-		self.Slider:ClearAllPoints()
-		self.Slider:SetPoint("LEFT", self.Label, "RIGHT", 5, 0)
-			self.Slider:SetPoint("RIGHT", self, "RIGHT", -(inputWidth + inputGap), 0)
-
-		if input then
-			input:ClearAllPoints()
-			if inputShown then
-				input:SetPoint("RIGHT", self, "RIGHT", -2, 0)
-			elseif self.Slider.RightText then
-				input:SetPoint("CENTER", self.Slider.RightText, "CENTER", 0, 0)
-			else
-				input:SetPoint("RIGHT", self.Slider, "RIGHT", -2, 0)
-			end
-		end
-
-		local rightText = self.Slider and self.Slider.RightText
-		if rightText then
-			rightText:ClearAllPoints()
-			if inputShown then
-				rightText:SetPoint("LEFT", self.Slider, "RIGHT", 25, 0)
-			else
-				rightText:SetPoint("RIGHT", self, "RIGHT", -2, 0)
-			end
-		end
-	end
-
-	mixin.ApplyLayout = mixin.ApplyInputLayout
 
 	function mixin:Setup(data, selection)
 		self.setting = data
@@ -2471,7 +2373,6 @@ local function buildSlider()
 					self.Slider.RightText:Show()
 				end
 			end
-			self:ApplyInputLayout()
 		end
 
 		self.initInProgress = false
@@ -2513,7 +2414,7 @@ local function buildSlider()
 		Mixin(frame, mixin)
 
 		frame:SetHeight(DEFAULT_SLIDER_HEIGHT)
-		frame.Slider:SetWidth(200)
+		frame.Slider:SetWidth(167)
 		frame.Slider.MinText:Hide()
 		frame.Slider.MaxText:Hide()
 		frame.Label:SetPoint("LEFT")
@@ -2522,7 +2423,7 @@ local function buildSlider()
 		input:SetAutoFocus(false)
 		input:SetSize(34, 20)
 		input:SetJustifyH("CENTER")
-		input:SetPoint("RIGHT", frame, "RIGHT", -2, 0)
+		input:SetPoint("LEFT", frame.Slider, "RIGHT", 5, 0)
 		input:Hide()
 		frame.Input = input
 
@@ -3159,11 +3060,11 @@ function Internal.CreateDialog()
 			scroll.ScrollBar:SetShown(needsScroll)
 		end
 
-		UpdateScrollChildWidth(self)
-
 		if scroll.UpdateScrollChildRect then
 			scroll:UpdateScrollChildRect()
 		end
+
+		UpdateScrollChildWidth(self)
 
 		if not needsScroll then
 			scroll:SetVerticalScroll(0)
@@ -3938,19 +3839,21 @@ function Internal:RefreshSettings()
 	local layoutIndex = lib:GetActiveLayoutIndex()
 	local layoutDirty = false
 	for _, child in ipairs({ parent:GetChildren() }) do
-		if child.SetEnabled and child.setting then
+		if child.setting then
 			local data = child.setting
-			local enabled = true
-			if data.isEnabled then
-				local ok, result = pcall(data.isEnabled, layoutName, layoutIndex)
-				enabled = ok and result ~= false
-			elseif data.disabled then
-				local ok, result = pcall(data.disabled, layoutName, layoutIndex)
-				enabled = not (ok and result == true)
-			end
-			if child._eqolEnabled ~= enabled then
-				child._eqolEnabled = enabled
-				child:SetEnabled(enabled)
+			if child.SetEnabled then
+				local enabled = true
+				if data.isEnabled then
+					local ok, result = pcall(data.isEnabled, layoutName, layoutIndex)
+					enabled = ok and result ~= false
+				elseif data.disabled then
+					local ok, result = pcall(data.disabled, layoutName, layoutIndex)
+					enabled = not (ok and result == true)
+				end
+				if child._eqolEnabled ~= enabled then
+					child._eqolEnabled = enabled
+					child:SetEnabled(enabled)
+				end
 			end
 
 			local collapsedParent = (data.kind ~= lib.SettingType.Collapsible) and data.parentId and Collapse:Get(selectionParent, data.parentId)

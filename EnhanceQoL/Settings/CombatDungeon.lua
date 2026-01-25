@@ -58,9 +58,7 @@ local COMBAT_LOG_DIFFICULTY_GROUPS = {
 	},
 }
 
-local function getCombatLogCategory(instanceType)
-	return combatLogInstanceMap[instanceType]
-end
+local function getCombatLogCategory(instanceType) return combatLogInstanceMap[instanceType] end
 
 local function getCombatLogSelectionTable(category)
 	if not addon.db then return nil end
@@ -76,9 +74,7 @@ end
 
 local function buildCombatLogDifficultyData()
 	addon.variables = addon.variables or {}
-	if addon.variables.combatLogDifficultyGroups and addon.variables.combatLogDifficultyLookup then
-		return addon.variables.combatLogDifficultyGroups, addon.variables.combatLogDifficultyLookup
-	end
+	if addon.variables.combatLogDifficultyGroups and addon.variables.combatLogDifficultyLookup then return addon.variables.combatLogDifficultyGroups, addon.variables.combatLogDifficultyLookup end
 
 	local groups = {}
 	local lookup = {}
@@ -133,9 +129,7 @@ local function isCombatLogToggleEnabled(category)
 end
 
 local function getCombatLogDecision(category, difficultyID)
-	if COMBAT_LOG_TOGGLE_DB_KEYS[category] then
-		return isCombatLogToggleEnabled(category)
-	end
+	if COMBAT_LOG_TOGGLE_DB_KEYS[category] then return isCombatLogToggleEnabled(category) end
 	local key = getCombatLogDifficultyKey(category, difficultyID)
 	if not key then return nil end
 	return isCombatLogSelected(category, key)
@@ -153,9 +147,7 @@ end
 
 local function cancelCombatLogStopTimer()
 	if not addon.variables or not addon.variables.combatLogStopTimer then return end
-	if addon.variables.combatLogStopTimer.Cancel then
-		addon.variables.combatLogStopTimer:Cancel()
-	end
+	if addon.variables.combatLogStopTimer.Cancel then addon.variables.combatLogStopTimer:Cancel() end
 	addon.variables.combatLogStopTimer = nil
 end
 
@@ -380,9 +372,7 @@ function addon.functions.initDungeonFrame()
 		parentSection = combatLogSection,
 	})
 
-	local function isCombatLogEnabled()
-		return combatLogEnabled and combatLogEnabled.setting and combatLogEnabled.setting:GetValue() == true
-	end
+	local function isCombatLogEnabled() return combatLogEnabled and combatLogEnabled.setting and combatLogEnabled.setting:GetValue() == true end
 
 	addon.functions.SettingsCreateCheckbox(cChar, {
 		var = "combatLogDelayedStop",
@@ -562,6 +552,14 @@ function addon.functions.initDungeonFrame()
 
 	local classTag = (addon.variables and addon.variables.unitClass) or select(2, UnitClass("player"))
 	if classTag == "DRUID" then
+		addon.functions.SettingsCreateCheckbox(addon.SettingsLayout.characterInspectCategory, {
+			var = "randomMountDruidNoShiftWhileMounted",
+			text = L["randomMountDruidNoShiftWhileMounted"],
+			func = function(value) addon.db["randomMountDruidNoShiftWhileMounted"] = value and true or false end,
+			default = false,
+			parentSection = expandable,
+		})
+
 		addon.functions.SettingsCreateHeadline(addon.SettingsLayout.characterInspectCategory, select(1, UnitClass("player")), { parentSection = expandable })
 
 		local data = {
