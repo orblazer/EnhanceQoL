@@ -1240,10 +1240,46 @@ function AuraUtil.cacheTargetAura(aura, unit)
 	t.canActivePlayerDispel = aura.canActivePlayerDispel
 end
 
+function AuraUtil.cacheAura(cache, aura)
+	if not (cache and aura and aura.auraInstanceID) then return end
+	local id = aura.auraInstanceID
+	local auras = cache.auras
+	if not auras then return end
+	local t = auras[id]
+	if not t then
+		t = {}
+		auras[id] = t
+	end
+	t.auraInstanceID = id
+	t.spellId = aura.spellId
+	t.name = aura.name
+	t.icon = aura.icon
+	t.isHelpful = aura.isHelpful
+	t.isHarmful = aura.isHarmful
+	t.applications = aura.applications
+	t.duration = aura.duration
+	t.expirationTime = aura.expirationTime
+	t.sourceUnit = aura.sourceUnit
+	t.dispelName = aura.dispelName
+	t.canActivePlayerDispel = aura.canActivePlayerDispel
+end
+
 function AuraUtil.addTargetAuraToOrder(auraInstanceID, unit)
 	local _, order, indexById = AuraUtil.getAuraTables(unit)
 	if not order or not indexById then return end
 	if not auraInstanceID or indexById[auraInstanceID] then return end
+	local idx = #order + 1
+	order[idx] = auraInstanceID
+	indexById[auraInstanceID] = idx
+	return idx
+end
+
+function AuraUtil.addAuraToOrder(cache, auraInstanceID)
+	if not (cache and auraInstanceID) then return nil end
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (order and indexById) then return nil end
+	if indexById[auraInstanceID] then return indexById[auraInstanceID] end
 	local idx = #order + 1
 	order[idx] = auraInstanceID
 	indexById[auraInstanceID] = idx
@@ -1258,6 +1294,16 @@ function AuraUtil.reindexTargetAuraOrder(startIndex, unit)
 	end
 end
 
+function AuraUtil.reindexAuraOrder(cache, startIndex)
+	if not cache then return end
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (order and indexById) then return end
+	for i = startIndex or 1, #order do
+		indexById[order[i]] = i
+	end
+end
+
 function AuraUtil.removeTargetAuraFromOrder(auraInstanceID, unit)
 	local _, order, indexById = AuraUtil.getAuraTables(unit)
 	if not order or not indexById then return nil end
@@ -1267,6 +1313,90 @@ function AuraUtil.removeTargetAuraFromOrder(auraInstanceID, unit)
 	indexById[auraInstanceID] = nil
 	AuraUtil.reindexTargetAuraOrder(idx, unit)
 	return idx
+end
+
+function AuraUtil.removeAuraFromOrder(cache, auraInstanceID)
+	if not (cache and auraInstanceID) then return nil end
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (order and indexById) then return nil end
+	local idx = indexById[auraInstanceID]
+	if not idx then return nil end
+	table.remove(order, idx)
+	indexById[auraInstanceID] = nil
+	AuraUtil.reindexAuraOrder(cache, idx)
+	return idx
+end
+
+function AuraUtil.updateAuraCacheFromEvent(cache, unit, updateInfo, opts)
+	if not (cache and unit and updateInfo) then return nil end
+	local auras = cache.auras
+	local order = cache.order
+	local indexById = cache.indexById
+	if not (auras and order and indexById) then return nil end
+	local showHelpful = opts and opts.showHelpful
+	local showHarmful = opts and opts.showHarmful
+	local helpfulFilter = opts and opts.helpfulFilter
+	local harmfulFilter = opts and opts.harmfulFilter
+	local hidePermanent = opts and opts.hidePermanent
+	local trackFirst = opts and opts.trackFirstChanged
+	local maxCount = opts and opts.maxCount
+	local firstChanged
+
+	if updateInfo.addedAuras then
+		for _, aura in ipairs(updateInfo.addedAuras) do
+			if aura and aura.auraInstanceID then
+				if hidePermanent and AuraUtil.isPermanentAura(aura, unit) then
+					if auras[aura.auraInstanceID] then
+						auras[aura.auraInstanceID] = nil
+						local idx = AuraUtil.removeAuraFromOrder(cache, aura.auraInstanceID)
+						if trackFirst and idx and maxCount and idx <= (maxCount + 1) then
+							if not firstChanged or idx < firstChanged then firstChanged = idx end
+						end
+					end
+				elseif showHarmful and harmfulFilter and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, harmfulFilter) then
+					AuraUtil.cacheAura(cache, aura)
+					local idx = AuraUtil.addAuraToOrder(cache, aura.auraInstanceID)
+					if trackFirst and idx and maxCount and idx <= maxCount then
+						if not firstChanged or idx < firstChanged then firstChanged = idx end
+					end
+				elseif showHelpful and helpfulFilter and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, helpfulFilter) then
+					AuraUtil.cacheAura(cache, aura)
+					local idx = AuraUtil.addAuraToOrder(cache, aura.auraInstanceID)
+					if trackFirst and idx and maxCount and idx <= maxCount then
+						if not firstChanged or idx < firstChanged then firstChanged = idx end
+					end
+				end
+			end
+		end
+	end
+
+	if updateInfo.updatedAuraInstanceIDs and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+		for _, inst in ipairs(updateInfo.updatedAuraInstanceIDs) do
+			if auras[inst] then
+				local data = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, inst)
+				if data then AuraUtil.cacheAura(cache, data) end
+			end
+			if trackFirst then
+				local idx = indexById[inst]
+				if idx and maxCount and idx <= maxCount then
+					if not firstChanged or idx < firstChanged then firstChanged = idx end
+				end
+			end
+		end
+	end
+
+	if updateInfo.removedAuraInstanceIDs then
+		for _, inst in ipairs(updateInfo.removedAuraInstanceIDs) do
+			auras[inst] = nil
+			local idx = AuraUtil.removeAuraFromOrder(cache, inst)
+			if trackFirst and idx and maxCount and idx <= (maxCount + 1) then
+				if not firstChanged or idx < firstChanged then firstChanged = idx end
+			end
+		end
+	end
+
+	return firstChanged
 end
 
 function AuraUtil.isPermanentAura(aura, unitToken)
@@ -1431,11 +1561,33 @@ function AuraUtil.styleAuraCount(btn, ac, countFontSizeOverride)
 end
 
 function AuraUtil.styleAuraCooldownText(btn, ac, cooldownFontSizeOverride)
-	if not btn or not btn.cd or not UFHelper or not UFHelper.applyCooldownTextStyle then return end
+	if not btn or not btn.cd then return end
 	ac = ac or {}
+	local fs = btn._cooldownText or (btn.cd.GetCountdownFontString and btn.cd:GetCountdownFontString())
+	if not fs then return end
+	btn._cooldownText = fs
+	local anchor = ac.cooldownAnchor or "CENTER"
+	local off = ac.cooldownOffset
+	local ox = (off and off.x) or 0
+	local oy = (off and off.y) or 0
 	local size = cooldownFontSizeOverride
 	if size == nil then size = ac.cooldownFontSize end
-	UFHelper.applyCooldownTextStyle(btn.cd, size)
+	local fontKey = ac.cooldownFont
+	local outline = ac.cooldownFontOutline
+	local curFont, curSize, curFlags = fs:GetFont()
+	if size == nil then size = curSize or 12 end
+	if outline == nil then outline = curFlags end
+	if fontKey == nil then fontKey = curFont end
+	local key = anchor .. "|" .. ox .. "|" .. oy .. "|" .. tostring(fontKey) .. "|" .. tostring(size) .. "|" .. tostring(outline)
+	if btn._cooldownStyleKey == key then return end
+	btn._cooldownStyleKey = key
+	fs:ClearAllPoints()
+	fs:SetPoint(anchor, btn.overlay or btn, anchor, ox, oy)
+	if UFHelper and UFHelper.applyFont then
+		UFHelper.applyFont(fs, fontKey, size, outline)
+	elseif UFHelper and UFHelper.applyCooldownTextStyle then
+		UFHelper.applyCooldownTextStyle(btn.cd, size)
+	end
 end
 
 function AuraUtil.styleAuraDRText(btn, ac, drFontSizeOverride)
@@ -1488,14 +1640,23 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	else
 		if ac.showCooldownBuffs ~= nil then showCooldown = ac.showCooldownBuffs end
 	end
+	local showCooldownText = ac.showCooldownText
+	if showCooldownText == nil then showCooldownText = showCooldown end
+	if isDebuff then
+		if ac.showCooldownTextDebuffs ~= nil then showCooldownText = ac.showCooldownTextDebuffs end
+	else
+		if ac.showCooldownTextBuffs ~= nil then showCooldownText = ac.showCooldownTextBuffs end
+	end
 	local cooldownFontSize = isDebuff and ac.cooldownFontSizeDebuff or ac.cooldownFontSizeBuff
 	if cooldownFontSize == nil then cooldownFontSize = ac.cooldownFontSize end
 	local countFontSize = isDebuff and ac.countFontSizeDebuff or ac.countFontSizeBuff
 	if countFontSize == nil then countFontSize = ac.countFontSize end
-	btn.cd:SetHideCountdownNumbers(showCooldown == false)
+	btn.cd:SetHideCountdownNumbers(showCooldownText == false)
 	AuraUtil.styleAuraCount(btn, ac, countFontSize)
 	AuraUtil.styleAuraCooldownText(btn, ac, cooldownFontSize)
-	if issecretvalue and issecretvalue(aura.applications) or aura.applications and aura.applications > 1 then
+	local showStacks = ac.showStacks
+	if showStacks == nil then showStacks = true end
+	if showStacks and (issecretvalue and issecretvalue(aura.applications) or aura.applications and aura.applications > 1) then
 		local appStacks = aura.applications
 		if not aura.isSample and C_UnitAuras.GetAuraApplicationDisplayCount then
 			appStacks = C_UnitAuras.GetAuraApplicationDisplayCount(unitToken, aura.auraInstanceID, 2, 1000) -- TODO actual 4th param is required because otherwise it's always "*" this always get's the right stack shown
@@ -3521,11 +3682,17 @@ local function updateUnitStatusIndicator(cfg, unit)
 		return
 	end
 	local statusTag
-	if UnitIsConnected and UnitIsConnected(unit) == false then
+	local connected = UnitIsConnected and UnitIsConnected(unit)
+	if issecretvalue and issecretvalue(connected) then connected = nil end
+	local isAFK = UnitIsAFK and UnitIsAFK(unit)
+	if issecretvalue and issecretvalue(isAFK) then isAFK = nil end
+	local isDND = UnitIsDND and UnitIsDND(unit)
+	if issecretvalue and issecretvalue(isDND) then isDND = nil end
+	if connected == false then
 		statusTag = PLAYER_OFFLINE or "Offline"
-	elseif UnitIsAFK and UnitIsAFK(unit) then
+	elseif isAFK == true then
 		statusTag = DEFAULT_AFK_MESSAGE or "AFK"
-	elseif UnitIsDND and UnitIsDND(unit) then
+	elseif isDND == true then
 		statusTag = DEFAULT_DND_MESSAGE or "DND"
 	end
 	if not statusTag and allowSample then statusTag = DEFAULT_AFK_MESSAGE or "AFK" end
