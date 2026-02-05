@@ -1,3 +1,4 @@
+-- luacheck: globals PanelTemplates_GetSelectedTab NineSliceUtil
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 

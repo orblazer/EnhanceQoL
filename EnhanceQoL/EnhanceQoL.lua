@@ -2196,6 +2196,7 @@ local function EQOL_HookSpellFlyout()
 	flyout.EQOL_MouseoverHooked = true
 end
 -- Action Bars
+local EnsureActionBarVisibilityWatcher
 local function UpdateActionBarMouseover(barName, config, variable)
 	local bar = _G[barName]
 	if not bar then return end
@@ -2534,7 +2535,7 @@ local function setActionBarVisibilityWatcherEnabled(watcher, enabled)
 	end
 end
 
-local function EnsureActionBarVisibilityWatcher()
+EnsureActionBarVisibilityWatcher = function()
 	addon.variables = addon.variables or {}
 	local enable = HasActionBarVisibilityConfig()
 	local watcher = addon.variables.actionBarVisibilityWatcher

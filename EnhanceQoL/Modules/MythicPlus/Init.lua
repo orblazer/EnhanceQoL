@@ -1,3 +1,4 @@
+-- luacheck: globals UIWidgetObjectiveTracker MonthlyActivitiesObjectiveTracker InitiativeTasksObjectiveTracker
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
