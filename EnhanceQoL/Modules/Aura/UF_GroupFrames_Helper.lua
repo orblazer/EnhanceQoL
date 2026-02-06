@@ -60,21 +60,20 @@ H.PREVIEW_SAMPLES = {
 		{ name = "DPS", class = "HUNTER", role = "DAMAGER", group = 1 },
 		{ name = "DPS", class = "ROGUE", role = "DAMAGER", group = 1 },
 	},
-	raid = {},
+	raid = nil,
 }
-if H.BuildRaidPreviewSamples then H.PREVIEW_SAMPLES.raid = H.BuildRaidPreviewSamples(40) or {} end
 
 H.GROUP_NUMBER_FORMAT_OPTIONS = {
-	{ value = "GROUP", label = "Group 1" },
-	{ value = "G", label = "G1" },
-	{ value = "G_SPACE", label = "G 1" },
-	{ value = "NUMBER", label = "1" },
-	{ value = "PARENS", label = "(1)" },
-	{ value = "BRACKETS", label = "[1]" },
-	{ value = "BRACES", label = "{1}" },
-	{ value = "ANGLE", label = "<1>" },
-	{ value = "PIPE", label = "|| 1 ||" },
-	{ value = "HASH", label = "#1" },
+	{ value = "GROUP", label = "Group 1", text = "Group 1" },
+	{ value = "G", label = "G1", text = "G1" },
+	{ value = "G_SPACE", label = "G 1", text = "G 1" },
+	{ value = "NUMBER", label = "1", text = "1" },
+	{ value = "PARENS", label = "(1)", text = "(1)" },
+	{ value = "BRACKETS", label = "[1]", text = "[1]" },
+	{ value = "BRACES", label = "{1}", text = "{1}" },
+	{ value = "ANGLE", label = "<1>", text = "<1>" },
+	{ value = "PIPE", label = "|| 1 ||", text = "|| 1 ||" },
+	{ value = "HASH", label = "#1", text = "#1" },
 }
 
 H.MELEE_SPECS = {
@@ -940,6 +939,10 @@ function H.BuildRaidPreviewSamples(count)
 	end
 
 	return samples
+end
+
+if not H.PREVIEW_SAMPLES.raid or #H.PREVIEW_SAMPLES.raid == 0 then
+	H.PREVIEW_SAMPLES.raid = H.BuildRaidPreviewSamples(40) or {}
 end
 
 function H.BuildPreviewSampleList(kind, cfg, baseSamples, limit, quotaTanks, quotaHealers)

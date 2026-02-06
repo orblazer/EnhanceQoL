@@ -5257,19 +5257,19 @@ local function buildEditModeSettings(kind, editModeId)
 			end
 		end
 	end
-	local sortGroupOptions = {
-		{ value = "GROUP", label = "Group" },
-		{ value = "CLASS", label = "Class" },
-		{ value = "ASSIGNEDROLE", label = "Role" },
-	}
-	local sortMethodOptions = {
-		{ value = "INDEX", label = "Index" },
-		{ value = "NAME", label = "Name" },
-	}
-	local sortDirOptions = {
-		{ value = "ASC", label = "Ascending" },
-		{ value = "DESC", label = "Descending" },
-	}
+local sortGroupOptions = {
+	{ value = "GROUP", label = "Group", text = "Group" },
+	{ value = "CLASS", label = "Class", text = "Class" },
+	{ value = "ASSIGNEDROLE", label = "Role", text = "Role" },
+}
+local sortMethodOptions = {
+	{ value = "INDEX", label = "Index", text = "Index" },
+	{ value = "NAME", label = "Name", text = "Name" },
+}
+local sortDirOptions = {
+	{ value = "ASC", label = "Ascending", text = "Ascending" },
+	{ value = "DESC", label = "Descending", text = "Descending" },
+}
 	local privateAuraPointOptions = {
 		{ value = "LEFT", label = "Left", text = "Left" },
 		{ value = "RIGHT", label = "Right", text = "Right" },
