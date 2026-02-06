@@ -2475,7 +2475,36 @@ function GF:LayoutAuras(self)
 			x = roundToPixel(x, scale)
 			y = roundToPixel(y, scale)
 
-			local key = anchorPoint .. "|" .. tostring(primary) .. "|" .. tostring(secondary) .. "|" .. size .. "|" .. spacing .. "|" .. perRow .. "|" .. maxCount .. "|" .. x .. "|" .. y
+			local parityX, parityY = 0, 0
+			if parent and parent.GetSize and scale and scale > 0 then
+				local pw, ph = parent:GetSize()
+				if pw and ph then
+					parityX = floor(pw * scale + 0.5) % 2
+					parityY = floor(ph * scale + 0.5) % 2
+				end
+			end
+
+			local key = anchorPoint
+				.. "|"
+				.. tostring(primary)
+				.. "|"
+				.. tostring(secondary)
+				.. "|"
+				.. size
+				.. "|"
+				.. spacing
+				.. "|"
+				.. perRow
+				.. "|"
+				.. maxCount
+				.. "|"
+				.. x
+				.. "|"
+				.. y
+				.. "|"
+				.. parityX
+				.. "|"
+				.. parityY
 			local layout = st._auraLayout[kindKey] or {}
 			layout.anchorPoint = anchorPoint
 			layout.primary = primary
@@ -2493,8 +2522,28 @@ function GF:LayoutAuras(self)
 				st._auraLayoutKey[kindKey] = key
 				local container = ensureAuraContainer(st, meta.containerKey)
 				if container then
+					local px = x
+					local py = y
+					if (parityX == 1 or parityY == 1) and scale and scale > 0 then
+						local ap = tostring(anchorPoint or "CENTER"):upper()
+						local half = 0.5 / scale
+						if parityX == 1 then
+							if ap:find("LEFT", 1, true) then
+								px = px + half
+							elseif ap:find("RIGHT", 1, true) then
+								px = px - half
+							end
+						end
+						if parityY == 1 then
+							if ap:find("TOP", 1, true) then
+								py = py - half
+							elseif ap:find("BOTTOM", 1, true) then
+								py = py + half
+							end
+						end
+					end
 					container:ClearAllPoints()
-					container:SetPoint(anchorPoint, parent, anchorPoint, x, y)
+					container:SetPoint(anchorPoint, parent, anchorPoint, px, py)
 					local primaryVertical = primary == "UP" or primary == "DOWN"
 					local rows, cols
 					if primaryVertical then
