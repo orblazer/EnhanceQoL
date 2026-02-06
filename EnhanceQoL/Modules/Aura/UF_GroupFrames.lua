@@ -747,7 +747,7 @@ local DEFAULTS = {
 				size = 20,
 				point = "LEFT",
 				offset = 2,
-				borderScale = nil,
+				borderScale = 1,
 			},
 			parent = {
 				point = "CENTER",
@@ -1082,7 +1082,7 @@ local DEFAULTS = {
 				size = 18,
 				point = "LEFT",
 				offset = 2,
-				borderScale = nil,
+				borderScale = 1,
 			},
 			parent = {
 				point = "CENTER",
@@ -12039,7 +12039,7 @@ local function buildEditModeSettings(kind, editModeId)
 			field = "privateAurasSize",
 			parentId = "privateAuras",
 			minValue = 8,
-			maxValue = 60,
+			maxValue = 30,
 			valueStep = 1,
 			get = function()
 				local cfg = getCfg(kind)
@@ -12052,7 +12052,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local cfg = getCfg(kind)
 				local pcfg = ensurePrivateAuraConfig(cfg)
 				if not pcfg then return end
-				pcfg.icon.size = clampNumber(value, 8, 60, pcfg.icon.size or 20)
+				pcfg.icon.size = clampNumber(value, 8, 30, pcfg.icon.size or 20)
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "privateAurasSize", pcfg.icon.size, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
