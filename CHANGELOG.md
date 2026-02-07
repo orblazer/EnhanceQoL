@@ -1,6 +1,6 @@
 # Changelog
 
-## [7.10.0] - 2026-02-06
+## [7.10.0] - 2026-02-07
 
 ### ✨ Added
 
@@ -57,6 +57,7 @@
 - MythicPlus: ConsolePort left-click on World Map teleports now triggers the cast correctly
 - Visibility: Skyriding stance check no longer triggers for non-druids (e.g., paladin auras)
 - World Map Teleport: Mixed Alliance and Horde for Tol Barad Portal
+- Cooldown Panels: Specs were not correctly checked
 
 ---
 

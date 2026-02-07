@@ -5483,7 +5483,6 @@ local function setAllHooks()
 	-- Init modules
 	if addon.Aura and addon.Aura.functions then
 		if addon.Aura.functions.InitDB then addon.Aura.functions.InitDB() end
-		if addon.Aura.functions.InitCooldownPanels then addon.Aura.functions.InitCooldownPanels() end
 		if addon.Aura.functions.InitResourceBars then addon.Aura.functions.InitResourceBars() end
 		if addon.Aura.functions.InitUnitFrames then addon.Aura.functions.InitUnitFrames() end
 	end
@@ -5944,6 +5943,9 @@ local eventHandlers = {
 					end
 				end
 			end
+		end
+		if addon.Aura and addon.Aura.functions then
+			if addon.Aura.functions.InitCooldownPanels then addon.Aura.functions.InitCooldownPanels() end
 		end
 	end,
 	["PLAYER_MONEY"] = function()
