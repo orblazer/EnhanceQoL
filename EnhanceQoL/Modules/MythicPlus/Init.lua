@@ -750,9 +750,9 @@ addon.MythicPlus.variables.portalCompendium = {
 			[410080] = { text = "VP", cId = { [438] = true }, x = 0.7656, y = 0.8428, zoneID = 325, locID = 1527 },
 			-- Tol Barad (Cata)
 			[88342] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_ALLIANCE, x = 0.7357, y = 0.6079, zoneID = 245, locID = 245 },
-			[88346] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE, x = 0.7357, y = 0.6079, zoneID = 245, locID = 245 },
+			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_ALLIANCE, x = 0.5480, y = 0.7819, zoneID = 245, locID = 245 },
 			[88344] = { text = "TolB", isClassTP = "MAGE", faction = FACTION_HORDE, x = 0.5480, y = 0.7819, zoneID = 245, locID = 245 },
-			[88345] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE, x = 0.5480, y = 0.7819, zoneID = 245, locID = 245 },
+			[88346] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE, x = 0.7357, y = 0.6079, zoneID = 245, locID = 245 },
 
 			[80256] = { text = "DH", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898, x = 0.4978, y = 0.5523, zoneID = 207, locID = 207 },
 			[59317] = { text = "VC", isToy = true, toyID = 43824, isHearthstone = true, icon = 133743, map = 125, x = 0.2372, y = 0.4670, zoneID = 125, locID = 125 },

@@ -178,6 +178,7 @@ local function setBackdrop(frame, borderCfg)
 		borderFrame:SetBackdrop({
 			bgFile = "Interface\\Buttons\\WHITE8x8",
 			edgeFile = edgeFile,
+			tile = false,
 			edgeSize = borderCfg.edgeSize or 1,
 			insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
 		})
@@ -251,6 +252,7 @@ local function applyHighlightStyle(st, cfg, key)
 	frame:SetBackdrop({
 		bgFile = "Interface\\Buttons\\WHITE8x8",
 		edgeFile = resolveBorderTexture(cfg.texture),
+		tile = false,
 		edgeSize = size,
 		insets = { left = size, right = size, top = size, bottom = size },
 	})
@@ -4705,6 +4707,7 @@ local function ensureAnchor(kind, parent)
 		anchor:SetBackdrop({
 			bgFile = "Interface\\Buttons\\WHITE8x8",
 			edgeFile = "Interface\\Buttons\\WHITE8x8",
+			tile = false,
 			edgeSize = 1,
 			insets = { left = 0, right = 0, top = 0, bottom = 0 },
 		})
@@ -5526,6 +5529,8 @@ function GF:ApplyHeaderAttributes(kind)
 
 	local spacing = clampNumber(tonumber(cfg.spacing) or 0, 0, 40, 0)
 	local growth = (cfg.growth or "DOWN"):upper()
+	local growthChanged = header._eqolLastGrowth ~= nil and header._eqolLastGrowth ~= growth
+	header._eqolLastGrowth = growth
 	local scale = GFH.GetEffectiveScale(UIParent)
 	spacing = roundToPixel(spacing, scale)
 	local raidUnitsPerColumn
@@ -5743,6 +5748,14 @@ function GF:ApplyHeaderAttributes(kind)
 	if growthChanged and header.GetChildren then
 		for _, child in ipairs({ header:GetChildren() }) do
 			if child and child.ClearAllPoints then child:ClearAllPoints() end
+		end
+	end
+
+	if header.IsShown and header:IsShown() then
+		if SecureGroupHeader_Update then
+			SecureGroupHeader_Update(header)
+		elseif header.Show then
+			header:Show()
 		end
 	end
 
