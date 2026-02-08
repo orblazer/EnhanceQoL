@@ -1,6 +1,6 @@
 # Changelog
 
-## [7.11.0] - 2026-02-10
+## [7.11.0] - 2026-02-08
 
 ### ✨ Added
 
@@ -21,6 +21,7 @@
 - Cooldown Panels: Fixed cases where hidden panels or cursor overlays could remain visible.
 - Cooldown Panels: Improved static text behavior for multi-entry panels.
 - Cooldown Panels: Simplified Static Text options in Edit Mode to reduce confusion.
+- Unit Frames: Raid frame color change was wrong
 
 ---
 
