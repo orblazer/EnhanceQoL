@@ -3393,14 +3393,7 @@ local function initUnitFrame()
 			local cfg = castbarModule.GetConfig()
 			if type(cfg) == "table" and cfg.enabled ~= nil then return cfg.enabled == true end
 		end
-
-		-- Legacy fallback for older saved vars.
-		local playerCfg = addon.db and addon.db.ufFrames and addon.db.ufFrames.player
-		if not (playerCfg and playerCfg.enabled == true) then return false end
-		local legacyCast = playerCfg.cast
-		if type(legacyCast) ~= "table" then return false end
-		if legacyCast.standalone ~= nil then return legacyCast.standalone == true and legacyCast.enabled ~= false end
-		return legacyCast.enabled ~= false
+		return false
 	end
 
 	local function EnsureCastbarHook(frame)
