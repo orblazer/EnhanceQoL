@@ -94,7 +94,7 @@ English • German • French • Spanish • Italian • Russian • Korean •
 *   Skip role selection when possible.
 *   Sort applicants by Mythic Score.
 *   Extended group filters (Bloodlust, Battle Res, role fit, duplicates).
-*   Keystone Helper – auto insert, improved UI, auto-start after pull, close bags, decimal forces, chest timers.
+*   Keystone Helper – auto insert, improved UI, auto-start after pull, close bags, decimal forces, chest timers, overtime.
 *   Talent Reminder – check on Ready Check, show active build name, play sound if mismatched.
 *   Combat rez tracker, potion tracker, BR tracker, rating display.
 *   Hide LFG text messages, shift reset filter button.

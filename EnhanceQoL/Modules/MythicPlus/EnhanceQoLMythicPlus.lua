@@ -284,33 +284,41 @@ hooksecurefunc(ScenarioObjectiveTracker.ChallengeModeBlock, "UpdateTime", functi
 		end
 	end
 
-	if not addon.db["enableKeystoneHelper"] or not addon.db["mythicPlusShowChestTimers"] then return end
+	if not addon.db["enableKeystoneHelper"] then return end
+
+	local timeLeft = self.timeLimit - elapsedTime
 
 	-- Always show chest timers in challenge mode
-	local timeLeft = math.max(0, self.timeLimit - elapsedTime)
-	local chest3Time = self.timeLimit * 0.4
-	local chest2Time = self.timeLimit * 0.2
+	if addon.db["mythicPlusShowChestTimers"] then
+		local chest3Time = self.timeLimit * 0.4
+		local chest2Time = self.timeLimit * 0.2
 
-	if not self.CustomTextAdded then
-		self.ChestTimeText2 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		self.ChestTimeText2:SetPoint("TOPLEFT", self.TimeLeft, "TOPRIGHT", 3, 2)
-		self.ChestTimeText3 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		self.ChestTimeText3:SetPoint("BOTTOMLEFT", self.TimeLeft, "BOTTOMRIGHT", 3, 0)
-		self.CustomTextAdded = true
+		if not self.CustomTextAdded then
+			self.ChestTimeText2 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+			self.ChestTimeText2:SetPoint("TOPLEFT", self.TimeLeft, "TOPRIGHT", 3, 2)
+			self.ChestTimeText3 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+			self.ChestTimeText3:SetPoint("BOTTOMLEFT", self.TimeLeft, "BOTTOMRIGHT", 3, 0)
+			self.CustomTextAdded = true
+		end
+
+		if timeLeft > 0 then
+			local chestText3 = ""
+			local chestText2 = ""
+
+			if timeLeft >= chest3Time then chestText3 = string.format("+3: %s", SecondsToClock(timeLeft - chest3Time)) end
+			if timeLeft >= chest2Time then chestText2 = string.format("+2: %s", SecondsToClock(timeLeft - chest2Time)) end
+
+			self.ChestTimeText2:SetText(chestText2)
+			self.ChestTimeText3:SetText(chestText3)
+		else
+			self.ChestTimeText2:SetText("")
+			self.ChestTimeText3:SetText("")
+		end
 	end
 
-	if timeLeft > 0 then
-		local chestText3 = ""
-		local chestText2 = ""
-
-		if timeLeft >= chest3Time then chestText3 = string.format("+3: %s", SecondsToClock(timeLeft - chest3Time)) end
-		if timeLeft >= chest2Time then chestText2 = string.format("+2: %s", SecondsToClock(timeLeft - chest2Time)) end
-
-		self.ChestTimeText2:SetText(chestText2)
-		self.ChestTimeText3:SetText(chestText3)
-	else
-		self.ChestTimeText2:SetText("")
-		self.ChestTimeText3:SetText("")
+	-- Show overtime
+	if addon.db["mythicPlusShowOvertime"] then
+		self.TimeLeft:SetText(SecondsToClock(math.abs(timeLeft)))
 	end
 end)
 

@@ -93,6 +93,8 @@ L["mythicPlusObjectiveTrackerSetting"] = "Behavior"
 L["collapse"] = "Collapse"
 L["mythicPlusShowChestTimers"] = "Show Mythic+ chest timers"
 L["mythicPlusShowChestTimersDesc"] = "Display +2/+3 upgrade timers alongside the dungeon timer."
+L["mythicPlusShowOvertime"] = "Show Mythic+ overtime"
+L["mythicPlusShowOvertimeDesc"] = "Display elapsed time after dungeon timer."
 
 L["HideTracker"] = "Hide"
 

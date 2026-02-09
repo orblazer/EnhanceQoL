@@ -47,8 +47,9 @@ function addon.MythicPlus.functions.InitDB()
 
 	-- Misc
 
-	-- Mythic+ timer tweaks
+	-- Mythic+ UI tweaks
 	init("mythicPlusShowChestTimers", true)
+	init("mythicPlusShowOvertime", true)
 
 	-- BR Tracker
 	init("mythicPlusBRTrackerEnabled", false)
