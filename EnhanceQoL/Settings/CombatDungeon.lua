@@ -648,6 +648,13 @@ if cChar and sectionDungeon then
 			func = function(v) addon.db["mythicPlusShowDepleteTimer"] = v end,
 			parentSection = sectionDungeon,
 		},
+		{
+			var = "mythicPlusEnableDeathLogs",
+			text = LMP["mythicPlusEnableDeathLogs"],
+			desc = LMP["mythicPlusEnableDeathLogsDesc"],
+			func = function(v) addon.db["mythicPlusEnableDeathLogs"] = v end,
+			parentSection = sectionDungeon,
+		},
 	}
 	for _, entry in ipairs(keystoneChildren) do
 		entry.parent = true

@@ -25,6 +25,9 @@ local EditMode = addon.EditMode
 local BR_EDITMODE_ID = "mythicPlusBRTracker"
 local brEditModeRegistered = false
 
+local deathTooltipRegistered = false
+local deathLogs = {}
+
 local function removeBRFrame()
 	if brButton then
 		brButton:Hide()
@@ -392,6 +395,46 @@ local function checkKeyStone()
 	end
 end
 
+hooksecurefunc(ScenarioObjectiveTracker.ChallengeModeBlock, "Activate", function(self)
+	if not addon.db["enableKeystoneHelper"] or not addon.db["mythicPlusEnableDeathLogs"] then return end
+
+	-- Prevent re register (cause activate is call multiple time)
+	if deathTooltipRegistered then return end
+	deathTooltipRegistered = true
+
+	-- Override default tooltip
+	self.DeathCount:SetScript("OnEnter", function()
+		-- Copy default tooltip to extend it
+		GameTooltip:SetOwner(self.DeathCount, "ANCHOR_LEFT");
+		GameTooltip:SetText(CHALLENGE_MODE_DEATH_COUNT_TITLE:format(self.deathCount), 1, 1, 1);
+		GameTooltip:AddLine(CHALLENGE_MODE_DEATH_COUNT_DESCRIPTION:format(SecondsToClock(self.timeLost)));
+
+		if next(deathLogs) ~= nil then
+			-- Format and sort list
+			local list = {}
+			for unit, data in pairs(deathLogs) do
+				local color = GetClassColorObj(data.class)
+				table.insert(list, { unit, color:WrapTextInColorCode(unit), data.count })
+			end
+			table.sort(list, function(a, b)
+				if a[3] == b[3] then -- sort by name if count is equal
+					return a[1] > b[1]
+				else             -- otherwise sort by death count
+					return a[3] > b[3]
+				end
+			end)
+
+			-- Add players to tooltip
+			GameTooltip:AddLine(" "); -- Spacer
+			for _, v in ipairs(list) do
+				GameTooltip:AddDoubleLine(v[2], C_ColorUtil.WrapTextInColorCode(v[3], "ffffffff"));
+			end
+		end
+
+		GameTooltip:Show();
+	end)
+end)
+
 -- Funktion zum Umgang mit Events
 local function eventHandler(self, event, arg1, arg2, arg3, arg4)
 	if event == "ADDON_LOADED" and arg1 == addonName then
@@ -419,6 +462,24 @@ local function eventHandler(self, event, arg1, arg2, arg3, arg4)
 	elseif event == "ENCOUNTER_END" then
 		-- In raids we hide after encounter; in M+ we keep showing
 		if not shouldShowBRTracker() then removeBRFrame() end
+	elseif event == "CHALLENGE_MODE_START" then
+		deathLogs = {} -- Reset logs
+	elseif event == "UNIT_DIED" then
+		if addon.db["enableKeystoneHelper"] and addon.db["mythicPlusEnableDeathLogs"] then
+			if issecretvalue(arg1) then return end -- Skip enemy
+			local unit = UnitTokenFromGUID(arg1)
+			if UnitIsPlayer(unit) and not UnitIsFeignDeath(unit) then
+				local name = UnitName(unit)
+				if deathLogs[name] then
+					deathLogs[name].count = deathLogs[name].count + 1
+				else
+					deathLogs[name] = {
+						count = 1,
+						class = select(2, UnitClass(unit)) -- Store class name for handle leaver
+					}
+				end
+			end
+		end
 	end
 end
 
@@ -434,6 +495,8 @@ function addon.MythicPlus.functions.InitMain()
 	frameLoad:RegisterEvent("SPELL_UPDATE_CHARGES")
 	frameLoad:RegisterEvent("ENCOUNTER_END")
 	frameLoad:RegisterEvent("ENCOUNTER_START")
+	frameLoad:RegisterEvent("CHALLENGE_MODE_START")
+	frameLoad:RegisterEvent("UNIT_DIED")
 
 	-- Setze den Event-Handler
 	frameLoad:SetScript("OnEvent", eventHandler)

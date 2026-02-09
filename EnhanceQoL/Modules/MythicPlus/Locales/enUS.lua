@@ -95,6 +95,8 @@ L["mythicPlusShowChestTimers"] = "Show Mythic+ chest timers"
 L["mythicPlusShowChestTimersDesc"] = "Display +2/+3 upgrade timers alongside the dungeon timer."
 L["mythicPlusShowOvertime"] = "Show Mythic+ overtime"
 L["mythicPlusShowOvertimeDesc"] = "Display elapsed time after dungeon timer."
+L["mythicPlusEnableDeathLogs"] = "Details death counter"
+L["mythicPlusEnableDeathLogsDesc"] = "Display death count for each players on death counter tooltip."
 
 L["HideTracker"] = "Hide"
 
