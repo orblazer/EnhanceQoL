@@ -298,9 +298,11 @@ hooksecurefunc(ScenarioObjectiveTracker.ChallengeModeBlock, "UpdateTime", functi
 
 		if not self.CustomTextAdded then
 			self.ChestTimeText2 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-			self.ChestTimeText2:SetPoint("TOPLEFT", self.TimeLeft, "TOPRIGHT", 3, 2)
+			self.ChestTimeText2:SetPoint("TOPLEFT", self.TimeLeft, "TOPRIGHT", 4, 2)
+			self.ChestTimeText2:SetJustifyH("LEFT")
 			self.ChestTimeText3 = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-			self.ChestTimeText3:SetPoint("BOTTOMLEFT", self.TimeLeft, "BOTTOMRIGHT", 3, 0)
+			self.ChestTimeText3:SetPoint("BOTTOMLEFT", self.TimeLeft, "BOTTOMRIGHT", 4, 0)
+			self.ChestTimeText3:SetJustifyH("LEFT")
 			self.CustomTextAdded = true
 		end
 
