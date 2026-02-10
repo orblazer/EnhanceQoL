@@ -72,7 +72,19 @@ local hooksecurefunc = hooksecurefunc
 local BAR_TEX_INHERIT = "__PER_BAR__"
 local EDIT_MODE_SAMPLE_MAX = 100
 local AURA_FILTERS = GFH.AuraFilters
-local AURA_CACHE_OPTS = GFH.AuraCacheOptions
+local UNIT_AURA_SORT_RULE_EXPIRATION = Enum and Enum.UnitAuraSortRule and Enum.UnitAuraSortRule.ExpirationOnly
+local UNIT_AURA_SORT_DIRECTION_REVERSE = Enum and Enum.UnitAuraSortDirection and Enum.UnitAuraSortDirection.Reverse
+local SECRET_TEXT_UPDATE_INTERVAL = 0.1
+
+local function queryUnitAurasSorted(unit, filter, maxCount)
+	if not filter then return nil end
+	if UNIT_AURA_SORT_RULE_EXPIRATION and UNIT_AURA_SORT_DIRECTION_REVERSE then
+		return C_UnitAuras.GetUnitAuras(unit, filter, maxCount, UNIT_AURA_SORT_RULE_EXPIRATION, UNIT_AURA_SORT_DIRECTION_REVERSE)
+	end
+	if maxCount then return C_UnitAuras.GetUnitAuras(unit, filter, maxCount) end
+	return C_UnitAuras.GetUnitAuras(unit, filter)
+end
+
 local PREVIEW_SAMPLES = GFH.PREVIEW_SAMPLES or { party = {}, raid = {}, mt = {}, ma = {} }
 local groupNumberFormatOptions = GFH.GROUP_NUMBER_FORMAT_OPTIONS or {}
 local groupNumberFormatTokens = {}
@@ -2815,62 +2827,96 @@ local function setAuraFlag(flags, flag)
 	return flags + flag
 end
 
-local function clearAuraFlag(flags, flag)
-	if not flags then return nil end
-	if flags % (flag * 2) >= flag then flags = flags - flag end
-	if flags == 0 then return nil end
+local function hasAuraFlag(flags, flag) return flags and flags % (flag * 2) >= flag end
+
+local function clearAuraKinds(st)
+	if not st then return end
+	st._auraKindById = st._auraKindById or {}
+	local flagsById = st._auraKindById
+	for k in pairs(flagsById) do
+		flagsById[k] = nil
+	end
+end
+
+local function isAuraFilteredIn(unit, auraInstanceID, filter)
+	if not auraInstanceID then return false end
+	if filter then return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, auraInstanceID, filter) end
+	return false
+end
+
+local function getAuraKindFlags(unit, aura, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispel)
+	if not (unit and aura and aura.auraInstanceID) then return nil end
+	local auraId = aura.auraInstanceID
+	local flags
+	local harmfulMatch, helpfulMatch
+
+	if wantBuff then
+		helpfulMatch = isAuraFilteredIn(unit, auraId, helpfulFilter)
+		if helpfulMatch then flags = setAuraFlag(flags, AURA_KIND_HELPFUL) end
+	end
+
+	if (wantDebuff or wantsDispel) and not helpfulMatch then
+		harmfulMatch = isAuraFilteredIn(unit, auraId, harmfulFilter)
+		if wantDebuff and harmfulMatch then flags = setAuraFlag(flags, AURA_KIND_HARMFUL) end
+	end
+
+	if wantExternals and isAuraFilteredIn(unit, auraId, externalFilter) then flags = setAuraFlag(flags, AURA_KIND_EXTERNAL) end
+	if wantsDispel and harmfulMatch and isAuraFilteredIn(unit, auraId, dispelFilter) then flags = setAuraFlag(flags, AURA_KIND_DISPEL) end
+
 	return flags
 end
 
-local function hasAuraFlag(flags, flag) return flags and flags % (flag * 2) >= flag end
-
-local function rebuildAuraKindFlags(st, helpfulCache, harmfulCache, externalCache, dispelCache)
-	if not st then return end
-	st._auraKindById = st._auraKindById or {}
-	local flags = st._auraKindById
-	for k in pairs(flags) do
-		flags[k] = nil
-	end
-	local function mark(cache, flag)
-		if not (cache and cache.order) then return end
-		for i = 1, #cache.order do
-			local id = cache.order[i]
-			if id then flags[id] = setAuraFlag(flags[id], flag) end
-		end
-	end
-	mark(helpfulCache, AURA_KIND_HELPFUL)
-	mark(harmfulCache, AURA_KIND_HARMFUL)
-	mark(externalCache, AURA_KIND_EXTERNAL)
-	mark(dispelCache, AURA_KIND_DISPEL)
+local function removeAuraFromGroupStore(cache, flagsById, auraId)
+	if not (cache and auraId) then return end
+	cache.auras[auraId] = nil
+	if cache.indexById then cache.indexById[auraId] = nil end
+	cache._orderDirty = true
+	if flagsById then flagsById[auraId] = nil end
 end
 
-local function updateAuraKindFlagsFromEvent(st, cache, flag, updateInfo)
-	if not (st and cache and updateInfo) then return end
+local function compactAuraOrder(cache)
+	if not (cache and cache._orderDirty and cache.order and cache.indexById and cache.auras) then return end
+	local order = cache.order
 	local indexById = cache.indexById
-	if not indexById then return end
-	st._auraKindById = st._auraKindById or {}
-	local flags = st._auraKindById
-	if updateInfo.addedAuras then
-		for _, aura in ipairs(updateInfo.addedAuras) do
-			local id = aura and aura.auraInstanceID
-			if id and indexById[id] then flags[id] = setAuraFlag(flags[id], flag) end
+	local auras = cache.auras
+	local seen = {}
+	local write = 1
+	for read = 1, #order do
+		local auraId = order[read]
+		if auraId and auras[auraId] and not seen[auraId] then
+			seen[auraId] = true
+			order[write] = auraId
+			indexById[auraId] = write
+			write = write + 1
 		end
 	end
-	if updateInfo.updatedAuraInstanceIDs then
-		for _, id in ipairs(updateInfo.updatedAuraInstanceIDs) do
-			if id and indexById[id] then flags[id] = setAuraFlag(flags[id], flag) end
-		end
+	for i = write, #order do
+		order[i] = nil
 	end
-	if updateInfo.removedAuraInstanceIDs then
-		for _, id in ipairs(updateInfo.removedAuraInstanceIDs) do
-			if id and flags[id] ~= nil then flags[id] = clearAuraFlag(flags[id], flag) end
-		end
-	end
+	cache._orderDirty = nil
 end
 
-local function isAuraBigDefensive(unit, aura, externalFilter)
-	if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID and unit and aura and aura.auraInstanceID and externalFilter) then return false end
-	return not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, externalFilter)
+local function cacheAuraWithFlags(cache, flagsById, aura, flags)
+	if not (cache and aura and aura.auraInstanceID) then return end
+	local auraId = aura.auraInstanceID
+	if flags then
+		if AuraUtil and AuraUtil.cacheAura then
+			AuraUtil.cacheAura(cache, aura)
+		else
+			cache.auras[auraId] = aura
+		end
+		if AuraUtil and AuraUtil.addAuraToOrder then
+			AuraUtil.addAuraToOrder(cache, auraId)
+		else
+			if not cache.indexById[auraId] then
+				cache.order[#cache.order + 1] = auraId
+				cache.indexById[auraId] = #cache.order
+			end
+		end
+		if flagsById then flagsById[auraId] = flags end
+	else
+		removeAuraFromGroupStore(cache, flagsById, auraId)
+	end
 end
 
 local AURA_TYPE_META = {
@@ -3079,7 +3125,7 @@ function GF:LayoutAuras(self)
 	end
 end
 
-local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache, externalFilter, changed)
+local function updateAuraType(self, unit, st, ac, kindKey, cache, changed)
 	local meta = AURA_TYPE_META[kindKey]
 	if not meta then return end
 	local typeCfg = (ac and ac[kindKey]) or EMPTY
@@ -3114,7 +3160,6 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache,
 		return
 	end
 	local flags = st._auraKindById
-	local externalIndex = externalCache and externalCache.indexById
 	local externalsEnabled = ac and ac.externals and ac.externals.enabled ~= false
 	local shown = 0
 	local maxCount = layout.maxCount or 0
@@ -3123,31 +3168,15 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache,
 		local auraId = order[i]
 		local aura = auraId and auras[auraId]
 		if aura then
+			local auraFlags = flags and flags[auraId]
 			local match = false
 			if kindKey == "debuff" then
-				match = true
+				match = hasAuraFlag(auraFlags, AURA_KIND_HARMFUL)
 			elseif kindKey == "buff" then
-				if externalsEnabled then
-					if flags and hasAuraFlag(flags[auraId], AURA_KIND_EXTERNAL) then
-						match = false
-					elseif externalIndex and externalIndex[auraId] then
-						match = false
-					elseif externalFilter and (flags == nil or flags[auraId] == nil) then
-						local isExternal = isAuraBigDefensive(unit, aura, externalFilter or AURA_FILTERS.bigDefensive)
-						if isExternal then
-							if flags then flags[auraId] = setAuraFlag(flags[auraId], AURA_KIND_EXTERNAL) end
-							match = false
-						else
-							match = true
-						end
-					else
-						match = true
-					end
-				else
-					match = true
-				end
+				match = hasAuraFlag(auraFlags, AURA_KIND_HELPFUL)
+				if match and externalsEnabled and hasAuraFlag(auraFlags, AURA_KIND_EXTERNAL) then match = false end
 			elseif kindKey == "externals" then
-				match = true
+				match = hasAuraFlag(auraFlags, AURA_KIND_EXTERNAL)
 			end
 			if match then
 				shown = shown + 1
@@ -3177,86 +3206,90 @@ local function updateAuraType(self, unit, st, ac, kindKey, cache, externalCache,
 	hideAuraButtons(buttons, shown + 1)
 end
 
-local function fullScanGroupAuras(unit, cache, helpfulFilter, harmfulFilter)
-	if not (unit and cache and C_UnitAuras) then return end
+local function fullScanGroupAuras(unit, st, cache, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispel, queryMax)
+	if not (unit and st and cache and C_UnitAuras) then return end
 	resetAuraCache(cache)
-	local auras = cache.auras
+	clearAuraKinds(st)
+	local flagsById = st._auraKindById
+	local seen = {}
+
 	local function storeAura(aura)
-		if aura and aura.auraInstanceID then
-			if AuraUtil and AuraUtil.cacheAura then
-				AuraUtil.cacheAura(cache, aura)
-			else
-				auras[aura.auraInstanceID] = aura
-			end
-			if AuraUtil and AuraUtil.addAuraToOrder then
-				AuraUtil.addAuraToOrder(cache, aura.auraInstanceID)
-			else
-				cache.order[#cache.order + 1] = aura.auraInstanceID
-				cache.indexById[aura.auraInstanceID] = #cache.order
-			end
+		local auraId = aura and aura.auraInstanceID
+		if not auraId or seen[auraId] then return end
+		seen[auraId] = true
+		local flags = getAuraKindFlags(unit, aura, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispel)
+		cacheAuraWithFlags(cache, flagsById, aura, flags)
+	end
+
+	if wantBuff and helpfulFilter then
+		local helpful = queryUnitAurasSorted(unit, helpfulFilter, queryMax and queryMax.helpful)
+		for i = 1, (helpful and #helpful or 0) do
+			storeAura(helpful[i])
 		end
 	end
-	if C_UnitAuras.GetUnitAuras then
-		if helpfulFilter then
-			local helpful = C_UnitAuras.GetUnitAuras(unit, helpfulFilter)
-			for i = 1, (helpful and #helpful or 0) do
-				storeAura(helpful[i])
-			end
+	if (wantDebuff or wantsDispel) and harmfulFilter then
+		local harmful = queryUnitAurasSorted(unit, harmfulFilter, queryMax and queryMax.harmful)
+		for i = 1, (harmful and #harmful or 0) do
+			storeAura(harmful[i])
 		end
-		if harmfulFilter then
-			local harmful = C_UnitAuras.GetUnitAuras(unit, harmfulFilter)
-			for i = 1, (harmful and #harmful or 0) do
-				storeAura(harmful[i])
-			end
-		end
-	elseif C_UnitAuras.GetAuraSlots then
-		if helpfulFilter then
-			local helpful = { C_UnitAuras.GetAuraSlots(unit, helpfulFilter) }
-			for i = 2, #helpful do
-				local aura = C_UnitAuras.GetAuraDataBySlot(unit, helpful[i])
-				storeAura(aura)
-			end
-		end
-		if harmfulFilter then
-			local harmful = { C_UnitAuras.GetAuraSlots(unit, harmfulFilter) }
-			for i = 2, #harmful do
-				local aura = C_UnitAuras.GetAuraDataBySlot(unit, harmful[i])
-				storeAura(aura)
-			end
+	end
+	if wantExternals and externalFilter then
+		local externals = queryUnitAurasSorted(unit, externalFilter, queryMax and queryMax.external)
+		for i = 1, (externals and #externals or 0) do
+			storeAura(externals[i])
 		end
 	end
 end
 
-local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
-	if not (unit and st and updateInfo and AuraUtil and AuraUtil.updateAuraCacheFromEvent) then return end
-	local wantsHelpful = ac and (ac.buff and ac.buff.enabled ~= false) or false
-	local wantsHarmful = ac and (ac.debuff and ac.debuff.enabled ~= false) or false
-	local wantsExternals = ac and (ac.externals and ac.externals.enabled ~= false) or false
+local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter, externalFilter, dispelFilter)
+	if not (unit and st and updateInfo) then return end
+
+	local wantBuff = ac and (ac.buff and ac.buff.enabled ~= false) or false
+	local wantDebuff = ac and (ac.debuff and ac.debuff.enabled ~= false) or false
+	local wantExternals = ac and (ac.externals and ac.externals.enabled ~= false) or false
 	local wantsDispel = st._wantsDispelTint == true
-	local helpfulCache = wantsHelpful and getAuraCache(st, "helpful") or nil
-	local harmfulCache = wantsHarmful and getAuraCache(st, "harmful") or nil
-	local externalCache = wantsExternals and getAuraCache(st, "externals") or nil
-	local dispelCache = wantsDispel and getAuraCache(st, "dispel") or nil
-	if wantsHelpful and helpfulCache then
-		local opts = AURA_CACHE_OPTS.helpful
-		if opts then opts.helpfulFilter = helpfulFilter end
-		AuraUtil.updateAuraCacheFromEvent(helpfulCache, unit, updateInfo, opts)
-		updateAuraKindFlagsFromEvent(st, helpfulCache, AURA_KIND_HELPFUL, updateInfo)
+	local wantsAny = wantBuff or wantDebuff or wantExternals or wantsDispel
+	local cache = getAuraCache(st, "all")
+
+	st._auraKindById = st._auraKindById or {}
+	local flagsById = st._auraKindById
+
+	if not wantsAny then
+		resetAuraCache(cache)
+		clearAuraKinds(st)
+		return
 	end
-	if wantsHarmful and harmfulCache then
-		local opts = AURA_CACHE_OPTS.harmful
-		if opts then opts.harmfulFilter = harmfulFilter end
-		AuraUtil.updateAuraCacheFromEvent(harmfulCache, unit, updateInfo, opts)
-		updateAuraKindFlagsFromEvent(st, harmfulCache, AURA_KIND_HARMFUL, updateInfo)
+
+	if updateInfo.removedAuraInstanceIDs then
+		for i = 1, #updateInfo.removedAuraInstanceIDs do
+			removeAuraFromGroupStore(cache, flagsById, updateInfo.removedAuraInstanceIDs[i])
+		end
 	end
-	if wantsExternals then
-		if externalCache then AuraUtil.updateAuraCacheFromEvent(externalCache, unit, updateInfo, AURA_CACHE_OPTS.external) end
-		if externalCache then updateAuraKindFlagsFromEvent(st, externalCache, AURA_KIND_EXTERNAL, updateInfo) end
+
+	if updateInfo.addedAuras then
+		for i = 1, #updateInfo.addedAuras do
+			local aura = updateInfo.addedAuras[i]
+			local flags = getAuraKindFlags(unit, aura, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispel)
+			cacheAuraWithFlags(cache, flagsById, aura, flags)
+		end
 	end
-	if wantsDispel then
-		if dispelCache then AuraUtil.updateAuraCacheFromEvent(dispelCache, unit, updateInfo, AURA_CACHE_OPTS.dispel) end
-		if dispelCache then updateAuraKindFlagsFromEvent(st, dispelCache, AURA_KIND_DISPEL, updateInfo) end
+
+	if updateInfo.updatedAuraInstanceIDs and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
+		for i = 1, #updateInfo.updatedAuraInstanceIDs do
+			local auraId = updateInfo.updatedAuraInstanceIDs[i]
+			if auraId then
+				local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraId)
+				if aura then
+					local flags = getAuraKindFlags(unit, aura, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispel)
+					cacheAuraWithFlags(cache, flagsById, aura, flags)
+				else
+					removeAuraFromGroupStore(cache, flagsById, auraId)
+				end
+			end
+		end
 	end
+
+	compactAuraOrder(cache)
 end
 
 function GF:UpdateAuras(self, updateInfo)
@@ -3336,44 +3369,45 @@ function GF:UpdateAuras(self, updateInfo)
 	local harmfulFilter = AURA_FILTERS.harmful
 	local dispelFilter = AURA_FILTERS.dispellable
 	local externalFilter = AURA_FILTERS.bigDefensive
-	local helpfulCache = getAuraCache(st, "helpful")
-	local harmfulCache = getAuraCache(st, "harmful")
-	local externalCache = getAuraCache(st, "externals")
-	local dispelCache = getAuraCache(st, "dispel")
+	local auraQueryMax = st._auraQueryMax
+	if not auraQueryMax then
+		auraQueryMax = {}
+		st._auraQueryMax = auraQueryMax
+	end
+	local function normalizeMax(value)
+		value = floor(tonumber(value) or 0)
+		if value < 1 then return nil end
+		return value
+	end
+	local buffMax = normalizeMax(st._auraLayout and st._auraLayout.buff and st._auraLayout.buff.maxCount)
+	local debuffMax = normalizeMax(st._auraLayout and st._auraLayout.debuff and st._auraLayout.debuff.maxCount)
+	local externalMax = normalizeMax(st._auraLayout and st._auraLayout.externals and st._auraLayout.externals.maxCount)
+	if wantBuff and buffMax then
+		local extra = (wantExternals and externalMax) or 0
+		local helpfulMax = normalizeMax(buffMax + extra)
+		auraQueryMax.helpful = helpfulMax or buffMax
+	else
+		auraQueryMax.helpful = nil
+	end
+	local scanHarmful = wantDebuff or wantsDispelTint
+	if scanHarmful then
+		-- Dispel tint is derived from the harmful scan; keep it unbounded for correctness.
+		auraQueryMax.harmful = wantsDispelTint and nil or debuffMax
+	else
+		auraQueryMax.harmful = nil
+	end
+	auraQueryMax.external = wantExternals and externalMax or nil
+	local allCache = getAuraCache(st, "all")
+	st._auraKindById = st._auraKindById or {}
 	if not updateInfo or updateInfo.isFullUpdate then
+		fullScanGroupAuras(unit, st, allCache, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispelTint, auraQueryMax)
 		if wantsAuras then
-			if wantBuff then
-				fullScanGroupAuras(unit, helpfulCache, helpfulFilter, nil)
-			elseif helpfulCache then
-				resetAuraCache(helpfulCache)
-			end
-			if wantDebuff then
-				fullScanGroupAuras(unit, harmfulCache, nil, harmfulFilter)
-			elseif harmfulCache then
-				resetAuraCache(harmfulCache)
-			end
-		else
-			if helpfulCache then resetAuraCache(helpfulCache) end
-			if harmfulCache then resetAuraCache(harmfulCache) end
-		end
-		if wantExternals and externalCache then
-			fullScanGroupAuras(unit, externalCache, externalFilter, nil)
-		elseif externalCache then
-			resetAuraCache(externalCache)
-		end
-		if wantsDispelTint and dispelCache then
-			fullScanGroupAuras(unit, dispelCache, nil, dispelFilter)
-		elseif dispelCache then
-			resetAuraCache(dispelCache)
-		end
-		rebuildAuraKindFlags(st, helpfulCache, harmfulCache, externalCache, dispelCache)
-		if wantsAuras then
-			if wantBuff then updateAuraType(self, unit, st, ac, "buff", helpfulCache, externalCache, externalFilter) end
-			if wantDebuff then updateAuraType(self, unit, st, ac, "debuff", harmfulCache, externalCache, externalFilter) end
-			if wantExternals then updateAuraType(self, unit, st, ac, "externals", externalCache, externalCache, externalFilter) end
+			if wantBuff then updateAuraType(self, unit, st, ac, "buff", allCache) end
+			if wantDebuff then updateAuraType(self, unit, st, ac, "debuff", allCache) end
+			if wantExternals then updateAuraType(self, unit, st, ac, "externals", allCache) end
 		end
 		if wantsDispelTint then
-			GF:UpdateDispelTint(self, dispelCache, dispelFilter)
+			GF:UpdateDispelTint(self, allCache, dispelFilter, nil, AURA_KIND_DISPEL)
 		else
 			GF:UpdateDispelTint(self, nil, nil)
 		end
@@ -3389,10 +3423,18 @@ function GF:UpdateAuras(self, updateInfo)
 	if updateInfo then
 		local preFlags = st._auraKindById
 		local removed = updateInfo.removedAuraInstanceIDs
-		if removed then
+		local updated = updateInfo.updatedAuraInstanceIDs
+		if removed or updated then
 			if preFlags then
-				for i = 1, #removed do
-					markKinds(preFlags[removed[i]])
+				if removed then
+					for i = 1, #removed do
+						markKinds(preFlags[removed[i]])
+					end
+				end
+				if updated then
+					for i = 1, #updated do
+						markKinds(preFlags[updated[i]])
+					end
 				end
 			else
 				touchBuff = wantBuff
@@ -3402,7 +3444,7 @@ function GF:UpdateAuras(self, updateInfo)
 		end
 	end
 
-	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter)
+	updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, harmfulFilter, externalFilter, dispelFilter)
 	local changed = st._auraChanged
 	if updateInfo then
 		if not changed then
@@ -3454,12 +3496,12 @@ function GF:UpdateAuras(self, updateInfo)
 		end
 	end
 	if wantsAuras then
-		if wantBuff and touchBuff then updateAuraType(self, unit, st, ac, "buff", helpfulCache, externalCache, externalFilter, changed) end
-		if wantDebuff and touchDebuff then updateAuraType(self, unit, st, ac, "debuff", harmfulCache, externalCache, externalFilter, changed) end
-		if wantExternals and touchExternals then updateAuraType(self, unit, st, ac, "externals", externalCache, externalCache, externalFilter, changed) end
+		if wantBuff and touchBuff then updateAuraType(self, unit, st, ac, "buff", allCache, changed) end
+		if wantDebuff and touchDebuff then updateAuraType(self, unit, st, ac, "debuff", allCache, changed) end
+		if wantExternals and touchExternals then updateAuraType(self, unit, st, ac, "externals", allCache, changed) end
 	end
 	if wantsDispelTint then
-		GF:UpdateDispelTint(self, dispelCache, dispelFilter)
+		GF:UpdateDispelTint(self, allCache, dispelFilter, nil, AURA_KIND_DISPEL)
 	else
 		GF:UpdateDispelTint(self, nil, nil)
 	end
@@ -3967,7 +4009,7 @@ local function updateGroupIndicatorsForFrames(container, frames, cfg, def, isPre
 	end
 end
 
-function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
+function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample, requiredFlag)
 	local st = getState(self)
 	if not st then return end
 	local kind = self._eqolGroupKind or "party"
@@ -4014,10 +4056,16 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample)
 		if unit and cache and cache.order and cache.auras then
 			local auras = cache.auras
 			local order = cache.order
+			local flagsById = st._auraKindById
 			for i = 1, #order do
 				local auraId = order[i]
 				local aura = auraId and auras[auraId]
-				if aura then
+				local match = true
+				if requiredFlag then
+					local auraKey = (aura and aura.auraInstanceID) or auraId
+					match = auraKey and hasAuraFlag(flagsById and flagsById[auraKey], requiredFlag)
+				end
+				if aura and match then
 					local dispelName = aura.dispelName
 					if not (issecretvalue and issecretvalue(dispelName)) and dispelName and dispelName ~= "" then colorKey = dispelName end
 					local dispelCurve = GFH.DispelColorCurve
@@ -4365,6 +4413,7 @@ function GF:UpdateHealthValue(self, unit, st)
 		if st.healthTextCenter then st.healthTextCenter:SetText("") end
 		if st.healthTextRight then st.healthTextRight:SetText("") end
 		st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
+		st._nextHealthTextUpdateAt = nil
 		return
 	end
 	if isDead == true then
@@ -4372,6 +4421,7 @@ function GF:UpdateHealthValue(self, unit, st)
 		if st.healthTextCenter then st.healthTextCenter:SetText("") end
 		if st.healthTextRight then st.healthTextRight:SetText("") end
 		st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
+		st._nextHealthTextUpdateAt = nil
 		return
 	end
 	if hasText and (st.healthTextLeft or st.healthTextCenter or st.healthTextRight) then
@@ -4381,44 +4431,75 @@ function GF:UpdateHealthValue(self, unit, st)
 			if st.healthTextCenter then st.healthTextCenter:SetText("") end
 			if st.healthTextRight then st.healthTextRight:SetText("") end
 			st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
+			st._nextHealthTextUpdateAt = nil
 		else
-			local delimiter = (UFHelper and UFHelper.getTextDelimiter and UFHelper.getTextDelimiter(hc, defH)) or (hc.textDelimiter or defH.textDelimiter or " ")
-			local delimiter2 = (UFHelper and UFHelper.getTextDelimiterSecondary and UFHelper.getTextDelimiterSecondary(hc, defH, delimiter))
-				or (hc.textDelimiterSecondary or defH.textDelimiterSecondary or delimiter)
-			local delimiter3 = (UFHelper and UFHelper.getTextDelimiterTertiary and UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2))
-				or (hc.textDelimiterTertiary or defH.textDelimiterTertiary or delimiter2)
-			local useShort = hc.useShortNumbers ~= false
-			local hidePercentSymbol = hc.hidePercentSymbol == true
-			local percentVal
-			if GFH.TextModeUsesPercent(leftMode) or GFH.TextModeUsesPercent(centerMode) or GFH.TextModeUsesPercent(rightMode) then
-				if addon.variables and addon.variables.isMidnight then
-					percentVal = getHealthPercent(unit, cur, maxv)
-				elseif not secretHealth then
-					percentVal = getHealthPercent(unit, cur, maxv)
+			local allowTextRefresh = true
+			if secretHealth then
+				local now = GetTime and GetTime() or 0
+				local nextAt = st._nextHealthTextUpdateAt or 0
+				if now < nextAt then
+					allowTextRefresh = false
+				else
+					st._nextHealthTextUpdateAt = now + SECRET_TEXT_UPDATE_INTERVAL
 				end
+			else
+				st._nextHealthTextUpdateAt = nil
 			end
-			local levelText
-			if UFHelper and UFHelper.textModeUsesLevel then
-				if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = getSafeLevelText(unit, false) end
-			end
-			local missingValue
-			if GFH.TextModeUsesDeficit(leftMode) or GFH.TextModeUsesDeficit(centerMode) or GFH.TextModeUsesDeficit(rightMode) then
-				if UnitHealthMissing then missingValue = UnitHealthMissing(unit) end
-				if not (issecretvalue and issecretvalue(missingValue)) then
-					if missingValue == nil and not secretHealth then
-						if type(cur) == "number" and type(maxv) == "number" then missingValue = maxv - cur end
+			if allowTextRefresh then
+				local delimiter = (UFHelper and UFHelper.getTextDelimiter and UFHelper.getTextDelimiter(hc, defH)) or (hc.textDelimiter or defH.textDelimiter or " ")
+				local delimiter2 = (UFHelper and UFHelper.getTextDelimiterSecondary and UFHelper.getTextDelimiterSecondary(hc, defH, delimiter))
+					or (hc.textDelimiterSecondary or defH.textDelimiterSecondary or delimiter)
+				local delimiter3 = (UFHelper and UFHelper.getTextDelimiterTertiary and UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2))
+					or (hc.textDelimiterTertiary or defH.textDelimiterTertiary or delimiter2)
+				local useShort = hc.useShortNumbers ~= false
+				local hidePercentSymbol = hc.hidePercentSymbol == true
+				local percentVal
+				if GFH.TextModeUsesPercent(leftMode) or GFH.TextModeUsesPercent(centerMode) or GFH.TextModeUsesPercent(rightMode) then
+					if addon.variables and addon.variables.isMidnight then
+						percentVal = getHealthPercent(unit, cur, maxv)
+					elseif not secretHealth then
+						percentVal = getHealthPercent(unit, cur, maxv)
 					end
 				end
+				local levelText
+				if UFHelper and UFHelper.textModeUsesLevel then
+					if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = getSafeLevelText(unit, false) end
+				end
+				local missingValue
+				if GFH.TextModeUsesDeficit(leftMode) or GFH.TextModeUsesDeficit(centerMode) or GFH.TextModeUsesDeficit(rightMode) then
+					if UnitHealthMissing then missingValue = UnitHealthMissing(unit) end
+					if not (issecretvalue and issecretvalue(missingValue)) then
+						if missingValue == nil and not secretHealth then
+							if type(cur) == "number" and type(maxv) == "number" then missingValue = maxv - cur end
+						end
+					end
+				end
+				setTextSlot(st, st.healthTextLeft, "_lastHealthTextLeft", leftMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
+				setTextSlot(
+					st,
+					st.healthTextCenter,
+					"_lastHealthTextCenter",
+					centerMode,
+					cur,
+					maxv,
+					useShort,
+					percentVal,
+					delimiter,
+					delimiter2,
+					delimiter3,
+					hidePercentSymbol,
+					levelText,
+					missingValue
+				)
+				setTextSlot(st, st.healthTextRight, "_lastHealthTextRight", rightMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
 			end
-			setTextSlot(st, st.healthTextLeft, "_lastHealthTextLeft", leftMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
-			setTextSlot(st, st.healthTextCenter, "_lastHealthTextCenter", centerMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
-			setTextSlot(st, st.healthTextRight, "_lastHealthTextRight", rightMode, cur, maxv, useShort, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, missingValue)
 		end
 	elseif st.healthTextLeft or st.healthTextCenter or st.healthTextRight then
 		if st.healthTextLeft then st.healthTextLeft:SetText("") end
 		if st.healthTextCenter then st.healthTextCenter:SetText("") end
 		if st.healthTextRight then st.healthTextRight:SetText("") end
 		st._lastHealthTextLeft, st._lastHealthTextCenter, st._lastHealthTextRight = nil, nil, nil
+		st._nextHealthTextUpdateAt = nil
 	end
 end
 
@@ -4755,6 +4836,7 @@ function GF:UnitButton_SetUnit(self, unit)
 	if st then
 		st._auraCache = nil
 		st._auraCacheByKey = nil
+		st._auraQueryMax = nil
 	end
 	GF:CacheUnitStatic(self)
 
@@ -4786,6 +4868,7 @@ function GF:UnitButton_ClearUnit(self)
 		st._healAbsorbAmount = nil
 		st._auraCache = nil
 		st._auraCacheByKey = nil
+		st._auraQueryMax = nil
 	end
 	if st and st.privateAuras and UFHelper then
 		if UFHelper.RemovePrivateAuras then UFHelper.RemovePrivateAuras(st.privateAuras) end
@@ -5730,8 +5813,8 @@ function GF:RefreshDispelTint()
 					GF:UpdateDispelTint(child, nil, nil, true)
 				else
 					local st = getState(child)
-					local cache = st and getAuraCache(st, "dispel")
-					GF:UpdateDispelTint(child, cache, AURA_FILTERS.dispellable)
+					local cache = st and getAuraCache(st, "all")
+					GF:UpdateDispelTint(child, cache, AURA_FILTERS.dispellable, nil, AURA_KIND_DISPEL)
 				end
 			end
 		end)
@@ -6598,6 +6681,7 @@ function GF:RefreshChangedUnitButtons()
 		st._auraCacheByKey = nil
 		st._auraKindById = nil
 		st._auraChanged = nil
+		st._auraQueryMax = nil
 		GF:CacheUnitStatic(child)
 		GF:UnitButton_RegisterUnitEvents(child, unit)
 		if st._wantsAbsorb then GF:UpdateAbsorbCache(child, nil, unit, st) end

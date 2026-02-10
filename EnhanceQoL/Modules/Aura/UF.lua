@@ -25,6 +25,7 @@ addon.variables.ufSampleHealAbsorb = addon.variables.ufSampleHealAbsorb or {}
 local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 local smoothFill = Enum.StatusBarInterpolation.ExponentialEaseOut
+local SECRET_TEXT_UPDATE_INTERVAL = 0.1
 
 local function getSmoothInterpolation(cfg, def)
 	if not smoothFill then return nil end
@@ -3778,18 +3779,33 @@ local function updateHealth(cfg, unit)
 	local leftMode = hc.textLeft or "PERCENT"
 	local centerMode = hc.textCenter or "NONE"
 	local rightMode = hc.textRight or "CURMAX"
-	local delimiter = UFHelper.getTextDelimiter(hc, defH)
-	local delimiter2 = UFHelper.getTextDelimiterSecondary(hc, defH, delimiter)
-	local delimiter3 = UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2)
-	local hidePercentSymbol = hc.hidePercentSymbol == true
-	local roundPercent = hc.roundPercent == true
-	local hideClassText = shouldHideClassificationText(cfg, unit)
-	local levelText
-	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit, nil, hideClassText) end
+	local secretHealth = issecretvalue and (issecretvalue(cur) or issecretvalue(maxv))
+	local allowTextRefresh = true
+	if secretHealth then
+		local now = GetTime and GetTime() or 0
+		local nextAt = st._nextHealthTextUpdateAt or 0
+		if now < nextAt then
+			allowTextRefresh = false
+		else
+			st._nextHealthTextUpdateAt = now + SECRET_TEXT_UPDATE_INTERVAL
+		end
+	else
+		st._nextHealthTextUpdateAt = nil
+	end
+	local delimiter, delimiter2, delimiter3, hidePercentSymbol, roundPercent, levelText
+	if allowTextRefresh then
+		delimiter = UFHelper.getTextDelimiter(hc, defH)
+		delimiter2 = UFHelper.getTextDelimiterSecondary(hc, defH, delimiter)
+		delimiter3 = UFHelper.getTextDelimiterTertiary(hc, defH, delimiter, delimiter2)
+		hidePercentSymbol = hc.hidePercentSymbol == true
+		roundPercent = hc.roundPercent == true
+		local hideClassText = shouldHideClassificationText(cfg, unit)
+		if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit, nil, hideClassText) end
+	end
 	if st.healthTextLeft then
 		if leftMode == "NONE" then
 			st.healthTextLeft:SetText("")
-		else
+		elseif allowTextRefresh then
 			st.healthTextLeft:SetText(
 				UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
 			)
@@ -3798,7 +3814,7 @@ local function updateHealth(cfg, unit)
 	if st.healthTextCenter then
 		if centerMode == "NONE" then
 			st.healthTextCenter:SetText("")
-		else
+		elseif allowTextRefresh then
 			st.healthTextCenter:SetText(
 				UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
 			)
@@ -3807,7 +3823,7 @@ local function updateHealth(cfg, unit)
 	if st.healthTextRight then
 		if rightMode == "NONE" then
 			st.healthTextRight:SetText("")
-		else
+		elseif allowTextRefresh then
 			st.healthTextRight:SetText(
 				UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
 			)
