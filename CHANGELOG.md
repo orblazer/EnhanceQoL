@@ -11,6 +11,7 @@
 - Unit Frames: Added per-frame `Hide in vehicles` visibility option.
 - Cooldown Panels: Added per-panel `Hide in vehicles` display option.
 - Aura: Added per-module `Hide in pet battles` options for Unit Frames, Cooldown Panels, Resource Bars, and GCD Bar.
+- Aura: Added `Hide in client scenes` (e.g. minigames) for Unit Frames, Cooldown Panels, and Resource Bars (default enabled).
 - Resource Bars: Added per-bar `Click-through` option in Edit Mode
 
 ### ⚡ Performance

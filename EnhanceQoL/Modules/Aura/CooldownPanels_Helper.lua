@@ -107,6 +107,7 @@ Helper.PANEL_LAYOUT_DEFAULTS = {
 	opacityInCombat = 1,
 	hideInVehicle = false,
 	hideInPetBattle = false,
+	hideInClientScene = true,
 	hideOnCooldown = false,
 	showOnCooldown = false,
 	showIconTexture = true,

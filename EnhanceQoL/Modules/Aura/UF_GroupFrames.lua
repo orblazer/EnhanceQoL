@@ -72,17 +72,12 @@ local hooksecurefunc = hooksecurefunc
 local BAR_TEX_INHERIT = "__PER_BAR__"
 local EDIT_MODE_SAMPLE_MAX = 100
 local AURA_FILTERS = GFH.AuraFilters
-local UNIT_AURA_SORT_RULE_EXPIRATION = Enum and Enum.UnitAuraSortRule and Enum.UnitAuraSortRule.ExpirationOnly
-local UNIT_AURA_SORT_DIRECTION_REVERSE = Enum and Enum.UnitAuraSortDirection and Enum.UnitAuraSortDirection.Reverse
 local SECRET_TEXT_UPDATE_INTERVAL = 0.1
 
-local function queryUnitAurasSorted(unit, filter, maxCount)
+local function queryAuraSlots(unit, filter, maxCount)
 	if not filter then return nil end
-	if UNIT_AURA_SORT_RULE_EXPIRATION and UNIT_AURA_SORT_DIRECTION_REVERSE then
-		return C_UnitAuras.GetUnitAuras(unit, filter, maxCount, UNIT_AURA_SORT_RULE_EXPIRATION, UNIT_AURA_SORT_DIRECTION_REVERSE)
-	end
-	if maxCount then return C_UnitAuras.GetUnitAuras(unit, filter, maxCount) end
-	return C_UnitAuras.GetUnitAuras(unit, filter)
+	if maxCount then return { C_UnitAuras.GetAuraSlots(unit, filter, maxCount) } end
+	return { C_UnitAuras.GetAuraSlots(unit, filter) }
 end
 
 local PREVIEW_SAMPLES = GFH.PREVIEW_SAMPLES or { party = {}, raid = {}, mt = {}, ma = {} }
@@ -988,6 +983,7 @@ local DEFAULTS = {
 		enabled = false,
 		showPlayer = true,
 		showSolo = false,
+		hideInClientScene = true,
 		tooltip = {
 			mode = "OFF",
 			modifier = "ALT",
@@ -1331,6 +1327,7 @@ local DEFAULTS = {
 	},
 	raid = {
 		enabled = false,
+		hideInClientScene = true,
 		tooltip = {
 			mode = "OFF",
 			modifier = "ALT",
@@ -1864,6 +1861,7 @@ GF.anchors = GF.anchors or {}
 GF._pendingRefresh = GF._pendingRefresh or false
 GF._pendingHeaderKinds = GF._pendingHeaderKinds or {}
 GF._pendingDisable = GF._pendingDisable or false
+GF._clientSceneActive = GF._clientSceneActive or false
 
 local registerFeatureEvents
 local unregisterFeatureEvents
@@ -2998,20 +2996,13 @@ local function compactAuraOrder(cache)
 	local order = cache.order
 	local indexById = cache.indexById
 	local auras = cache.auras
-	local seen = cache._seen
-	if seen then
-		for k in pairs(seen) do
-			seen[k] = nil
-		end
-	else
-		seen = {}
-		cache._seen = seen
+	for k in pairs(indexById) do
+		indexById[k] = nil
 	end
 	local write = 1
 	for read = 1, #order do
 		local auraId = order[read]
-		if auraId and auras[auraId] and not seen[auraId] then
-			seen[auraId] = true
+		if auraId and auras[auraId] and not indexById[auraId] then
 			order[write] = auraId
 			indexById[auraId] = write
 			write = write + 1
@@ -3360,21 +3351,24 @@ local function fullScanGroupAuras(unit, st, cache, helpfulFilter, harmfulFilter,
 	end
 
 	if wantBuff and helpfulFilter then
-		local helpful = queryUnitAurasSorted(unit, helpfulFilter, queryMax and queryMax.helpful)
-		for i = 1, (helpful and #helpful or 0) do
-			storeAura(helpful[i])
+		local helpfulSlots = queryAuraSlots(unit, helpfulFilter, queryMax and queryMax.helpful)
+		for i = 2, (helpfulSlots and #helpfulSlots or 0) do
+			local aura = C_UnitAuras.GetAuraDataBySlot(unit, helpfulSlots[i])
+			if aura then storeAura(aura) end
 		end
 	end
 	if (wantDebuff or wantsDispel) and harmfulFilter then
-		local harmful = queryUnitAurasSorted(unit, harmfulFilter, queryMax and queryMax.harmful)
-		for i = 1, (harmful and #harmful or 0) do
-			storeAura(harmful[i])
+		local harmfulSlots = queryAuraSlots(unit, harmfulFilter, queryMax and queryMax.harmful)
+		for i = 2, (harmfulSlots and #harmfulSlots or 0) do
+			local aura = C_UnitAuras.GetAuraDataBySlot(unit, harmfulSlots[i])
+			if aura then storeAura(aura) end
 		end
 	end
 	if wantExternals and externalFilter then
-		local externals = queryUnitAurasSorted(unit, externalFilter, queryMax and queryMax.external)
-		for i = 1, (externals and #externals or 0) do
-			storeAura(externals[i])
+		local externalSlots = queryAuraSlots(unit, externalFilter, queryMax and queryMax.external)
+		for i = 2, (externalSlots and #externalSlots or 0) do
+			local aura = C_UnitAuras.GetAuraDataBySlot(unit, externalSlots[i])
+			if aura then storeAura(aura) end
 		end
 	end
 end
@@ -3417,7 +3411,8 @@ local function updateGroupAuraCache(unit, st, updateInfo, ac, helpfulFilter, har
 	if updateInfo.updatedAuraInstanceIDs and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID then
 		for i = 1, #updateInfo.updatedAuraInstanceIDs do
 			local auraId = updateInfo.updatedAuraInstanceIDs[i]
-			if auraId then
+			local isKnown = auraId and ((flagsById and flagsById[auraId]) or (cache.auras and cache.auras[auraId]))
+			if isKnown then
 				local aura = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, auraId)
 				if aura then
 					local flags = getAuraKindFlags(unit, aura, helpfulFilter, harmfulFilter, externalFilter, dispelFilter, wantBuff, wantDebuff, wantExternals, wantsDispel)
@@ -4237,22 +4232,9 @@ function GF:UpdateDispelTint(self, cache, dispelFilter, allowSample, requiredFla
 			end
 			if dispelAura then
 				local dispelName = dispelAura.dispelName
-				if not (issecretvalue and issecretvalue(dispelName)) and dispelName and dispelName ~= "" then colorKey = dispelName end
-				local dispelCurve = GFH.DispelColorCurve
-				if dispelAura.auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and dispelCurve then
-					local color = C_UnitAuras.GetAuraDispelTypeColor(unit, dispelAura.auraInstanceID, dispelCurve)
-					if not (issecretvalue and issecretvalue(color)) then
-						if color and color.GetRGBA then
-							r, g, b = color:GetRGBA()
-						elseif color and color.r then
-							r, g, b = color.r, color.g, color.b
-						end
-					end
-				end
-				if not r then
-					if not (issecretvalue and issecretvalue(dispelName)) then
-						r, g, b = GFH.GetDebuffColorFromName(dispelName or "None")
-					end
+				if not (issecretvalue and issecretvalue(dispelName)) and dispelName and dispelName ~= "" then
+					colorKey = dispelName
+					r, g, b = GFH.GetDebuffColorFromName(dispelName)
 				end
 			end
 		end
@@ -5010,8 +4992,7 @@ function GF:UnitButton_SetUnit(self, unit)
 		st._auraCache = nil
 		st._auraCacheByKey = nil
 		st._auraQueryMax = nil
-		st._dispelAuraId = nil
-		st._dispelAuraIdDirty = nil
+		clearDispelAuraState(st)
 	end
 	GF:CacheUnitStatic(self)
 
@@ -5044,8 +5025,7 @@ function GF:UnitButton_ClearUnit(self)
 		st._auraCache = nil
 		st._auraCacheByKey = nil
 		st._auraQueryMax = nil
-		st._dispelAuraId = nil
-		st._dispelAuraIdDirty = nil
+		clearDispelAuraState(st)
 	end
 	if st and st.privateAuras and UFHelper then
 		if UFHelper.RemovePrivateAuras then UFHelper.RemovePrivateAuras(st.privateAuras) end
@@ -5353,7 +5333,13 @@ function GF:UpdateAnchorSize(kind)
 end
 
 local function applyVisibility(header, kind, cfg)
-	if not header or not cfg or not RegisterStateDriver then return end
+	if not header or not cfg then return end
+	local def = DEFAULTS[kind]
+	local hideInClientScene = GFH and GFH.ShouldHideInClientScene and GFH.ShouldHideInClientScene(cfg, def)
+	local inEdit = isEditModeActive and isEditModeActive()
+	local forceClientSceneHide = not inEdit and hideInClientScene and GF._clientSceneActive == true
+	if GFH and GFH.ApplyClientSceneAlphaToFrame then GFH.ApplyClientSceneAlphaToFrame(header, forceClientSceneHide) end
+	if not RegisterStateDriver then return end
 	if InCombatLockdown and InCombatLockdown() then return end
 
 	if UnregisterStateDriver then UnregisterStateDriver(header, "visibility") end
@@ -5365,7 +5351,7 @@ local function applyVisibility(header, kind, cfg)
 	end
 
 	local cond = "hide"
-	if header._eqolForceHide or header._eqolSpecialHide then
+	if header._eqolForceHide or header._eqolSpecialHide or forceClientSceneHide then
 		cond = "hide"
 	elseif header._eqolForceShow then
 		cond = "show"
@@ -6107,6 +6093,26 @@ function GF:RefreshPowerVisibility()
 	end
 end
 
+function GF:RefreshClientSceneVisibility()
+	local pendingCombatRefresh = InCombatLockdown and InCombatLockdown()
+	for kind, header in pairs(GF.headers or {}) do
+		local cfg = getCfg(kind)
+		if header and cfg then applyVisibility(header, kind, cfg) end
+	end
+	if GF._raidGroupHeaders then
+		local cfg = getCfg("raid")
+		for _, header in ipairs(GF._raidGroupHeaders) do
+			if header and cfg then applyVisibility(header, "raid", cfg) end
+		end
+	end
+	if pendingCombatRefresh then
+		GF:MarkPendingHeaderRefresh("party")
+		GF:MarkPendingHeaderRefresh("raid")
+		GF:MarkPendingHeaderRefresh("mt")
+		GF:MarkPendingHeaderRefresh("ma")
+	end
+end
+
 function GF:UpdateHealthColorMode(kind)
 	if not isFeatureEnabled() then return end
 	if kind then
@@ -6196,9 +6202,7 @@ local function applyRaidGroupHeaders(cfg, layout, groupSpecs, forceShow, forceHi
 			header._eqolSpecialHide = not active
 
 			if active then
-				local function setAttr(key, value)
-					GF:SetHeaderAttributeIfChanged(header, key, value)
-				end
+				local function setAttr(key, value) GF:SetHeaderAttributeIfChanged(header, key, value) end
 				local specSortMethod = tostring(spec.sortMethod or "INDEX"):upper()
 				setAttr("showParty", false)
 				setAttr("showRaid", true)
@@ -6314,9 +6318,7 @@ function GF:ApplyHeaderAttributes(kind)
 	local rawGroupBy
 	local db = DB or ensureDB()
 	local raidFramesEnabled = db and db.raid and db.raid.enabled == true
-	local function setAttr(key, value)
-		GF:SetHeaderAttributeIfChanged(header, key, value)
-	end
+	local function setAttr(key, value) GF:SetHeaderAttributeIfChanged(header, key, value) end
 
 	if kind == "party" then
 		setAttr("showParty", true)
@@ -6876,8 +6878,7 @@ function GF:RefreshChangedUnitButtons()
 		st._auraKindById = nil
 		st._auraChanged = nil
 		st._auraQueryMax = nil
-		st._dispelAuraId = nil
-		st._dispelAuraIdDirty = nil
+		clearDispelAuraState(st)
 		GF:CacheUnitStatic(child)
 		GF:UnitButton_RegisterUnitEvents(child, unit)
 		if st._wantsAbsorb then GF:UpdateAbsorbCache(child, nil, unit, st) end
@@ -7235,47 +7236,68 @@ local function buildEditModeSettings(kind, editModeId)
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "height", v, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
 			end,
-		},
-		{
-			name = "Power height",
-			kind = SettingType.Slider,
-			allowInput = true,
-			field = "powerHeight",
-			minValue = 0,
-			maxValue = 50,
-			valueStep = 1,
-			default = (DEFAULTS[kind] and DEFAULTS[kind].powerHeight) or 6,
-			parentId = "frame",
-			get = function()
-				local cfg = getCfg(kind)
-				return cfg and cfg.powerHeight or (DEFAULTS[kind] and DEFAULTS[kind].powerHeight) or 6
-			end,
-			set = function(_, value)
-				local cfg = getCfg(kind)
-				if not cfg then return end
-				local v = clampNumber(value, 0, 50, cfg.powerHeight or 6)
-				cfg.powerHeight = v
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerHeight", v, nil, true) end
-				GF:ApplyHeaderAttributes(kind)
-			end,
-		},
-		{
-			name = "Tooltip",
-			kind = SettingType.Dropdown,
-			field = "tooltipMode",
-			parentId = "frame",
-			default = (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.mode) or "OFF",
-			customDefaultText = getTooltipModeLabel(),
-			get = function() return getTooltipModeValue() end,
-			set = function(_, value)
-				local cfg = getCfg(kind)
-				if not cfg or not value then return end
-				cfg.tooltip = cfg.tooltip or {}
-				cfg.tooltip.mode = tostring(value):upper()
-				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "tooltipMode", cfg.tooltip.mode, nil, true) end
-			end,
-			generator = tooltipModeGenerator(),
-		},
+			},
+			{
+				name = "Power height",
+				kind = SettingType.Slider,
+				allowInput = true,
+				field = "powerHeight",
+				minValue = 0,
+				maxValue = 50,
+				valueStep = 1,
+				default = (DEFAULTS[kind] and DEFAULTS[kind].powerHeight) or 6,
+				parentId = "frame",
+				get = function()
+					local cfg = getCfg(kind)
+					return cfg and cfg.powerHeight or (DEFAULTS[kind] and DEFAULTS[kind].powerHeight) or 6
+				end,
+				set = function(_, value)
+					local cfg = getCfg(kind)
+					if not cfg then return end
+					local v = clampNumber(value, 0, 50, cfg.powerHeight or 6)
+					cfg.powerHeight = v
+					if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "powerHeight", v, nil, true) end
+					GF:ApplyHeaderAttributes(kind)
+				end,
+			},
+			{
+				name = L["UFHideInClientScene"] or "Hide in client scenes",
+				kind = SettingType.Checkbox,
+				field = "hideInClientScene",
+				parentId = "frame",
+				default = (DEFAULTS[kind] and DEFAULTS[kind].hideInClientScene) ~= false,
+				get = function()
+					local cfg = getCfg(kind)
+					local value = cfg and cfg.hideInClientScene
+					if value == nil then value = DEFAULTS[kind] and DEFAULTS[kind].hideInClientScene end
+					if value == nil then value = true end
+					return value == true
+				end,
+				set = function(_, value)
+					local cfg = getCfg(kind)
+					if not cfg then return end
+					cfg.hideInClientScene = value and true or false
+					if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hideInClientScene", cfg.hideInClientScene, nil, true) end
+					GF:RefreshClientSceneVisibility()
+				end,
+			},
+			{
+				name = "Tooltip",
+				kind = SettingType.Dropdown,
+				field = "tooltipMode",
+				parentId = "frame",
+				default = (DEFAULTS[kind] and DEFAULTS[kind].tooltip and DEFAULTS[kind].tooltip.mode) or "OFF",
+				customDefaultText = getTooltipModeLabel(),
+				get = function() return getTooltipModeValue() end,
+				set = function(_, value)
+					local cfg = getCfg(kind)
+					if not cfg or not value then return end
+					cfg.tooltip = cfg.tooltip or {}
+					cfg.tooltip.mode = tostring(value):upper()
+					if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "tooltipMode", cfg.tooltip.mode, nil, true) end
+				end,
+				generator = tooltipModeGenerator(),
+			},
 		{
 			name = "Tooltip modifier",
 			kind = SettingType.Dropdown,
@@ -15105,6 +15127,7 @@ local function applyEditModeData(kind, data)
 	if data.tooltipMode ~= nil or data.tooltipModifier ~= nil then cfg.tooltip = cfg.tooltip or {} end
 	if data.tooltipMode ~= nil then cfg.tooltip.mode = tostring(data.tooltipMode):upper() end
 	if data.tooltipModifier ~= nil then cfg.tooltip.modifier = tostring(data.tooltipModifier):upper() end
+	if data.hideInClientScene ~= nil then cfg.hideInClientScene = data.hideInClientScene and true or false end
 	if data.tooltipAuras ~= nil then
 		local ac = ensureAuraConfig(cfg)
 		local enabled = data.tooltipAuras and true or false
@@ -15876,6 +15899,7 @@ local function applyEditModeData(kind, data)
 		or data.nameColor ~= nil
 
 	GF:ApplyHeaderAttributes(kind)
+	if data.hideInClientScene ~= nil then GF:RefreshClientSceneVisibility() end
 	if refreshNames then GF:RefreshNames() end
 	if refreshAuras then refreshAllAuras() end
 end
@@ -15969,17 +15993,19 @@ function GF:EnsureEditMode()
 				hoverHighlightTexture = (cfg.highlightHover and cfg.highlightHover.texture) or (def.highlightHover and def.highlightHover.texture) or "DEFAULT",
 				hoverHighlightSize = (cfg.highlightHover and cfg.highlightHover.size) or (def.highlightHover and def.highlightHover.size) or 2,
 				hoverHighlightOffset = (cfg.highlightHover and cfg.highlightHover.offset) or (def.highlightHover and def.highlightHover.offset) or 0,
-				targetHighlightEnabled = (cfg.highlightTarget and cfg.highlightTarget.enabled) == true,
-				targetHighlightColor = (cfg.highlightTarget and cfg.highlightTarget.color) or (def.highlightTarget and def.highlightTarget.color) or { 1, 1, 0, 1 },
-				targetHighlightTexture = (cfg.highlightTarget and cfg.highlightTarget.texture) or (def.highlightTarget and def.highlightTarget.texture) or "DEFAULT",
-				targetHighlightSize = (cfg.highlightTarget and cfg.highlightTarget.size) or (def.highlightTarget and def.highlightTarget.size) or 2,
-				targetHighlightOffset = (cfg.highlightTarget and cfg.highlightTarget.offset) or (def.highlightTarget and def.highlightTarget.offset) or 0,
-				tooltipMode = tcfg.mode or defTooltip.mode or "OFF",
-				tooltipModifier = tcfg.modifier or defTooltip.modifier or "ALT",
-				tooltipAuras = ac.buff.showTooltip == true and ac.debuff.showTooltip == true and ac.externals.showTooltip == true,
-				showPlayer = cfg.showPlayer == true,
-				showSolo = cfg.showSolo == true,
-				unitsPerColumn = cfg.unitsPerColumn or (DEFAULTS[kind] and DEFAULTS[kind].unitsPerColumn) or (DEFAULTS.raid and DEFAULTS.raid.unitsPerColumn) or 5,
+					targetHighlightEnabled = (cfg.highlightTarget and cfg.highlightTarget.enabled) == true,
+					targetHighlightColor = (cfg.highlightTarget and cfg.highlightTarget.color) or (def.highlightTarget and def.highlightTarget.color) or { 1, 1, 0, 1 },
+					targetHighlightTexture = (cfg.highlightTarget and cfg.highlightTarget.texture) or (def.highlightTarget and def.highlightTarget.texture) or "DEFAULT",
+					targetHighlightSize = (cfg.highlightTarget and cfg.highlightTarget.size) or (def.highlightTarget and def.highlightTarget.size) or 2,
+					targetHighlightOffset = (cfg.highlightTarget and cfg.highlightTarget.offset) or (def.highlightTarget and def.highlightTarget.offset) or 0,
+					tooltipMode = tcfg.mode or defTooltip.mode or "OFF",
+					tooltipModifier = tcfg.modifier or defTooltip.modifier or "ALT",
+					tooltipAuras = ac.buff.showTooltip == true and ac.debuff.showTooltip == true and ac.externals.showTooltip == true,
+					showPlayer = cfg.showPlayer == true,
+					showSolo = cfg.showSolo == true,
+					hideInClientScene = (cfg.hideInClientScene ~= nil and cfg.hideInClientScene == true)
+						or ((cfg.hideInClientScene == nil) and (def.hideInClientScene ~= false)),
+					unitsPerColumn = cfg.unitsPerColumn or (DEFAULTS[kind] and DEFAULTS[kind].unitsPerColumn) or (DEFAULTS.raid and DEFAULTS.raid.unitsPerColumn) or 5,
 				maxColumns = cfg.maxColumns or (DEFAULTS[kind] and DEFAULTS[kind].maxColumns) or (DEFAULTS.raid and DEFAULTS.raid.maxColumns) or 8,
 				columnSpacing = cfg.columnSpacing or (DEFAULTS[kind] and DEFAULTS[kind].columnSpacing) or (DEFAULTS.raid and DEFAULTS.raid.columnSpacing) or 0,
 				customSortEnabled = resolveSortMethod(cfg) == "NAMELIST",
@@ -16443,6 +16469,8 @@ end
 do
 	GF._eventFrame = CreateFrame("Frame")
 	GF._eventFrame:RegisterEvent("PLAYER_LOGIN")
+	GF._eventFrame:RegisterEvent("CLIENT_SCENE_OPENED")
+	GF._eventFrame:RegisterEvent("CLIENT_SCENE_CLOSED")
 	GF._eventFrame:SetScript("OnEvent", function(_, event, ...)
 		if event == "PLAYER_LOGIN" then
 			if isFeatureEnabled() then
@@ -16466,6 +16494,12 @@ do
 				local applied = GF:ApplyPendingHeaderKinds()
 				if not applied then GF.Refresh() end
 			end
+		elseif event == "CLIENT_SCENE_OPENED" then
+			GF._clientSceneActive = true
+			if isFeatureEnabled() then GF:RefreshClientSceneVisibility() end
+		elseif event == "CLIENT_SCENE_CLOSED" then
+			GF._clientSceneActive = false
+			if isFeatureEnabled() then GF:RefreshClientSceneVisibility() end
 		elseif not isFeatureEnabled() then
 			return
 		elseif event == "RAID_TARGET_UPDATE" then

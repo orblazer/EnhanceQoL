@@ -20,6 +20,7 @@ function addon.Aura.functions.InitDB()
 	init("resourceBarsHideMounted", false)
 	init("resourceBarsHideVehicle", false)
 	init("resourceBarsHidePetBattle", false)
+	init("resourceBarsHideClientScene", true)
 	if addon.db.resourceBarsHidePetBattle == nil and addon.db.auraHideInPetBattle ~= nil then addon.db.resourceBarsHidePetBattle = addon.db.auraHideInPetBattle and true or false end
 
 	-- spec specific settings for personal resource bars

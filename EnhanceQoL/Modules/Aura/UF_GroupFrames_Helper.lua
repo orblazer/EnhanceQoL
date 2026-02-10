@@ -109,6 +109,24 @@ function H.GetUnitSubgroup(unit)
 	return raidSubgroup
 end
 
+function H.ShouldHideInClientScene(cfg, def)
+	local value = cfg and cfg.hideInClientScene
+	if value == nil then value = def and def.hideInClientScene end
+	if value == nil then value = true end
+	return value == true
+end
+
+function H.ApplyClientSceneAlphaToFrame(frame, forceHide)
+	if not (frame and frame.SetAlpha) then return end
+	if forceHide then
+		frame._eqolClientSceneAlphaHidden = true
+		if frame.GetAlpha and frame:GetAlpha() ~= 0 then frame:SetAlpha(0) end
+	elseif frame._eqolClientSceneAlphaHidden then
+		frame._eqolClientSceneAlphaHidden = nil
+		if frame.GetAlpha and frame:GetAlpha() == 0 then frame:SetAlpha(1) end
+	end
+end
+
 H.MELEE_SPECS = {
 	-- Death Knight (all melee)
 	[250] = true,

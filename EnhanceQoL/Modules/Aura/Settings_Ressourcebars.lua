@@ -199,6 +199,7 @@ local function notifyResourceBarSettings()
 	Settings.NotifyUpdate("EQOL_resourceBarsHideMounted")
 	Settings.NotifyUpdate("EQOL_resourceBarsHideVehicle")
 	Settings.NotifyUpdate("EQOL_resourceBarsHidePetBattle")
+	Settings.NotifyUpdate("EQOL_resourceBarsHideClientScene")
 	for var in pairs(specSettingVars) do
 		Settings.NotifyUpdate("EQOL_" .. var)
 	end
@@ -2888,22 +2889,39 @@ local function buildSettings()
 					sType = "checkbox",
 					parentSection = expandable,
 				},
-				{
-					var = "resourceBarsHidePetBattle",
-					text = L["Hide in pet battles"] or "Hide in pet battles",
-					get = function() return addon.db["resourceBarsHidePetBattle"] end,
-					func = function(val)
-						addon.db["resourceBarsHidePetBattle"] = val and true or false
-						applyResourceBarsVisibility("settings")
-					end,
-					parent = true,
-					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
-					sType = "checkbox",
-					parentSection = expandable,
-				},
-				{
-					var = "resourceBarsAutoEnable",
-					text = L["AutoEnableAllBars"] or "Auto-enable bars for new characters",
+					{
+						var = "resourceBarsHidePetBattle",
+						text = L["Hide in pet battles"] or "Hide in pet battles",
+						get = function() return addon.db["resourceBarsHidePetBattle"] end,
+						func = function(val)
+							addon.db["resourceBarsHidePetBattle"] = val and true or false
+							applyResourceBarsVisibility("settings")
+						end,
+						parent = true,
+						parentCheck = function() return addon.db["enableResourceFrame"] == true end,
+						sType = "checkbox",
+						parentSection = expandable,
+					},
+					{
+						var = "resourceBarsHideClientScene",
+						text = L["Hide in client scenes"] or "Hide in client scenes",
+						get = function()
+							local value = addon.db["resourceBarsHideClientScene"]
+							if value == nil then return true end
+							return value == true
+						end,
+						func = function(val)
+							addon.db["resourceBarsHideClientScene"] = val and true or false
+							applyResourceBarsVisibility("settings")
+						end,
+						parent = true,
+						parentCheck = function() return addon.db["enableResourceFrame"] == true end,
+						sType = "checkbox",
+						parentSection = expandable,
+					},
+					{
+						var = "resourceBarsAutoEnable",
+						text = L["AutoEnableAllBars"] or "Auto-enable bars for new characters",
 					sType = "multidropdown",
 					options = AUTO_ENABLE_OPTIONS,
 					order = AUTO_ENABLE_ORDER,

@@ -843,6 +843,11 @@ local function buildUnitSettings(unit)
 		cfg.visibilityFade = pct / 100
 		if UF and UF.ApplyVisibilityRules then UF.ApplyVisibilityRules(unit) end
 	end
+	local function hideInClientSceneDefault()
+		local value = def.hideInClientScene
+		if value == nil then value = true end
+		return value == true
+	end
 	local function isHideInVehicleEnabled()
 		local cfg = ensureConfig(unit)
 		local value = cfg and cfg.hideInVehicle
@@ -864,6 +869,18 @@ local function buildUnitSettings(unit)
 	local function setHideInPetBattleEnabled(value)
 		local cfg = ensureConfig(unit)
 		cfg.hideInPetBattle = value and true or false
+		refreshSelf()
+		refreshSettingsUI()
+	end
+	local function isHideInClientSceneEnabled()
+		local cfg = ensureConfig(unit)
+		local value = cfg and cfg.hideInClientScene
+		if value == nil then value = hideInClientSceneDefault() end
+		return value == true
+	end
+	local function setHideInClientSceneEnabled(value)
+		local cfg = ensureConfig(unit)
+		cfg.hideInClientScene = value and true or false
 		refreshSelf()
 		refreshSettingsUI()
 	end
@@ -904,6 +921,7 @@ local function buildUnitSettings(unit)
 	)
 	list[#list + 1] = checkbox(L["UFHideInVehicle"] or "Hide in vehicles", isHideInVehicleEnabled, setHideInVehicleEnabled, def.hideInVehicle == true, "frame")
 	if not isPlayer then list[#list + 1] = checkbox(L["UFHideInPetBattle"] or "Hide in pet battles", isHideInPetBattleEnabled, setHideInPetBattleEnabled, def.hideInPetBattle == true, "frame") end
+	list[#list + 1] = checkbox(L["UFHideInClientScene"] or "Hide in client scenes", isHideInClientSceneEnabled, setHideInClientSceneEnabled, hideInClientSceneDefault(), "frame")
 
 	if #visibilityOptions > 0 then
 		list[#list + 1] = multiDropdown(L["Show when"] or "Show when", visibilityOptions, isVisibilityRuleSelected, setVisibilityRule, nil, "frame")

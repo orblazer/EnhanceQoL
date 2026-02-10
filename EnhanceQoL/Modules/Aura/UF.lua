@@ -26,6 +26,7 @@ local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 local smoothFill = Enum.StatusBarInterpolation.ExponentialEaseOut
 local SECRET_TEXT_UPDATE_INTERVAL = 0.1
+UF._clientSceneActive = false
 
 local function getSmoothInterpolation(cfg, def)
 	if not smoothFill then return nil end
@@ -220,6 +221,7 @@ local defaults = {
 	player = {
 		enabled = false,
 		hideInPetBattle = false,
+		hideInClientScene = true,
 		showTooltip = false,
 		tooltipUseEditMode = false,
 		smoothFill = false,
@@ -2340,6 +2342,51 @@ function AuraUtil.updateTargetAuraIcons(startIndex, unit)
 	AuraUtil.updateAuraContainerSize(st.debuffContainer, math.min(debuffCount, ac.max), debuffLayout, perRowDebuff, debPrimary)
 end
 
+function AuraUtil.normalizeAuraQueryLimit(value)
+	value = math.floor(tonumber(value) or 0)
+	if value < 1 then return nil end
+	return value
+end
+
+function AuraUtil.getTargetAuraQueryLimits(ac, showBuffs, showDebuffs)
+	local maxCount = AuraUtil.normalizeAuraQueryLimit(ac and ac.max) or 16
+	local buffLimit
+	local debuffLimit
+
+	if showBuffs and showDebuffs and ac and ac.separateDebuffAnchor == true then
+		local debuffCount = math.floor(maxCount * 0.4)
+		if maxCount > 1 and debuffCount < 1 then debuffCount = 1 end
+		if debuffCount >= maxCount then debuffCount = maxCount - 1 end
+		if debuffCount < 0 then debuffCount = 0 end
+		local buffCount = maxCount - debuffCount
+		buffLimit = AuraUtil.normalizeAuraQueryLimit(buffCount + 1)
+		debuffLimit = AuraUtil.normalizeAuraQueryLimit(debuffCount + 1)
+	else
+		local cap = maxCount + 1
+		buffLimit = showBuffs and cap or nil
+		debuffLimit = showDebuffs and cap or nil
+	end
+
+	return buffLimit, debuffLimit
+end
+
+function AuraUtil.scanTargetAuraSlots(unit, filter, queryLimit, hidePermanent)
+	if not (unit and filter and C_UnitAuras and C_UnitAuras.GetAuraSlots and C_UnitAuras.GetAuraDataBySlot) then return end
+	local slots
+	if queryLimit then
+		slots = { C_UnitAuras.GetAuraSlots(unit, filter, queryLimit) }
+	else
+		slots = { C_UnitAuras.GetAuraSlots(unit, filter) }
+	end
+	for i = 2, #slots do
+		local aura = C_UnitAuras.GetAuraDataBySlot(unit, slots[i])
+		if aura and (not hidePermanent or not AuraUtil.isPermanentAura(aura, unit)) then
+			AuraUtil.cacheTargetAura(aura, unit)
+			AuraUtil.addTargetAuraToOrder(aura.auraInstanceID, unit)
+		end
+	end
+end
+
 function AuraUtil.fullScanTargetAuras(unit)
 	unit = unit or "target"
 	AuraUtil.resetTargetAuras(unit)
@@ -2372,51 +2419,9 @@ function AuraUtil.fullScanTargetAuras(unit)
 	end
 	local helpfulFilter, harmfulFilter = AuraUtil.getAuraFilters(unit)
 	local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
-	if C_UnitAuras and C_UnitAuras.GetUnitAuras then
-		if showBuffs then
-			local helpful = C_UnitAuras.GetUnitAuras(unit, helpfulFilter)
-			for i = 1, #helpful do
-				local aura = helpful[i]
-				if aura and (not hidePermanent or not AuraUtil.isPermanentAura(aura, unit)) then
-					AuraUtil.cacheTargetAura(aura, unit)
-					AuraUtil.addTargetAuraToOrder(aura.auraInstanceID, unit)
-				end
-			end
-		end
-		if showDebuffs then
-			local harmful = C_UnitAuras.GetUnitAuras(unit, harmfulFilter)
-			for i = 1, #harmful do
-				local aura = harmful[i]
-				if aura and (not hidePermanent or not AuraUtil.isPermanentAura(aura, unit)) then
-					AuraUtil.cacheTargetAura(aura, unit)
-					AuraUtil.addTargetAuraToOrder(aura.auraInstanceID, unit)
-				end
-			end
-		end
-	elseif C_UnitAuras and C_UnitAuras.GetAuraSlots then
-		if showBuffs then
-			local helpful = { C_UnitAuras.GetAuraSlots(unit, helpfulFilter) }
-			for i = 2, #helpful do
-				local slot = helpful[i]
-				local aura = C_UnitAuras.GetAuraDataBySlot(unit, slot)
-				if aura and (not hidePermanent or not AuraUtil.isPermanentAura(aura, unit)) then
-					AuraUtil.cacheTargetAura(aura, unit)
-					AuraUtil.addTargetAuraToOrder(aura.auraInstanceID, unit)
-				end
-			end
-		end
-		if showDebuffs then
-			local harmful = { C_UnitAuras.GetAuraSlots(unit, harmfulFilter) }
-			for i = 2, #harmful do
-				local slot = harmful[i]
-				local aura = C_UnitAuras.GetAuraDataBySlot(unit, slot)
-				if aura and (not hidePermanent or not AuraUtil.isPermanentAura(aura, unit)) then
-					AuraUtil.cacheTargetAura(aura, unit)
-					AuraUtil.addTargetAuraToOrder(aura.auraInstanceID, unit)
-				end
-			end
-		end
-	end
+	local helpfulLimit, harmfulLimit = AuraUtil.getTargetAuraQueryLimits(ac, showBuffs, showDebuffs)
+	if showBuffs then AuraUtil.scanTargetAuraSlots(unit, helpfulFilter, helpfulLimit, hidePermanent) end
+	if showDebuffs then AuraUtil.scanTargetAuraSlots(unit, harmfulFilter, harmfulLimit, hidePermanent) end
 	AuraUtil.updateTargetAuraIcons(nil, unit)
 end
 
@@ -2454,11 +2459,16 @@ local function shouldHideInPetBattle(cfg, def)
 end
 
 local function applyVisibilityDriver(unit, enabled)
-	if InCombatLockdown() then return end
 	local st = states[unit]
-	if not st or not st.frame or not RegisterStateDriver then return end
+	if not st or not st.frame then return end
 	local cfg = ensureDB(unit)
 	local def = defaultsFor(unit)
+	local inEdit = addon.EditModeLib and addon.EditModeLib.IsInEditMode and addon.EditModeLib:IsInEditMode()
+	local hideInClientScene = UFHelper and UFHelper.shouldHideInClientScene and UFHelper.shouldHideInClientScene(cfg, def)
+	local forceClientSceneHide = enabled and not inEdit and hideInClientScene and UF._clientSceneActive == true
+	if UFHelper and UFHelper.applyClientSceneAlphaOverride then UFHelper.applyClientSceneAlphaOverride(st, forceClientSceneHide) end
+	if InCombatLockdown() then return end
+	if not RegisterStateDriver then return end
 	local hideInVehicle = enabled and shouldHideInVehicle(cfg, def)
 	local hideInPetBattle = enabled and unit ~= UNIT.PLAYER and shouldHideInPetBattle(cfg, def)
 	local cond
@@ -2560,8 +2570,11 @@ end
 local function applyVisibilityRules(unit)
 	if not ApplyFrameVisibilityConfig then return end
 	local cfg = ensureDB(unit)
+	local def = defaultsFor(unit)
 	local inEdit = addon.EditModeLib and addon.EditModeLib.IsInEditMode and addon.EditModeLib:IsInEditMode()
 	local useConfig = (not inEdit and cfg and cfg.enabled) and normalizeVisibilityConfig(cfg.visibility) or nil
+	local hideInClientScene = UFHelper and UFHelper.shouldHideInClientScene and UFHelper.shouldHideInClientScene(cfg, def)
+	local forceClientSceneHide = not inEdit and cfg and cfg.enabled and hideInClientScene and UF._clientSceneActive == true
 	local fadeAlpha = nil
 	if not inEdit and cfg and type(cfg.visibilityFade) == "number" then
 		fadeAlpha = cfg.visibilityFade
@@ -2573,11 +2586,13 @@ local function applyVisibilityRules(unit)
 		for i = 1, maxBossFrames do
 			local info = UNITS["boss" .. i]
 			if info and info.frameName then ApplyFrameVisibilityConfig(info.frameName, { unitToken = "boss" }, useConfig, opts) end
+			if UFHelper and UFHelper.applyClientSceneAlphaOverride then UFHelper.applyClientSceneAlphaOverride(states["boss" .. i], forceClientSceneHide) end
 		end
 		return
 	end
 	local info = UNITS[unit]
 	if info and info.frameName then ApplyFrameVisibilityConfig(info.frameName, { unitToken = info.unit }, useConfig, opts) end
+	if UFHelper and UFHelper.applyClientSceneAlphaOverride then UFHelper.applyClientSceneAlphaOverride(states[unit], forceClientSceneHide) end
 end
 
 local function applyVisibilityRulesAll()
@@ -2587,6 +2602,19 @@ local function applyVisibilityRulesAll()
 	applyVisibilityRules("focus")
 	applyVisibilityRules("pet")
 	applyVisibilityRules("boss")
+end
+
+function UF.RefreshClientSceneVisibility()
+	applyVisibilityDriver(UNIT.PLAYER, ensureDB(UNIT.PLAYER).enabled)
+	applyVisibilityDriver(UNIT.TARGET, ensureDB(UNIT.TARGET).enabled)
+	applyVisibilityDriver(UNIT.TARGET_TARGET, ensureDB(UNIT.TARGET_TARGET).enabled)
+	applyVisibilityDriver(UNIT.FOCUS, ensureDB(UNIT.FOCUS).enabled)
+	applyVisibilityDriver(UNIT.PET, ensureDB(UNIT.PET).enabled)
+	local bossEnabled = ensureDB("boss").enabled
+	for i = 1, maxBossFrames do
+		applyVisibilityDriver("boss" .. i, bossEnabled)
+	end
+	applyVisibilityRulesAll()
 end
 
 local function hideBlizzardPlayerFrame()
@@ -3800,7 +3828,9 @@ local function updateHealth(cfg, unit)
 		hidePercentSymbol = hc.hidePercentSymbol == true
 		roundPercent = hc.roundPercent == true
 		local hideClassText = shouldHideClassificationText(cfg, unit)
-		if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit, nil, hideClassText) end
+		if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then
+			levelText = UFHelper.getUnitLevelText(unit, nil, hideClassText)
+		end
 	end
 	if st.healthTextLeft then
 		if leftMode == "NONE" then
@@ -5542,6 +5572,8 @@ local generalEvents = {
 	"ENCOUNTER_END",
 	"RAID_TARGET_UPDATE",
 	"SPELL_RANGE_CHECK_UPDATE",
+	"CLIENT_SCENE_OPENED",
+	"CLIENT_SCENE_CLOSED",
 }
 
 local eventFrame
@@ -6297,6 +6329,12 @@ local function onEvent(self, event, unit, ...)
 		local usCfg = (playerCfg.status and playerCfg.status.unitStatus) or usDef or {}
 		if playerCfg.enabled ~= false and usCfg.enabled == true and usCfg.showGroup == true then updateUnitStatusIndicator(playerCfg, UNIT.PLAYER) end
 		UF.UpdateAllRoleIndicators(true)
+	elseif event == "CLIENT_SCENE_OPENED" then
+		UF._clientSceneActive = true
+		UF.RefreshClientSceneVisibility()
+	elseif event == "CLIENT_SCENE_CLOSED" then
+		UF._clientSceneActive = false
+		UF.RefreshClientSceneVisibility()
 	elseif event == "RAID_TARGET_UPDATE" then
 		updateAllRaidTargetIcons()
 	end

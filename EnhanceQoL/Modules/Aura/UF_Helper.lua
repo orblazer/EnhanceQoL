@@ -214,6 +214,24 @@ function H.ClampNumber(value, minValue, maxValue, fallback)
 	return v
 end
 
+function H.shouldHideInClientScene(cfg, def)
+	local value = cfg and cfg.hideInClientScene
+	if value == nil then value = def and def.hideInClientScene end
+	if value == nil then value = true end
+	return value == true
+end
+
+function H.applyClientSceneAlphaOverride(st, forceHide)
+	if not (st and st.frame and st.frame.SetAlpha) then return end
+	if forceHide then
+		st._eqolClientSceneAlphaHidden = true
+		if st.frame.GetAlpha and st.frame:GetAlpha() ~= 0 then st.frame:SetAlpha(0) end
+	elseif st._eqolClientSceneAlphaHidden then
+		st._eqolClientSceneAlphaHidden = nil
+		if st.frame.GetAlpha and st.frame:GetAlpha() == 0 then st.frame:SetAlpha(1) end
+	end
+end
+
 function H.getClampedAbsorbAmount(unit) return UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0 end
 
 function H.getHealthCurveValue(unit, curve)
