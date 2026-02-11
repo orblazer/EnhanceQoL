@@ -642,10 +642,10 @@ if cChar and sectionDungeon then
 			parentSection = sectionDungeon,
 		},
 		{
-			var = "mythicPlusShowDepleteTimer",
-			text = LMP["mythicPlusShowDepleteTimer"],
-			desc = LMP["mythicPlusShowDepleteTimerDesc"],
-			func = function(v) addon.db["mythicPlusShowDepleteTimer"] = v end,
+			var = "mythicPlusShowOvertime",
+			text = LMP["mythicPlusShowOvertime"],
+			desc = LMP["mythicPlusShowOvertimeDesc"],
+			func = function(v) addon.db["mythicPlusShowOvertime"] = v end,
 			parentSection = sectionDungeon,
 		},
 		{
