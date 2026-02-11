@@ -83,7 +83,7 @@ end
 local function GetCooldownData(spellInfo)
 	if not spellInfo then return end
 
-	local cooldownData
+	local cooldownData, isSecret = nil, false
 	if spellInfo.isToy then
 		if spellInfo.toyID then
 			local startTime, duration, enable = GetItemCooldown(spellInfo.toyID)
@@ -111,9 +111,10 @@ local function GetCooldownData(spellInfo)
 			spellID = FindSpellOverrideByID(spellID)
 			spellInfo.spellID = spellID
 		end
-		cooldownData = C_Spell.GetSpellCooldown(spellID)
+		cooldownData = C_Spell.GetSpellCooldownDuration(spellID)
+		isSecret = true
 	end
-	return cooldownData
+	return cooldownData, isSecret
 end
 
 local function getCurrentSeasonPortal()
@@ -1051,8 +1052,10 @@ function checkCooldown()
 
 	for _, button in pairs(frameAnchor.buttons or {}) do
 		if isKnown[button.spellID] then
-			local cooldownData = GetCooldownData(button)
-			if cooldownData and cooldownData.isEnabled then
+			local cooldownData, isSecret = GetCooldownData(button)
+			if isSecret then
+				if cooldownData then button.cooldownFrame:SetCooldownFromDuration(cooldownData) end
+			elseif cooldownData and cooldownData.isEnabled then
 				button.cooldownFrame:SetCooldown(cooldownData.startTime, cooldownData.duration, cooldownData.modRate)
 			else
 				button.cooldownFrame:SetCooldown(0, 0)
@@ -1135,9 +1138,7 @@ local function ensureRioScoreFrame()
 	if gFrameAnchorScore then return gFrameAnchorScore end
 
 	local frameAnchorScore = _G["EQOLDungeonScoreFrame"]
-	if not frameAnchorScore then
-		frameAnchorScore = CreateFrame("Frame", "EQOLDungeonScoreFrame", parentFrame, "BackdropTemplate")
-	end
+	if not frameAnchorScore then frameAnchorScore = CreateFrame("Frame", "EQOLDungeonScoreFrame", parentFrame, "BackdropTemplate") end
 	gFrameAnchorScore = frameAnchorScore
 	if frameAnchorScore._eqolRioInitialized then return frameAnchorScore end
 

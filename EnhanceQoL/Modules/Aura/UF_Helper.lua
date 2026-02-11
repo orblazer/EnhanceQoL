@@ -2570,6 +2570,8 @@ local rangeFadeHandlers = {}
 local rangeFadeState = {
 	activeSpells = {},
 	spellStates = {},
+	numChecked = 0,
+	numInRange = 0,
 	inRange = true,
 	configDirty = true,
 	configValid = false,
@@ -2650,17 +2652,35 @@ local function applyRangeFadeAlpha(inRange, force)
 	applyFn(targetAlpha, force)
 end
 
-local function recomputeRangeFade()
-	local anyChecked = false
-	local anyInRange = false
-	for _, inRange in pairs(rangeFadeState.spellStates) do
-		anyChecked = true
-		if inRange == true then
-			anyInRange = true
-			break
-		end
+local function removeRangeFadeSpellState(spellId)
+	local oldState = rangeFadeState.spellStates[spellId]
+	if oldState == nil then return false end
+	rangeFadeState.spellStates[spellId] = nil
+	if oldState == true then rangeFadeState.numInRange = math.max(0, (rangeFadeState.numInRange or 0) - 1) end
+	rangeFadeState.numChecked = math.max(0, (rangeFadeState.numChecked or 0) - 1)
+	return true
+end
+
+local function setRangeFadeSpellState(spellId, inRange)
+	local newState = (inRange == true)
+	local oldState = rangeFadeState.spellStates[spellId]
+	if oldState == nil then
+		rangeFadeState.spellStates[spellId] = newState
+		rangeFadeState.numChecked = (rangeFadeState.numChecked or 0) + 1
+		if newState then rangeFadeState.numInRange = (rangeFadeState.numInRange or 0) + 1 end
+		return true
 	end
-	rangeFadeState.inRange = (not anyChecked) or anyInRange
+	if oldState == newState then return false end
+	rangeFadeState.spellStates[spellId] = newState
+	if oldState == true then rangeFadeState.numInRange = math.max(0, (rangeFadeState.numInRange or 0) - 1) end
+	if newState then rangeFadeState.numInRange = (rangeFadeState.numInRange or 0) + 1 end
+	return true
+end
+
+local function recomputeRangeFade()
+	local numChecked = rangeFadeState.numChecked or 0
+	local numInRange = rangeFadeState.numInRange or 0
+	rangeFadeState.inRange = (numChecked == 0) or (numInRange > 0)
 	applyRangeFadeAlpha(rangeFadeState.inRange)
 end
 
@@ -2697,6 +2717,8 @@ end
 
 function H.RangeFadeReset()
 	clearTable(rangeFadeState.spellStates)
+	rangeFadeState.numChecked = 0
+	rangeFadeState.numInRange = 0
 	rangeFadeState.inRange = true
 	applyRangeFadeAlpha(true, true)
 end
@@ -2718,9 +2740,9 @@ function H.RangeFadeUpdateFromEvent(spellIdentifier, isInRange, checksRange)
 	if isRangeFadeIgnored(id) then return end
 	if not id or not rangeFadeState.activeSpells[id] then return end
 	if checksRange then
-		rangeFadeState.spellStates[id] = (isInRange == true)
+		setRangeFadeSpellState(id, isInRange == true)
 	else
-		rangeFadeState.spellStates[id] = nil
+		removeRangeFadeSpellState(id)
 	end
 	recomputeRangeFade()
 end
@@ -2745,7 +2767,7 @@ function H.RangeFadeUpdateSpells()
 		if not wanted[spellId] then
 			EnableSpellRangeCheck(spellId, false)
 			rangeFadeState.activeSpells[spellId] = nil
-			rangeFadeState.spellStates[spellId] = nil
+			removeRangeFadeSpellState(spellId)
 		end
 	end
 	for spellId in pairs(wanted) do

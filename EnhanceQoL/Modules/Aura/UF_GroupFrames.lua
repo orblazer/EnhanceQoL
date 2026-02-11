@@ -16494,7 +16494,8 @@ do
 				if not applied then GF.Refresh() end
 			end
 		elseif event == "CLIENT_SCENE_OPENED" then
-			GF._clientSceneActive = true
+			local sceneType = ...
+			GF._clientSceneActive = (sceneType == 1)
 			if isFeatureEnabled() then GF:RefreshClientSceneVisibility() end
 		elseif event == "CLIENT_SCENE_CLOSED" then
 			GF._clientSceneActive = false

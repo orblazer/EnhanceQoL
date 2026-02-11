@@ -737,26 +737,49 @@ local function hasVisibilityRules(cfg)
 	return config ~= nil and next(config) ~= nil
 end
 
+local function syncTargetRangeFadeConfig(cfg, def)
+	local st = states[UNIT.TARGET]
+	if not st then
+		st = {}
+		states[UNIT.TARGET] = st
+	end
+	cfg = cfg or st.cfg or ensureDB(UNIT.TARGET)
+	def = def or defaultsFor(UNIT.TARGET)
+	local rcfg = (cfg and cfg.rangeFade) or (def and def.rangeFade) or {}
+	local blockedByVisibility = hasVisibilityRules(cfg) == true
+	local enabled = (cfg and cfg.enabled ~= false) and rcfg.enabled == true and not blockedByVisibility
+	local alpha = tonumber(rcfg.alpha)
+	if alpha == nil then alpha = 0.5 end
+	if alpha < 0 then alpha = 0 end
+	if alpha > 1 then alpha = 1 end
+	local ignoreUnlimited = rcfg.ignoreUnlimitedSpells
+	if ignoreUnlimited == nil then
+		ignoreUnlimited = true
+	else
+		ignoreUnlimited = ignoreUnlimited == true
+	end
+	st._rangeFadeEnabledCfg = enabled == true
+	st._rangeFadeBlockedByVisibility = blockedByVisibility
+	st._rangeFadeAlphaCfg = alpha
+	st._rangeFadeIgnoreUnlimited = ignoreUnlimited
+end
+
 if UFHelper and UFHelper.RangeFadeRegister then
 	UFHelper.RangeFadeRegister(function()
-		local cfg = ensureDB(UNIT.TARGET)
-		local def = defaultsFor(UNIT.TARGET)
-		local rcfg = (cfg and cfg.rangeFade) or (def and def.rangeFade) or {}
-		local enabled = (cfg and cfg.enabled ~= false) and rcfg.enabled == true
+		local st = states[UNIT.TARGET]
+		if not st then return false, 0.5, true end
+		local enabled = st._rangeFadeEnabledCfg == true
 		if addon.EditModeLib and addon.EditModeLib:IsInEditMode() then enabled = false end
-		if hasVisibilityRules(cfg) then enabled = false end
-		local alpha = rcfg.alpha
+		if st._rangeFadeBlockedByVisibility then enabled = false end
+		local alpha = st._rangeFadeAlphaCfg
 		if type(alpha) ~= "number" then alpha = 0.5 end
-		if alpha < 0 then alpha = 0 end
-		if alpha > 1 then alpha = 1 end
-		local ignoreUnlimited = rcfg.ignoreUnlimitedSpells
+		local ignoreUnlimited = st._rangeFadeIgnoreUnlimited
 		if ignoreUnlimited == nil then ignoreUnlimited = true end
 		return enabled, alpha, ignoreUnlimited
 	end, function(targetAlpha, force)
 		local st = states[UNIT.TARGET]
 		if not st or not st.frame or not st.frame.SetAlpha then return end
-		local cfg = ensureDB(UNIT.TARGET)
-		if hasVisibilityRules(cfg) then
+		if st._rangeFadeBlockedByVisibility then
 			st._rangeFadeAlpha = nil
 			return
 		end
@@ -5131,6 +5154,7 @@ local function applyConfig(unit)
 	states[unit] = states[unit] or {}
 	local st = states[unit]
 	st.cfg = cfg
+	if unit == UNIT.TARGET then syncTargetRangeFadeConfig(cfg, def) end
 	st._nextHealthTextUpdateAt = nil
 	st._nextPowerTextUpdateAt = nil
 	if not cfg.enabled then
@@ -6405,7 +6429,8 @@ local function onEvent(self, event, unit, ...)
 		if playerCfg.enabled ~= false and usCfg.enabled == true and usCfg.showGroup == true then updateUnitStatusIndicator(playerCfg, UNIT.PLAYER) end
 		UF.UpdateAllRoleIndicators(true)
 	elseif event == "CLIENT_SCENE_OPENED" then
-		UF._clientSceneActive = true
+		local sceneType = unit
+		UF._clientSceneActive = (sceneType == 1)
 		UF.RefreshClientSceneVisibility()
 	elseif event == "CLIENT_SCENE_CLOSED" then
 		UF._clientSceneActive = false
@@ -6478,6 +6503,7 @@ local function ensureEventHandling()
 		end
 	end
 	updatePortraitEventRegistration()
+	syncTargetRangeFadeConfig(ensureDB(UNIT.TARGET), defaultsFor(UNIT.TARGET))
 	refreshRangeFadeSpells(false)
 end
 

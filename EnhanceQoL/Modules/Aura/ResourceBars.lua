@@ -4365,7 +4365,8 @@ local function eventHandler(self, event, unit, arg1)
 		scheduleSpecRefresh()
 		if scheduleRelativeFrameWidthSync then scheduleRelativeFrameWidthSync() end
 	elseif event == "CLIENT_SCENE_OPENED" then
-		ResourceBars._clientSceneOpen = true
+		local sceneType = unit
+		ResourceBars._clientSceneOpen = (sceneType == 1)
 		ResourceBars.ApplyVisibilityPreference(event)
 		return
 	elseif event == "CLIENT_SCENE_CLOSED" then
