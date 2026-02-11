@@ -31,7 +31,7 @@ local clampNumber = UFHelper and UFHelper.ClampNumber
 
 local MIN_WIDTH = 50
 local OFFSET_RANGE = 1000
-local defaultStrata = (_G.PlayerFrame and _G.PlayerFrame.GetFrameStrata and _G.PlayerFrame:GetFrameStrata()) or "MEDIUM"
+local defaultStrata = "LOW"
 local defaultLevel = (_G.PlayerFrame and _G.PlayerFrame.GetFrameLevel and _G.PlayerFrame:GetFrameLevel()) or 0
 
 local strataOptions = {
@@ -44,6 +44,11 @@ local strataOptions = {
 	{ value = "FULLSCREEN_DIALOG", label = "FULLSCREEN_DIALOG" },
 	{ value = "TOOLTIP", label = "TOOLTIP" },
 }
+
+local strataOptionsWithDefault = { { value = "", label = DEFAULT or "Default" } }
+for _, option in ipairs(strataOptions) do
+	strataOptionsWithDefault[#strataOptionsWithDefault + 1] = option
+end
 
 local STRATA_INDEX = {}
 for index, option in ipairs(strataOptions) do
@@ -187,6 +192,12 @@ local totemFrameClasses = {
 	SHAMAN = true,
 	WARLOCK = true,
 }
+
+local function getPlayerClassFrameSupportFlags()
+	local classToken = addon.variables and addon.variables.unitClass
+	if not classToken then return false, false end
+	return classResourceClasses[classToken] == true, totemFrameClasses[classToken] == true
+end
 
 local bossUnitLookup = { boss = true }
 for i = 1, (MAX_BOSS_FRAMES or 5) do
@@ -386,6 +397,59 @@ local function refresh(unit)
 	elseif UF.Refresh then
 		UF.Refresh()
 	end
+end
+
+local refreshBatchDepth = 0
+local refreshBatchAll = false
+local refreshBatchUnits = {}
+
+local function clearRefreshBatchState()
+	refreshBatchAll = false
+	for unit in pairs(refreshBatchUnits) do
+		refreshBatchUnits[unit] = nil
+	end
+end
+
+local function requestRefresh(unit)
+	if refreshBatchDepth > 0 then
+		if unit == nil then
+			clearRefreshBatchState()
+			refreshBatchAll = true
+		elseif not refreshBatchAll then
+			refreshBatchUnits[unit] = true
+		end
+		return
+	end
+	refresh(unit)
+end
+
+local function flushRefreshBatch()
+	if refreshBatchAll then
+		clearRefreshBatchState()
+		refresh()
+		return
+	end
+	local pendingCount = 0
+	local pendingUnit
+	for unit in pairs(refreshBatchUnits) do
+		pendingCount = pendingCount + 1
+		pendingUnit = unit
+		if pendingCount > 1 then break end
+	end
+	clearRefreshBatchState()
+	if pendingCount == 1 then
+		refresh(pendingUnit)
+	elseif pendingCount > 1 then
+		refresh()
+	end
+end
+
+local function beginRefreshBatch() refreshBatchDepth = refreshBatchDepth + 1 end
+
+local function endRefreshBatch()
+	if refreshBatchDepth <= 0 then return end
+	refreshBatchDepth = refreshBatchDepth - 1
+	if refreshBatchDepth == 0 then flushRefreshBatch() end
 end
 
 local function refreshSettingsUI()
@@ -644,6 +708,144 @@ local function checkboxColor(args)
 	}
 end
 
+local function setRangeFadeSpecSpell(unit, specId, kind, value)
+	local cfg = ensureConfig(unit)
+	cfg.rangeFade = cfg.rangeFade or {}
+	if type(cfg.rangeFade.specSpells) ~= "table" then cfg.rangeFade.specSpells = {} end
+	local specKey = tonumber(specId)
+	if not specKey or specKey <= 0 then return end
+	local entry = cfg.rangeFade.specSpells[specKey]
+	if type(entry) ~= "table" then
+		entry = {}
+		cfg.rangeFade.specSpells[specKey] = entry
+	end
+
+	if value == "NONE" then
+		entry[kind] = false
+	elseif value == "DEFAULT" then
+		entry[kind] = nil
+	else
+		local spellId = tonumber(value)
+		if spellId and spellId > 0 then
+			entry[kind] = math.floor(spellId)
+		else
+			entry[kind] = nil
+		end
+	end
+
+	if entry.friendly == nil and entry.enemy == nil then cfg.rangeFade.specSpells[specKey] = nil end
+	if not next(cfg.rangeFade.specSpells) then cfg.rangeFade.specSpells = nil end
+end
+
+local function getRangeFadeSpecSpellState(unit, specId, kind)
+	local cfg = ensureConfig(unit)
+	local rangeCfg = cfg and cfg.rangeFade or nil
+	local specKey = tonumber(specId)
+	local stored
+	if rangeCfg and type(rangeCfg.specSpells) == "table" and specKey then
+		local entry = rangeCfg.specSpells[specKey]
+		if type(entry) == "table" then stored = entry[kind] end
+	end
+
+	local resolvedFriendly, resolvedEnemy
+	if UFHelper and UFHelper.RangeFadeResolveSpellPair then
+		resolvedFriendly, resolvedEnemy = UFHelper.RangeFadeResolveSpellPair(rangeCfg, specKey)
+	end
+	local resolved = (kind == "friendly") and resolvedFriendly or resolvedEnemy
+	if stored == false or stored == 0 or stored == "0" then return "none", nil end
+	if tonumber(stored) and tonumber(stored) > 0 then return "custom", math.floor(tonumber(stored)) end
+	if resolved and tonumber(resolved) and tonumber(resolved) > 0 then return "default", math.floor(tonumber(resolved)) end
+	return "default", nil
+end
+
+local function getRangeFadeSpellDisplay(unit, specId, kind)
+	local mode, spellId = getRangeFadeSpecSpellState(unit, specId, kind)
+	if mode == "none" then return NONE or "None" end
+	if spellId and UFHelper and UFHelper.RangeFadeGetSpellLabel then return UFHelper.RangeFadeGetSpellLabel(spellId, false) or tostring(spellId) end
+	if mode == "default" then return L["UFRangeFadeDefaultNone"] or "Default (none)" end
+	return NONE or "None"
+end
+
+local function createRangeFadeSpellPickerSetting(unit, isRangeFadeEnabled, refreshSelf, refreshRangeFadeRuntime)
+	return {
+		name = L["UFRangeFadeSpells"] or "Range check spells",
+		kind = settingType.Dropdown,
+		height = 300,
+		parentId = "rangeFade",
+		default = nil,
+		generator = function(_, root)
+			local specOptions = (UFHelper and UFHelper.RangeFadeGetSpecOptions and UFHelper.RangeFadeGetSpecOptions()) or {}
+			local friendlyLabel = L["UFRangeFadeFriendlySpell"] or "Friendly spell"
+			local enemyLabel = L["UFRangeFadeEnemySpell"] or "Enemy spell"
+			local defaultLabel = L["Default"] or "Default"
+			local defaultNoneLabel = L["UFRangeFadeDefaultNone"] or "Default (none)"
+			local noneLabel = NONE or "None"
+			if #specOptions == 0 then
+				root:CreateButton(noneLabel)
+				return
+			end
+
+			local function buildSpellMenu(parent, specId, kind, options)
+				if parent and parent.SetScrollMode then parent:SetScrollMode(280) end
+				local mode, currentSpellId = getRangeFadeSpecSpellState(unit, specId, kind)
+				local modeDefault = mode == "default"
+				local modeNone = mode == "none"
+				parent:CreateRadio(defaultLabel, function() return modeDefault end, function()
+					setRangeFadeSpecSpell(unit, specId, kind, "DEFAULT")
+					refreshRangeFadeRuntime(true, false)
+					refreshSelf()
+					refreshSettingsUI()
+				end)
+				parent:CreateRadio(noneLabel, function() return modeNone end, function()
+					setRangeFadeSpecSpell(unit, specId, kind, "NONE")
+					refreshRangeFadeRuntime(true, false)
+					refreshSelf()
+					refreshSettingsUI()
+				end)
+				local defaultFriendly, defaultEnemy = nil, nil
+				if UFHelper and UFHelper.RangeFadeGetDefaultSpellPair then
+					defaultFriendly, defaultEnemy = UFHelper.RangeFadeGetDefaultSpellPair(specId)
+				end
+				local defaultSpellId = kind == "friendly" and defaultFriendly or defaultEnemy
+				if defaultSpellId and UFHelper and UFHelper.RangeFadeGetSpellLabel then
+					parent:CreateButton(string.format("%s: %s", defaultLabel, UFHelper.RangeFadeGetSpellLabel(defaultSpellId, true) or tostring(defaultSpellId)))
+				elseif defaultSpellId == nil then
+					parent:CreateButton(defaultNoneLabel)
+				end
+				for i = 1, #options do
+					local option = options[i]
+					local spellId = option and option.value
+					if spellId then
+						parent:CreateRadio(option.label, function() return mode == "custom" and currentSpellId == spellId end, function()
+							setRangeFadeSpecSpell(unit, specId, kind, spellId)
+							refreshRangeFadeRuntime(true, false)
+							refreshSelf()
+							refreshSettingsUI()
+						end)
+					end
+				end
+			end
+
+			for i = 1, #specOptions do
+				local specEntry = specOptions[i]
+				local specId = specEntry and specEntry.value
+				if specId then
+					local classToken = specEntry.classToken
+					local friendlyOptions = (UFHelper and UFHelper.RangeFadeGetSpellOptions and UFHelper.RangeFadeGetSpellOptions("friendly", classToken)) or {}
+					local enemyOptions = (UFHelper and UFHelper.RangeFadeGetSpellOptions and UFHelper.RangeFadeGetSpellOptions("enemy", classToken)) or {}
+					local specMenu = root:CreateButton(specEntry.label or ("Spec " .. tostring(specId)))
+					if specMenu and specMenu.SetScrollMode then specMenu:SetScrollMode(220) end
+					local friendlyMenu = specMenu:CreateButton(string.format("%s: %s", friendlyLabel, getRangeFadeSpellDisplay(unit, specId, "friendly")))
+					local enemyMenu = specMenu:CreateButton(string.format("%s: %s", enemyLabel, getRangeFadeSpellDisplay(unit, specId, "enemy")))
+					buildSpellMenu(friendlyMenu, specId, "friendly", friendlyOptions)
+					buildSpellMenu(enemyMenu, specId, "enemy", enemyOptions)
+				end
+			end
+		end,
+		isEnabled = isRangeFadeEnabled,
+	}
+end
+
 local function anchorUsesUIParent(unit)
 	local cfg = ensureConfig(unit)
 	local def = defaultsFor(unit)
@@ -735,8 +937,11 @@ local function buildUnitSettings(unit)
 	local refresh = refreshSelf
 	local isPlayer = unit == "player"
 	local isPet = unit == "pet"
-	local classHasResource = isPlayer and classResourceClasses[addon.variables and addon.variables.unitClass]
-	local classHasTotemFrame = isPlayer and totemFrameClasses[addon.variables and addon.variables.unitClass]
+	local classHasResource = false
+	local classHasTotemFrame = false
+	if isPlayer then
+		classHasResource, classHasTotemFrame = getPlayerClassFrameSupportFlags()
+	end
 	local copyOptions = availableCopySources(unit)
 	local visibilityOptions = getVisibilityRuleOptions(unit)
 	local function getVisibilityConfig()
@@ -785,6 +990,47 @@ local function buildUnitSettings(unit)
 		cfg.visibilityFade = pct / 100
 		if UF and UF.ApplyVisibilityRules then UF.ApplyVisibilityRules(unit) end
 	end
+	local function hideInClientSceneDefault()
+		local value = def.hideInClientScene
+		if value == nil then value = true end
+		return value == true
+	end
+	local function isHideInVehicleEnabled()
+		local cfg = ensureConfig(unit)
+		local value = cfg and cfg.hideInVehicle
+		if value == nil then value = def.hideInVehicle end
+		return value == true
+	end
+	local function setHideInVehicleEnabled(value)
+		local cfg = ensureConfig(unit)
+		cfg.hideInVehicle = value and true or false
+		refreshSelf()
+		refreshSettingsUI()
+	end
+	local function isHideInPetBattleEnabled()
+		local cfg = ensureConfig(unit)
+		local value = cfg and cfg.hideInPetBattle
+		if value == nil then value = def.hideInPetBattle end
+		return value == true
+	end
+	local function setHideInPetBattleEnabled(value)
+		local cfg = ensureConfig(unit)
+		cfg.hideInPetBattle = value and true or false
+		refreshSelf()
+		refreshSettingsUI()
+	end
+	local function isHideInClientSceneEnabled()
+		local cfg = ensureConfig(unit)
+		local value = cfg and cfg.hideInClientScene
+		if value == nil then value = hideInClientSceneDefault() end
+		return value == true
+	end
+	local function setHideInClientSceneEnabled(value)
+		local cfg = ensureConfig(unit)
+		cfg.hideInClientScene = value and true or false
+		refreshSelf()
+		refreshSettingsUI()
+	end
 
 	list[#list + 1] = { name = SETTINGS or "Settings", kind = settingType.Collapsible, id = "utility", defaultCollapsed = true }
 
@@ -820,6 +1066,9 @@ local function buildUnitSettings(unit)
 		"frame",
 		isTooltipEnabled
 	)
+	list[#list + 1] = checkbox(L["UFHideInVehicle"] or "Hide in vehicles", isHideInVehicleEnabled, setHideInVehicleEnabled, def.hideInVehicle == true, "frame")
+	if not isPlayer then list[#list + 1] = checkbox(L["UFHideInPetBattle"] or "Hide in pet battles", isHideInPetBattleEnabled, setHideInPetBattleEnabled, def.hideInPetBattle == true, "frame") end
+	list[#list + 1] = checkbox(L["UFHideInClientScene"] or "Hide in client scenes", isHideInClientSceneEnabled, setHideInClientSceneEnabled, hideInClientSceneDefault(), "frame")
 
 	if #visibilityOptions > 0 then
 		list[#list + 1] = multiDropdown(L["Show when"] or "Show when", visibilityOptions, isVisibilityRuleSelected, setVisibilityRule, nil, "frame")
@@ -1240,13 +1489,20 @@ local function buildUnitSettings(unit)
 	if unit == "target" then
 		local rangeDef = def.rangeFade or {}
 		local function isRangeFadeEnabled() return getValue(unit, { "rangeFade", "enabled" }, rangeDef.enabled == true) == true end
+		local function refreshRangeFadeRuntime(rebuildSpellList, applyCurrent)
+			if not UFHelper then return end
+			if UFHelper.RangeFadeMarkConfigDirty then UFHelper.RangeFadeMarkConfigDirty() end
+			if rebuildSpellList and UFHelper.RangeFadeMarkSpellListDirty then UFHelper.RangeFadeMarkSpellListDirty() end
+			if applyCurrent and UFHelper.RangeFadeApplyCurrent then UFHelper.RangeFadeApplyCurrent(true) end
+			if UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
+		end
 
 		list[#list + 1] = { name = L["UFRangeFade"] or "Range fade", kind = settingType.Collapsible, id = "rangeFade", defaultCollapsed = true }
 
 		list[#list + 1] = checkbox(L["UFRangeFadeEnable"] or "Enable range fade", isRangeFadeEnabled, function(val)
 			setValue(unit, { "rangeFade", "enabled" }, val and true or false)
 			refreshSelf()
-			if UFHelper and UFHelper.RangeFadeUpdateSpells then UFHelper.RangeFadeUpdateSpells() end
+			refreshRangeFadeRuntime(true, false)
 		end, rangeDef.enabled == true, "rangeFade")
 
 		local rangeFadeAlpha = slider(L["UFRangeFadeAlpha"] or "Out of range opacity", 0, 100, 1, function()
@@ -1261,9 +1517,12 @@ local function buildUnitSettings(unit)
 			if pct > 100 then pct = 100 end
 			setValue(unit, { "rangeFade", "alpha" }, pct / 100)
 			refreshSelf()
+			refreshRangeFadeRuntime(false, true)
 		end, math.floor(((rangeDef.alpha or 0.5) * 100) + 0.5), "rangeFade", true, function(v) return tostring(v) .. "%" end)
 		rangeFadeAlpha.isEnabled = isRangeFadeEnabled
 		list[#list + 1] = rangeFadeAlpha
+
+		list[#list + 1] = createRangeFadeSpellPickerSetting(unit, isRangeFadeEnabled, refreshSelf, refreshRangeFadeRuntime)
 	end
 
 	list[#list + 1] = { name = L["HealthBar"] or "Health Bar", kind = settingType.Collapsible, id = "health", defaultCollapsed = true }
@@ -2562,6 +2821,31 @@ local function buildUnitSettings(unit)
 		castHeight.isEnabled = isCastEnabled
 		list[#list + 1] = castHeight
 
+		local castStrata = radioDropdown(
+			L["UFCastStrata"] or "Castbar strata",
+			strataOptionsWithDefault,
+			function() return getValue(unit, { "cast", "strata" }, castDef.strata or "") end,
+			function(val)
+				setValue(unit, { "cast", "strata" }, (val and val ~= "") and val or nil)
+				refresh()
+			end,
+			castDef.strata or "",
+			"cast"
+		)
+		castStrata.isEnabled = isCastEnabled
+		list[#list + 1] = castStrata
+
+		local castFrameLevelOffset = slider(L["UFCastFrameLevelOffset"] or "Castbar frame level offset", -20, 50, 1, function()
+			local fallback = castDef.frameLevelOffset
+			if fallback == nil then fallback = 1 end
+			return getValue(unit, { "cast", "frameLevelOffset" }, fallback)
+		end, function(val)
+			setValue(unit, { "cast", "frameLevelOffset" }, val)
+			refresh()
+		end, (castDef.frameLevelOffset == nil) and 1 or castDef.frameLevelOffset, "cast", true)
+		castFrameLevelOffset.isEnabled = isCastEnabled
+		list[#list + 1] = castFrameLevelOffset
+
 		local anchorOpts = {
 			{ value = "TOP", label = L["Top"] or "Top" },
 			{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
@@ -3186,6 +3470,37 @@ local function buildUnitSettings(unit)
 	)
 	levelAnchorSetting.isEnabled = isLevelEnabled
 	list[#list + 1] = levelAnchorSetting
+
+	local levelStrataSetting = radioDropdown(
+		L["UFLevelStrata"] or "Level text strata",
+		strataOptionsWithDefault,
+		function() return getValue(unit, { "status", "levelStrata" }, statusDef.levelStrata or "") end,
+		function(val)
+			setValue(unit, { "status", "levelStrata" }, (val and val ~= "") and val or nil)
+			refresh()
+		end,
+		statusDef.levelStrata or "",
+		"status"
+	)
+	levelStrataSetting.isEnabled = isLevelEnabled
+	list[#list + 1] = levelStrataSetting
+
+	local levelFrameLevelOffsetSetting = slider(
+		L["UFLevelFrameLevelOffset"] or "Level text frame level offset",
+		-20,
+		50,
+		1,
+		function() return getValue(unit, { "status", "levelFrameLevelOffset" }, statusDef.levelFrameLevelOffset or 5) end,
+		function(val)
+			setValue(unit, { "status", "levelFrameLevelOffset" }, val or 5)
+			refresh()
+		end,
+		statusDef.levelFrameLevelOffset or 5,
+		"status",
+		true
+	)
+	levelFrameLevelOffsetSetting.isEnabled = isLevelEnabled
+	list[#list + 1] = levelFrameLevelOffsetSetting
 
 	local levelFontSizeSetting = slider(
 		L["Level font size"] or "Level font size",
@@ -4125,24 +4440,17 @@ local function buildUnitSettings(unit)
 			{ value = "EDGE", label = L["Edge"] or "Edge" },
 			{ value = "OVERLAY", label = L["Overlay"] or "Overlay" },
 		}
-		list[#list + 1] = radioDropdown(
-			L["Aura border render mode"] or "Aura border render mode",
-			borderRenderModeOptions,
-			function()
-				local mode = (getValue(unit, { "auraIcons", "borderRenderMode" }, auraDef.borderRenderMode or "EDGE") or "EDGE"):upper()
-				if mode == "OVERLAY" then return "OVERLAY" end
-				return "EDGE"
-			end,
-			function(val)
-				local mode = tostring(val or "EDGE"):upper()
-				if mode ~= "OVERLAY" then mode = "EDGE" end
-				setValue(unit, { "auraIcons", "borderRenderMode" }, mode)
-				refresh()
-				refreshAuras()
-			end,
-			((auraDef.borderRenderMode or "EDGE"):upper() == "OVERLAY") and "OVERLAY" or "EDGE",
-			"auras"
-		)
+		list[#list + 1] = radioDropdown(L["Aura border render mode"] or "Aura border render mode", borderRenderModeOptions, function()
+			local mode = (getValue(unit, { "auraIcons", "borderRenderMode" }, auraDef.borderRenderMode or "EDGE") or "EDGE"):upper()
+			if mode == "OVERLAY" then return "OVERLAY" end
+			return "EDGE"
+		end, function(val)
+			local mode = tostring(val or "EDGE"):upper()
+			if mode ~= "OVERLAY" then mode = "EDGE" end
+			setValue(unit, { "auraIcons", "borderRenderMode" }, mode)
+			refresh()
+			refreshAuras()
+		end, ((auraDef.borderRenderMode or "EDGE"):upper() == "OVERLAY") and "OVERLAY" or "EDGE", "auras")
 		list[#list].isEnabled = isAuraEnabled
 		list[#list + 1] = { name = "", kind = settingType.Divider, parentId = "auras" }
 
@@ -5460,7 +5768,6 @@ local function registerUnitFrame(unit, info)
 			UF.EnsureFrames(unit)
 		end
 	end
-	refresh()
 	local frame = _G[info.frameName]
 	if not frame then return end
 	local layout = calcLayout(unit, frame)
@@ -5475,16 +5782,24 @@ local function registerUnitFrame(unit, info)
 		layoutDefaults = layout,
 		settingsMaxHeight = DEFAULT_SETTINGS_MAX_HEIGHT,
 		onApply = function(_, _, data)
+			if not data.point then return end
 			local cfg = ensureConfig(unit)
 			cfg.anchor = cfg.anchor or {}
-			if data.point then
-				cfg.anchor.point = data.point
-				cfg.anchor.relativePoint = data.relativePoint or data.point
-				cfg.anchor.x = data.x or 0
-				cfg.anchor.y = data.y or 0
-				cfg.anchor.relativeTo = cfg.anchor.relativeTo or "UIParent"
-			end
-			refresh()
+			local oldPoint = cfg.anchor.point
+			local oldRelativePoint = cfg.anchor.relativePoint
+			local oldX = cfg.anchor.x or 0
+			local oldY = cfg.anchor.y or 0
+			local newPoint = data.point
+			local newRelativePoint = data.relativePoint or data.point
+			local newX = data.x or 0
+			local newY = data.y or 0
+			cfg.anchor.relativeTo = cfg.anchor.relativeTo or "UIParent"
+			if oldPoint == newPoint and oldRelativePoint == newRelativePoint and oldX == newX and oldY == newY then return end
+			cfg.anchor.point = newPoint
+			cfg.anchor.relativePoint = newRelativePoint
+			cfg.anchor.x = newX
+			cfg.anchor.y = newY
+			requestRefresh(unit)
 		end,
 		onEnter = function(activeFrame) syncEditModeSelectionStrata(activeFrame) end,
 		isEnabled = function() return ensureConfig(unit).enabled == true end,
@@ -5507,9 +5822,15 @@ local function registerEditModeFrames()
 		focus = { frameName = "EQOLUFFocusFrame", frameId = frameIds.focus, title = L["UFFocusFrame"] or FOCUS },
 		boss = { frameName = "EQOLUFBossContainer", frameId = frameIds.boss, title = (L["UFBossFrame"] or "Boss Frames") },
 	}
-	for unit, info in pairs(frames) do
-		registerUnitFrame(unit, info)
-	end
+	beginRefreshBatch()
+	local ok, err = pcall(function()
+		for unit, info in pairs(frames) do
+			registerUnitFrame(unit, info)
+		end
+		requestRefresh()
+	end)
+	endRefreshBatch()
+	if not ok then error(err) end
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 end
 
