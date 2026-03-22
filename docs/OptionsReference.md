@@ -95,7 +95,9 @@ Each action bar can be set to appear only on mouseover:
 - **Sort Mythic Dungeon applicants by Mythic Score** (Sort Mythic Dungeon Applicants by Mythic Score).
 
 ## Quest & Vendor Automation
-- **Automatically accept and complete quests** (Automatically accept and complete Quests).
+- **Automatically accept quests** (Automatically accept Quests).
+- **Automatically turn in quests** (Automatically turn in Quests).
+- **Automatically handle gossip** (Automatically handle Gossip).
 - **Don't automatically handle daily/weekly quests** (Don't automatically handle daily/weekly %s).
 - **Don't automatically handle trivial quests** (Don't automatically handle trivial %s).
 - **Don't automatically handle account-completed quests** (Don't automatically handle %s %s).
@@ -125,7 +127,6 @@ The **CVar** section exposes common console variables as checkboxes. Changing th
 - Enable autodismount when using abilities while flying
 - Enable mouse scroll in chat
 - Disable death effects
-- Enable Map Fade while moving
 - Show LUA-Error on UI
 - Show class colors on nameplates
 - Show the Castbar of your Target

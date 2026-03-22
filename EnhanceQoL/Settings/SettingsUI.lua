@@ -208,34 +208,54 @@ end
 ---------------------------------------------------------
 function addon.functions.SettingsCreateMultiDropdown(cat, cbData)
 	addon.db = addon.db or {}
-	addon.db[cbData.var] = addon.db[cbData.var] or {}
+	local explicitStorageDB = type(cbData.db) == "table" and cbData.db or nil
+
+	-- Resolve addon.db lazily so profile-backed settings do not capture the pre-init placeholder table.
+	local function resolveStorageDB()
+		if explicitStorageDB then return explicitStorageDB end
+		addon.db = addon.db or {}
+		return addon.db
+	end
+
+	local function ensureRootContainer()
+		local storageDB = resolveStorageDB()
+		if type(storageDB[cbData.var]) ~= "table" then storageDB[cbData.var] = {} end
+		return storageDB
+	end
 
 	local function getSelection()
-		local container = addon.db[cbData.var]
+		local storageDB = ensureRootContainer()
+		local container = storageDB[cbData.var]
 		if cbData.subvar then
+			if type(container[cbData.subvar]) ~= "table" then container[cbData.subvar] = {} end
 			container = container[cbData.subvar]
-			if type(container) ~= "table" then container = {} end
 		end
 		return container
 	end
 
 	local function setSelection(map)
+		local storageDB = ensureRootContainer()
+		if type(map) ~= "table" then map = {} end
 		if cbData.subvar then
-			addon.db[cbData.var] = addon.db[cbData.var] or {}
-			addon.db[cbData.var][cbData.subvar] = map
+			storageDB[cbData.var][cbData.subvar] = map
 		else
-			addon.db[cbData.var] = map
+			storageDB[cbData.var] = map
 		end
 		if cbData.callback then cbData.callback(map) end
 	end
 
 	local initializer = SettingsLib:CreateMultiDropdown(cat, {
 		key = cbData.var,
+		db = explicitStorageDB or addon.db,
 		name = cbData.text,
 		values = cbData.options or cbData.list,
 		optionfunc = cbData.optionfunc or cbData.listFunc,
+		desc = cbData.desc,
+		tooltip = cbData.tooltip,
 		height = cbData.menuHeight or 200,
 		order = cbData.order,
+		customText = cbData.customText,
+		customDefaultText = cbData.customDefaultText,
 		isSelected = cbData.isSelectedFunc,
 		setSelected = cbData.setSelectedFunc,
 		getSelection = cbData.getSelection or cbData.get or getSelection,
@@ -248,7 +268,7 @@ function addon.functions.SettingsCreateMultiDropdown(cat, cbData)
 		parentSection = cbData.parentSection,
 		isEnabled = cbData.isEnabled,
 		prefix = prefix,
-		hideSummary = true,
+		hideSummary = cbData.hideSummary == nil and true or cbData.hideSummary,
 	})
 
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}

@@ -11,6 +11,7 @@ local L = addon.L
 -- luacheck: globals EQOLIgnoreFrame EQOLIgnoreFrame_OnLoad HybridScrollFrame_CreateButtons DeclineGuildInvite MenuUtil
 local AceGUI = addon.AceGUI
 local MU = MenuUtil
+local issecretvalue = _G.issecretvalue
 local Ignore = addon.Ignore or {}
 addon.Ignore = Ignore
 
@@ -690,6 +691,7 @@ local function hookedAddIgnore(name)
 	if not name or name == "" then
 		if UnitExists("target") and UnitIsPlayer("target") then
 			local n, realm = UnitName("target")
+			if issecretvalue and (issecretvalue(n) or issecretvalue(realm)) then return end
 			if n then
 				if realm and realm ~= "" then
 					name = n .. "-" .. realm
@@ -887,7 +889,7 @@ local function updateRegistration()
 		LOGIN_FRAME:RegisterEvent("PLAYER_LOGIN")
 		for _, e in ipairs(CHAT_EVENTS) do
 			if not Ignore.registeredFilters[e] then
-				ChatFrame_AddMessageEventFilter(e, ignoreChatFilter)
+				ChatFrameUtil.AddMessageEventFilter(e, ignoreChatFilter)
 				Ignore.registeredFilters[e] = true
 			end
 		end
@@ -900,7 +902,7 @@ local function updateRegistration()
 	else
 		for _, e in ipairs(CHAT_EVENTS) do
 			if Ignore.registeredFilters[e] then
-				ChatFrame_RemoveMessageEventFilter(e, ignoreChatFilter)
+				ChatFrameUtil.RemoveMessageEventFilter(e, ignoreChatFilter)
 				Ignore.registeredFilters[e] = nil
 			end
 		end
@@ -971,7 +973,8 @@ Ignore.groupCheckFrame:SetScript("OnEvent", function()
 		local unit = prefix .. i
 		if UnitExists(unit) then
 			local n, r = UnitFullName(unit)
-			if n then
+			if issecretvalue and (issecretvalue(n) or issecretvalue(r)) then
+			elseif n then
 				r = r or (GetRealmName()):gsub("%s", "")
 				partyMembers[n .. "-" .. r] = true
 			end
@@ -979,6 +982,9 @@ Ignore.groupCheckFrame:SetScript("OnEvent", function()
 	end
 
 	local pn, pr = UnitFullName("player")
+	if issecretvalue and (issecretvalue(pn) or issecretvalue(pr)) then
+		pn, pr = nil, nil
+	end
 	pr = pr or (GetRealmName()):gsub("%s", "")
 	if pn then partyMembers[pn .. "-" .. pr] = true end
 
@@ -1037,7 +1043,7 @@ local function EQOL_AddUnitIgnoreEntry(owner, root, ctx)
 	if not Ignore.enabled then return end
 	local name = ctx and ctx.name
 	local realm = ctx and ctx.server
-	if issecretvalue and issecretvalue(name) then return end
+	if issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then return end
 	if name and not name:find("-") then
 		realm = realm or (GetRealmName()):gsub("%s", "")
 		name = name .. "-" .. realm
@@ -1046,6 +1052,7 @@ local function EQOL_AddUnitIgnoreEntry(owner, root, ctx)
 		local unit = (ctx and ctx.unit) or (owner and owner.unit) or (owner and owner.GetUnit and owner:GetUnit())
 		if unit and UnitName then
 			local n, r = UnitName(unit)
+			if issecretvalue and (issecretvalue(n) or issecretvalue(r)) then return end
 			if n then
 				r = r and r ~= "" and r or (GetRealmName()):gsub("%s", "")
 				name = n .. "-" .. r
@@ -1122,6 +1129,7 @@ if not Ignore.tooltipHookInstalled then
 		local unit = "mouseover"
 		if not UnitExists(unit) or not UnitIsPlayer(unit) then return end
 		local name, realm = UnitName(unit)
+		if issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then return end
 		if not name then return end
 		realm = realm and realm ~= "" and realm or (GetRealmName()):gsub("%s", "")
 		local entry = Ignore:CheckIgnore(name .. "-" .. realm)

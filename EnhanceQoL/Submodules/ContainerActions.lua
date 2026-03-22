@@ -18,6 +18,8 @@ local EDITMODE_ID = "containerActionsButton"
 local BUTTON_SIZE = 48
 local PREVIEW_ICON = "Interface\\Icons\\INV_Misc_Bag_10"
 local DEFAULT_ANCHOR = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -200 }
+local DEFAULT_ICON_TEXCOORD = { 0.08, 0.92, 0.08, 0.92 }
+local FULL_ICON_TEXCOORD = { 0, 1, 0, 1 }
 
 local ITEM_CLASS = Enum and Enum.ItemClass
 local MISC_SUBCLASS = Enum and Enum.ItemMiscellaneousSubclass
@@ -72,10 +74,17 @@ local function FormatAnchorPoint(data)
 end
 
 local function BuildAnchorLayoutSnapshot(layoutName)
-	local layout = EditMode and EditMode:GetLayoutData(EDITMODE_ID, layoutName)
-	if layout then return CopyAnchorConfig(layout) end
 	addon.db.containerActionAnchor = FormatAnchorPoint(addon.db.containerActionAnchor)
 	return CopyAnchorConfig(addon.db.containerActionAnchor)
+end
+
+local function SeedEditModeAnchorRecord(record)
+	if type(record) ~= "table" then return end
+	local snapshot = BuildAnchorLayoutSnapshot()
+	record.point = snapshot.point or DEFAULT_ANCHOR.point
+	record.relativePoint = snapshot.relativePoint or record.point
+	record.x = snapshot.x or 0
+	record.y = snapshot.y or 0
 end
 
 local function SecureSort(a, b)
@@ -100,6 +109,131 @@ end
 local function SetButtonIconTexCoord(button, ...)
 	local icon = GetButtonIcon(button)
 	if icon and icon.SetTexCoord then icon:SetTexCoord(...) end
+end
+
+local function SetTextureVisibility(texture, visible)
+	if not texture then return end
+	if visible then
+		texture:SetAlpha(1)
+		texture:Show()
+	else
+		texture:SetAlpha(0)
+		texture:Hide()
+	end
+end
+
+function ContainerActions:GetButtonBorderEnabled()
+	if not addon.db then return true end
+	return addon.db.containerActionButtonShowBorder ~= false
+end
+
+function ContainerActions:GetButtonIconCropEnabled()
+	if not addon.db then return true end
+	return addon.db.containerActionButtonCropIcon ~= false
+end
+
+function ContainerActions:ApplyButtonAppearance()
+	local button = self.button
+	if not button then return end
+
+	local showBorder = self:GetButtonBorderEnabled()
+	local cropIcon = self:GetButtonIconCropEnabled()
+
+	local normal = button.NormalTexture
+	if not normal and button.GetName then
+		local name = button:GetName()
+		if name and _G then normal = _G[name .. "NormalTexture"] end
+	end
+	if normal then
+		if showBorder then
+			normal:Show()
+		else
+			normal:Hide()
+		end
+	end
+
+	if button.FloatingBG then
+		if showBorder then
+			button.FloatingBG:Show()
+		else
+			button.FloatingBG:Hide()
+		end
+	end
+
+	local pushed = button.GetPushedTexture and button:GetPushedTexture() or button.PushedTexture
+	local highlight = button.GetHighlightTexture and button:GetHighlightTexture() or button.HighlightTexture
+	local checked = button.GetCheckedTexture and button:GetCheckedTexture() or button.CheckedTexture
+
+	SetTextureVisibility(pushed, showBorder)
+	SetTextureVisibility(highlight, showBorder)
+	SetTextureVisibility(checked, showBorder)
+	SetTextureVisibility(button.Border, showBorder)
+	SetTextureVisibility(button.IconBorder, showBorder)
+	SetTextureVisibility(button.SlotArt, showBorder)
+
+	local coords = cropIcon and DEFAULT_ICON_TEXCOORD or FULL_ICON_TEXCOORD
+	SetButtonIconTexCoord(button, coords[1], coords[2], coords[3], coords[4])
+end
+
+function ContainerActions:IsEditModePreviewActive()
+	return self.editModePreviewActive == true
+end
+
+function ContainerActions:UpdateEditModePreviewState()
+	local inEditMode = EditMode and EditMode.IsInEditMode and EditMode:IsInEditMode()
+	self.editModePreviewActive = inEditMode and true or false
+
+	local button = self.button
+	if not button then return end
+
+	if self.editModePreviewActive then
+		self:ApplyButtonAppearance()
+		if not button.entry then
+			SetButtonIconTexture(button, PREVIEW_ICON)
+			if button.Count then button.Count:SetText("") end
+		end
+		self:RequestVisibility(true, true)
+	else
+		if not button.entry then
+			SetButtonIconTexture(button, nil)
+			if button.Count then button.Count:SetText("") end
+		end
+		local shouldShow = self.desiredVisibility
+		if shouldShow == nil then
+			local hasItems = type(self.secureItems) == "table" and #self.secureItems > 0
+			shouldShow = self:IsEnabled() and hasItems
+		end
+		self:RequestVisibility(shouldShow, true)
+	end
+end
+
+function ContainerActions:RequestEditModeRefresh()
+	if EditMode and EditMode.RefreshFrame then
+		if InCombatLockdown and InCombatLockdown() then
+			self.deferEditModeRefresh = true
+		else
+			EditMode:RefreshFrame(EDITMODE_ID)
+		end
+	end
+end
+
+function ContainerActions:OnAppearanceSettingChanged()
+	self:ApplyButtonAppearance()
+	self:RequestEditModeRefresh()
+end
+
+function ContainerActions:SetButtonBorderEnabled(enabled)
+	local value = enabled and true or false
+	if addon.db and addon.db.containerActionButtonShowBorder == value then return end
+	if addon.db then addon.db.containerActionButtonShowBorder = value end
+	self:OnAppearanceSettingChanged()
+end
+
+function ContainerActions:SetButtonIconCropEnabled(enabled)
+	local value = enabled and true or false
+	if addon.db and addon.db.containerActionButtonCropIcon == value then return end
+	if addon.db then addon.db.containerActionButtonCropIcon = value end
+	self:OnAppearanceSettingChanged()
 end
 
 local AREA_BLOCKS = {
@@ -144,24 +278,76 @@ function ContainerActions:GetAnchorConfig(layoutName)
 	return FormatAnchorPoint(snapshot)
 end
 
-function ContainerActions:GetLayoutAreaBlocks(layoutName)
-	local targetLayout = layoutName or (EditMode and EditMode:GetActiveLayoutName()) or "_Global"
-	addon.db.containerActionLayouts = addon.db.containerActionLayouts or {}
-	local layoutData = addon.db.containerActionLayouts[targetLayout]
-	if not layoutData then
-		local copySource = addon.db.containerActionAreaBlocks
-		layoutData = {
-			areaBlocks = copySource and CopyTable(copySource) or {},
-		}
-		addon.db.containerActionLayouts[targetLayout] = layoutData
+local function copyMissingAreaBlocks(target, source)
+	if type(target) ~= "table" or type(source) ~= "table" then return end
+	for key, value in pairs(source) do
+		if target[key] == nil then target[key] = value and true or nil end
 	end
-	layoutData.areaBlocks = layoutData.areaBlocks or {}
-	return layoutData.areaBlocks
+end
+
+local function sortedLayoutKeys(layouts)
+	local keys = {}
+	if type(layouts) ~= "table" then return keys end
+	for key in pairs(layouts) do
+		if type(key) == "string" then keys[#keys + 1] = key end
+	end
+	table.sort(keys)
+	return keys
+end
+
+local function getPreferredLegacyLayout(layouts)
+	local preferred = EditMode and EditMode.GetActiveLayoutName and EditMode:GetActiveLayoutName()
+	if preferred and type(layouts[preferred]) == "table" then return preferred end
+	if type(layouts._Global) == "table" then return "_Global" end
+	for _, key in ipairs(sortedLayoutKeys(layouts)) do
+		if type(layouts[key]) == "table" then return key end
+	end
+	return nil
+end
+
+local function migrateLegacyAreaBlockStore(profile)
+	if type(profile) ~= "table" then return end
+	local legacy = profile.containerActionLayouts
+	if type(legacy) ~= "table" then
+		profile.containerActionAreaBlocks = profile.containerActionAreaBlocks or {}
+		return
+	end
+
+	local target = profile.containerActionAreaBlocks
+	if type(target) ~= "table" then
+		target = {}
+		profile.containerActionAreaBlocks = target
+	end
+
+	if next(target) == nil then
+		local preferred = getPreferredLegacyLayout(legacy)
+		local preferredData = preferred and legacy[preferred]
+		local preferredBlocks = type(preferredData) == "table" and preferredData.areaBlocks
+		if type(preferredBlocks) == "table" then copyMissingAreaBlocks(target, preferredBlocks) end
+	end
+
+	for _, key in ipairs(sortedLayoutKeys(legacy)) do
+		local layoutData = legacy[key]
+		local blocks = type(layoutData) == "table" and layoutData.areaBlocks
+		if type(blocks) == "table" then copyMissingAreaBlocks(target, blocks) end
+	end
+
+	profile.containerActionLayouts = nil
+end
+
+function ContainerActions:MigrateProfileData(profile)
+	migrateLegacyAreaBlockStore(profile)
+end
+
+function ContainerActions:GetLayoutAreaBlocks(layoutName)
+	if not addon.db then return {} end
+	migrateLegacyAreaBlockStore(addon.db)
+	addon.db.containerActionAreaBlocks = addon.db.containerActionAreaBlocks or {}
+	return addon.db.containerActionAreaBlocks
 end
 
 function ContainerActions:SetAreaBlock(layoutName, key, enabled)
-	layoutName = layoutName or (EditMode and EditMode:GetActiveLayoutName()) or "_Global"
-	local areaBlocks = self:GetLayoutAreaBlocks(layoutName)
+	local areaBlocks = self:GetLayoutAreaBlocks()
 	if enabled then
 		areaBlocks[key] = true
 	else
@@ -221,30 +407,44 @@ function ContainerActions:EnsureAnchor()
 
 	if EditMode and EditMode.IsAvailable and EditMode:IsAvailable() and not self.anchorRegistered then
 		local defaults = BuildAnchorLayoutSnapshot()
-		local dropdownSetting
+		local settings
 		local settingType = EditMode.lib and EditMode.lib.SettingType
 		if settingType then
-			dropdownSetting = {
-				name = L["containerActionsAreaHeader"],
-				kind = settingType.Dropdown,
-				height = 180,
-				default = {},
-				set = function() end,
-				generator = function(_, rootDescription)
-					for _, areaKey in ipairs(AREA_BLOCK_ORDER) do
-						local key = areaKey
-						rootDescription:CreateCheckbox(GetAreaDisplayName(key), function()
-							local layoutName = EditMode and EditMode:GetActiveLayoutName()
-							local cfg = ContainerActions:GetLayoutAreaBlocks(layoutName)
-							return not not cfg[key]
-						end, function()
-							local layoutName = EditMode and EditMode:GetActiveLayoutName()
-							local cfg = ContainerActions:GetLayoutAreaBlocks(layoutName)
-							local newState = not not cfg[key]
-							ContainerActions:SetAreaBlock(layoutName, key, not newState)
-						end)
-					end
-				end,
+			settings = {
+				{
+					name = L["containerActionsShowBorder"] or "Show button border",
+					kind = settingType.Checkbox,
+					default = true,
+					get = function() return ContainerActions:GetButtonBorderEnabled() end,
+					set = function(_, value) ContainerActions:SetButtonBorderEnabled(value) end,
+				},
+				{
+					name = L["containerActionsCropIcon"] or "Crop icon to Blizzard style",
+					kind = settingType.Checkbox,
+					default = true,
+					get = function() return ContainerActions:GetButtonIconCropEnabled() end,
+					set = function(_, value) ContainerActions:SetButtonIconCropEnabled(value) end,
+				},
+				{
+					name = L["containerActionsAreaHeader"],
+					kind = settingType.Dropdown,
+					height = 180,
+					default = {},
+					set = function() end,
+					generator = function(_, rootDescription)
+						for _, areaKey in ipairs(AREA_BLOCK_ORDER) do
+							local key = areaKey
+							rootDescription:CreateCheckbox(GetAreaDisplayName(key), function()
+								local cfg = ContainerActions:GetLayoutAreaBlocks()
+								return not not cfg[key]
+							end, function()
+								local cfg = ContainerActions:GetLayoutAreaBlocks()
+								local newState = not not cfg[key]
+								ContainerActions:SetAreaBlock(nil, key, not newState)
+							end)
+						end
+					end,
+				}
 			}
 		end
 
@@ -253,8 +453,21 @@ function ContainerActions:EnsureAnchor()
 			title = L["containerActionsAnchorLabel"] or "Container Button",
 			layoutDefaults = defaults,
 			isEnabled = function() return ContainerActions:IsEnabled() end,
-			onApply = function(_, layoutName, data) ContainerActions:ApplyAnchorLayout(data) end,
-			settings = dropdownSetting and { dropdownSetting } or nil,
+			onApply = function(_, layoutName, data)
+				if not ContainerActions._eqolEditModeHydrated then
+					ContainerActions._eqolEditModeHydrated = true
+					local record = data or {}
+					SeedEditModeAnchorRecord(record)
+					if EditMode and EditMode.SetFramePosition then
+						EditMode:SetFramePosition(EDITMODE_ID, record.point or DEFAULT_ANCHOR.point, record.x or 0, record.y or 0, layoutName)
+						return
+					end
+				end
+				ContainerActions:ApplyAnchorLayout(data)
+			end,
+			onEnter = function() ContainerActions:UpdateEditModePreviewState() end,
+			onExit = function() ContainerActions:UpdateEditModePreviewState() end,
+			settings = settings,
 		})
 		self.anchorRegistered = true
 	end
@@ -296,7 +509,6 @@ function ContainerActions:EnsureButton()
 	button:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
 	button:SetAttribute("pressAndHoldAction", false) -- verhindert Wiederholen beim Halten
 	button:SetAttribute("*type*", nil)
-	SetButtonIconTexCoord(button, 0.08, 0.92, 0.08, 0.92)
 	if button.HotKey then button.HotKey:SetText("") end
 	if button.Name then button.Name:Hide() end
 	button:SetPoint("CENTER", self:EnsureAnchor(), "CENTER")
@@ -335,6 +547,7 @@ function ContainerActions:EnsureButton()
 
 	self.button = button
 	self.buttonIcon = GetButtonIcon(button)
+	self:ApplyButtonAppearance()
 	self:EnsureButtonVisibilityDriver()
 
 	self:ApplyAnchorLayout(BuildAnchorLayoutSnapshot())
@@ -709,6 +922,7 @@ function ContainerActions:ApplyButtonEntry(entry)
 		button:SetAttribute("*type*", nil)
 		button:SetAttribute("item", nil)
 	end
+	self:ApplyButtonAppearance()
 	self:UpdateCount()
 end
 
@@ -744,7 +958,17 @@ function ContainerActions:RequestVisibility(show, skipDesiredUpdate)
 	if not skipDesiredUpdate then self.desiredVisibility = show and true or false end
 	local button = self:EnsureButton()
 	local desired = show and true or false
-	if self:HasVisibilityBlock() then desired = false end
+	if self:IsEditModePreviewActive() then
+		desired = true
+	elseif self:HasVisibilityBlock() then
+		desired = false
+	end
+
+	if self:IsEditModePreviewActive() and not button.entry then
+		SetButtonIconTexture(button, PREVIEW_ICON)
+		if button.Count then button.Count:SetText("") end
+	end
+
 	button:SetAlpha(desired and 1 or 0)
 	if InCombat() then
 		self.pendingVisibility = desired
@@ -830,13 +1054,7 @@ function ContainerActions:UpdateItems(list, dirtyBags)
 end
 
 function ContainerActions:UpdateAreaBlocks()
-	local layoutName = EditMode and EditMode:GetActiveLayoutName()
-	local config
-	if layoutName then
-		config = self:GetLayoutAreaBlocks(layoutName)
-	else
-		config = addon.db and addon.db.containerActionAreaBlocks or {}
-	end
+	local config = self:GetLayoutAreaBlocks()
 	local instanceType = GetCurrentInstanceType()
 	for _, key in ipairs(AREA_BLOCK_ORDER) do
 		local def = AREA_BLOCKS[key]
@@ -851,13 +1069,7 @@ end
 
 function ContainerActions:OnAreaBlockSettingChanged()
 	self:UpdateAreaBlocks()
-	if EditMode and EditMode.RefreshFrame then
-		if InCombatLockdown and InCombatLockdown() then
-			self.deferEditModeRefresh = true
-		else
-			EditMode:RefreshFrame(EDITMODE_ID)
-		end
-	end
+	self:RequestEditModeRefresh()
 end
 
 function ContainerActions:FlushDeferredEditRefresh()
@@ -930,9 +1142,6 @@ function ContainerActions:ShouldInspectTooltip(itemID)
 	if C_Item and C_Item.GetItemInfoInstant then
 		_, _, _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(itemID)
 	end
-	if (not classID or not subclassID) and GetItemInfoInstant then
-		_, _, _, _, _, classID, subclassID = GetItemInfoInstant(itemID)
-	end
 
 	if not classID then return true end
 
@@ -961,7 +1170,7 @@ function ContainerActions:IsTooltipOpenable(bag, slot, info)
 	if not tooltip or not tooltip.lines then return false end
 	for _, line in ipairs(tooltip.lines) do
 		if line and line.leftText then
-			if line.leftText == ITEM_COSMETIC_LEARN or line.leftText == ITEM_OPENABLE then
+			if line.leftText == ITEM_OPENABLE then
 				self.openableCache[itemID] = true
 				return true
 			end
@@ -979,9 +1188,6 @@ function ContainerActions:IsCollectibleMount(info)
 	local classID, subclassID
 	if C_Item and C_Item.GetItemInfoInstant then
 		local _, _, _, _, _, classValue, subclassValue = C_Item.GetItemInfoInstant(itemID)
-		classID, subclassID = classValue, subclassValue
-	elseif GetItemInfoInstant then
-		local _, _, _, _, _, _, _, _, _, _, _, classValue, subclassValue = GetItemInfoInstant(itemID)
 		classID, subclassID = classValue, subclassValue
 	end
 	local miscClassID = (ITEM_CLASS and ITEM_CLASS.Miscellaneous) or (type(LE_ITEM_CLASS_MISCELLANEOUS) == "number" and LE_ITEM_CLASS_MISCELLANEOUS) or nil
@@ -1101,6 +1307,8 @@ end
 
 function ContainerActions:OnSettingChanged(enabled)
 	self:Init()
+	self:ApplyButtonAppearance()
+	self:UpdateEditModePreviewState()
 	if not enabled then
 		self:UpdateItems({})
 	else
@@ -1112,6 +1320,7 @@ function ContainerActions:OnSettingChanged(enabled)
 end
 
 function ContainerActions:OnPostClick()
+	self:ApplyButtonAppearance()
 	if not self:IsEnabled() then return end
 	if self.awaitingRefresh then return end
 	self.awaitingRefresh = true

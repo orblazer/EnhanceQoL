@@ -11,6 +11,12 @@ local format = string.format
 local GetMoney = GetMoney
 local GetClassInfo = GetClassInfo
 local UnitGUID = UnitGUID
+local OpenAllBags = OpenAllBags
+local ToggleAllBags = ToggleAllBags
+
+local function getPrivateDB()
+	return addon.functions.GetPrivateDB and addon.functions.GetPrivateDB() or addon.privateDB or {}
+end
 
 local function getOptionsHint()
 	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
@@ -28,6 +34,8 @@ local function ensureDB()
 	db.fontSize = db.fontSize or 14
 	db.displayMode = db.displayMode or "character"
 	if db.displayMode == "account" then db.displayMode = "warband" end
+	db.leftClickAction = db.leftClickAction or "toggleDisplay"
+	if db.leftClickAction ~= "toggleDisplay" and db.leftClickAction ~= "openBags" then db.leftClickAction = "toggleDisplay" end
 	if db.showSilverCopper == nil then db.showSilverCopper = false end
 	if db.useTextColor == nil then db.useTextColor = false end
 	if not db.textColor then
@@ -56,7 +64,7 @@ local function createAceWindow()
 	aceWindow = frame.frame
 	frame:SetTitle((addon.DataPanel and addon.DataPanel.GetStreamOptionsTitle and addon.DataPanel.GetStreamOptionsTitle(stream and stream.meta and stream.meta.title)) or GAMEMENU_OPTIONS)
 	frame:SetWidth(300)
-	frame:SetHeight(280)
+	frame:SetHeight(340)
 	frame:SetLayout("List")
 
 	frame.frame:SetScript("OnShow", function(self) RestorePosition(self) end)
@@ -76,6 +84,32 @@ local function createAceWindow()
 		addon.DataHub:RequestUpdate(stream)
 	end)
 	frame:AddChild(fontSize)
+
+	local displayMode = AceGUI:Create("Dropdown")
+	displayMode:SetLabel(L["goldPanelDisplay"] or "Gold display")
+	displayMode:SetList({
+		character = L["goldPanelDisplayCharacter"] or "Character",
+		warband = L["warbandGold"] or "Warband gold",
+	})
+	displayMode:SetValue(db.displayMode or "character")
+	displayMode:SetCallback("OnValueChanged", function(_, _, key)
+		db.displayMode = (key == "warband") and "warband" or "character"
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(displayMode)
+
+	local clickAction = AceGUI:Create("Dropdown")
+	clickAction:SetLabel(L["goldPanelLeftClickAction"] or "Left-click action")
+	clickAction:SetList({
+		toggleDisplay = L["goldPanelLeftClickToggleDisplay"] or "Toggle gold display",
+		openBags = L["goldPanelLeftClickOpenBags"] or "Open bags",
+	})
+	clickAction:SetValue(db.leftClickAction or "toggleDisplay")
+	clickAction:SetCallback("OnValueChanged", function(_, _, key)
+		db.leftClickAction = (key == "openBags") and "openBags" or "toggleDisplay"
+		addon.DataHub:RequestUpdate(stream)
+	end)
+	frame:AddChild(clickAction)
 
 	local showSilverCopper = AceGUI:Create("CheckBox")
 	showSilverCopper:SetLabel(L["goldPanelShowSilverCopper"] or "Show silver and copper")
@@ -153,8 +187,9 @@ end
 local function collectCharacterMoneyFromTracker()
 	local list, total, currentMoney = {}, 0, nil
 	local playerGUID = UnitGUID("player")
-	if addon.db and type(addon.db.moneyTracker) == "table" then
-		for guid, info in pairs(addon.db.moneyTracker) do
+	local privateDB = getPrivateDB()
+	if type(privateDB.moneyTracker) == "table" then
+		for guid, info in pairs(privateDB.moneyTracker) do
 			if type(info) == "table" and type(info.money) == "number" then
 				total = total + info.money
 				if guid == playerGUID then currentMoney = info.money end
@@ -202,6 +237,16 @@ local function getDisplayLabel()
 	return L["goldPanelDisplayCharacter"] or "Character"
 end
 
+local function getLeftClickAction()
+	if db and db.leftClickAction == "openBags" then return "openBags" end
+	return "toggleDisplay"
+end
+
+local function getLeftClickHint()
+	if getLeftClickAction() == "openBags" then return L["goldPanelClickHintOpenBags"] or "Left-click to open bags" end
+	return L["goldPanelClickHintToggleDisplay"] or L["goldPanelClickHint"] or "Left-click to toggle warband/character gold"
+end
+
 local function toggleDisplayMode()
 	ensureDB()
 	if db.displayMode == "warband" then
@@ -212,11 +257,20 @@ local function toggleDisplayMode()
 	addon.DataHub:RequestUpdate(stream)
 end
 
+local function openBags()
+	if OpenAllBags then
+		OpenAllBags()
+	elseif ToggleAllBags then
+		ToggleAllBags()
+	end
+end
+
 local function checkMoney(stream)
 	ensureDB()
 	if db.displayMode == "account" then db.displayMode = "warband" end
+	local privateDB = getPrivateDB()
 	local money = GetMoney() or 0
-	if db.displayMode == "warband" then money = addon.db and addon.db.warbandGold or 0 end
+	if db.displayMode == "warband" then money = privateDB.warbandGold or 0 end
 	if db.displayMode ~= "warband" then
 		local _, _, currentMoney = collectCharacterMoney()
 		if type(currentMoney) == "number" then money = currentMoney end
@@ -231,7 +285,7 @@ end
 
 local provider = {
 	id = "gold",
-	version = 2,
+	version = 3,
 	title = WORLD_QUEST_REWARD_FILTERS_GOLD,
 	update = checkMoney,
 	events = {
@@ -241,7 +295,12 @@ local provider = {
 	},
 	OnClick = function(_, btn)
 		if btn == "LeftButton" then
-			toggleDisplayMode()
+			ensureDB()
+			if getLeftClickAction() == "openBags" then
+				openBags()
+			else
+				toggleDisplayMode()
+			end
 		elseif btn == "RightButton" then
 			createAceWindow()
 		end
@@ -252,7 +311,7 @@ local provider = {
 		tip:ClearLines()
 		tip:SetOwner(btn, "ANCHOR_TOPLEFT")
 
-		local warband = addon.db and addon.db.warbandGold
+		local warband = getPrivateDB().warbandGold
 		if warband ~= nil then tip:AddDoubleLine(L["warbandGold"] or "Warband gold", formatMoney(warband)) end
 
 		local list, total = collectCharacterMoney()
@@ -269,7 +328,7 @@ local provider = {
 			tip:AddDoubleLine(TOTAL or "Total", formatMoney(total))
 		end
 
-		local clickHint = L["goldPanelClickHint"] or "Left-click to toggle warband/character gold"
+		local clickHint = getLeftClickHint()
 		local modeHint = (L["goldPanelDisplay"] or "Gold display") .. ": " .. getDisplayLabel()
 		local hint = getOptionsHint()
 		if clickHint or modeHint or hint then

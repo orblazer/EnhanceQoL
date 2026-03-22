@@ -6,6 +6,18 @@ local EditMode = addon.EditMode
 local LibEditMode = LibStub("LibEQOLEditMode-1.0")
 
 local DEFAULT_LAYOUT = "_Global"
+local SHARED_STORAGE_KEY = "editModeData"
+local LEGACY_LAYOUTS_KEY = "editModeLayouts"
+local PROFILE_MIGRATION_FLAG = "_editModeDataMigratedV1"
+local ROOT_MIGRATION_FLAG = "_editModeDataMigratedAllProfilesV1"
+local POSITION_ONLY_FLAG = "_editModeDataPositionOnlyV1"
+local ROOT_POSITION_ONLY_FLAG = "_editModeDataPositionOnlyAllProfilesV1"
+local POSITION_FIELDS = {
+	point = true,
+	relativePoint = true,
+	x = true,
+	y = true,
+}
 
 local function getSelection(lib, frame)
 	if not lib or not lib.frameSelections then return nil end
@@ -28,16 +40,136 @@ end
 EditMode.frames = EditMode.frames or {}
 EditMode.lib = LibEditMode
 EditMode.activeLayout = EditMode.activeLayout
-EditMode.layoutFresh = EditMode.layoutFresh or {}
 
 function EditMode:IsAvailable() return self.lib ~= nil end
 
 function EditMode:IsInEditMode() return self:IsAvailable() and self.lib:IsInEditMode() end
 
+local function copyValue(value)
+	if type(value) == "table" then return CopyTable(value) end
+	return value
+end
+
+local function sortedKeys(source)
+	local result = {}
+	if type(source) ~= "table" then return result end
+	for key in pairs(source) do
+		if type(key) == "string" then result[#result + 1] = key end
+	end
+	table.sort(result)
+	return result
+end
+
+local function mergeMissingRecord(target, source)
+	if type(target) ~= "table" or type(source) ~= "table" then return end
+	for key, value in pairs(source) do
+		if target[key] == nil then target[key] = copyValue(value) end
+	end
+end
+
+local function mergeMissingFrames(target, source)
+	if type(target) ~= "table" or type(source) ~= "table" then return end
+	for frameId, data in pairs(source) do
+		local existing = target[frameId]
+		if existing == nil then
+			target[frameId] = copyValue(data)
+		elseif type(existing) == "table" and type(data) == "table" then
+			mergeMissingRecord(existing, data)
+		end
+	end
+end
+
+local function pruneRecordToPositionOnly(record)
+	if type(record) ~= "table" then return end
+	for field in pairs(record) do
+		if not POSITION_FIELDS[field] then record[field] = nil end
+	end
+end
+
+local function pruneStoreToPositionOnly(store)
+	if type(store) ~= "table" then return end
+	for id, record in pairs(store) do
+		if type(record) == "table" then
+			pruneRecordToPositionOnly(record)
+		else
+			store[id] = nil
+		end
+	end
+end
+
+local function pickPreferredLegacyLayout(layouts, preferred)
+	if preferred and type(layouts[preferred]) == "table" and next(layouts[preferred]) ~= nil then return preferred end
+	if type(layouts[DEFAULT_LAYOUT]) == "table" and next(layouts[DEFAULT_LAYOUT]) ~= nil then return DEFAULT_LAYOUT end
+	for _, key in ipairs(sortedKeys(layouts)) do
+		local layout = layouts[key]
+		if type(layout) == "table" and next(layout) ~= nil then return key end
+	end
+	return nil
+end
+
+function EditMode:_migrateLegacyLayoutStore(profile, preferredLayoutName)
+	if type(profile) ~= "table" then return end
+	if profile[PROFILE_MIGRATION_FLAG] and profile[POSITION_ONLY_FLAG] and profile[LEGACY_LAYOUTS_KEY] == nil and type(profile[SHARED_STORAGE_KEY]) == "table" then return end
+
+	local target = profile[SHARED_STORAGE_KEY]
+	if type(target) ~= "table" then
+		target = {}
+		profile[SHARED_STORAGE_KEY] = target
+	end
+
+	local legacyLayouts = profile[LEGACY_LAYOUTS_KEY]
+	if type(legacyLayouts) == "table" then
+		if next(target) == nil then
+			local preferred = pickPreferredLegacyLayout(legacyLayouts, preferredLayoutName)
+			if preferred and type(legacyLayouts[preferred]) == "table" then mergeMissingFrames(target, legacyLayouts[preferred]) end
+		end
+
+		for _, key in ipairs(sortedKeys(legacyLayouts)) do
+			local layout = legacyLayouts[key]
+			if type(layout) == "table" then mergeMissingFrames(target, layout) end
+		end
+
+		profile[LEGACY_LAYOUTS_KEY] = nil
+	end
+
+	pruneStoreToPositionOnly(target)
+
+	profile[PROFILE_MIGRATION_FLAG] = true
+	profile[POSITION_ONLY_FLAG] = true
+end
+
+function EditMode:MigrateProfileData(profile, preferredLayoutName) self:_migrateLegacyLayoutStore(profile, preferredLayoutName or self:GetActiveLayoutName()) end
+
+function EditMode:_migrateAllProfiles()
+	local db = _G.EnhanceQoLDB
+	if type(db) ~= "table" then return end
+	if db[ROOT_MIGRATION_FLAG] and db[ROOT_POSITION_ONLY_FLAG] then return end
+	local profiles = db.profiles
+	if type(profiles) ~= "table" then
+		db[ROOT_MIGRATION_FLAG] = true
+		db[ROOT_POSITION_ONLY_FLAG] = true
+		return
+	end
+
+	local preferred = self:GetActiveLayoutName()
+	for _, profile in pairs(profiles) do
+		self:_migrateLegacyLayoutStore(profile, preferred)
+	end
+
+	db[ROOT_MIGRATION_FLAG] = true
+	db[ROOT_POSITION_ONLY_FLAG] = true
+end
+
 function EditMode:_ensureDB()
 	if not addon.db then return nil end
-	addon.db.editModeLayouts = addon.db.editModeLayouts or {}
-	return addon.db.editModeLayouts
+	if self.runtimeProfileRef ~= addon.db then
+		self.runtimeProfileRef = addon.db
+		self.runtimeLayoutData = {}
+	end
+	self:_migrateAllProfiles()
+	self:_migrateLegacyLayoutStore(addon.db, self:GetActiveLayoutName())
+	addon.db[SHARED_STORAGE_KEY] = addon.db[SHARED_STORAGE_KEY] or {}
+	return addon.db[SHARED_STORAGE_KEY]
 end
 
 function EditMode:GetActiveLayoutName()
@@ -55,45 +187,6 @@ end
 function EditMode:_resolveLayoutName(layoutName)
 	if layoutName and layoutName ~= "" then return layoutName end
 	return self:GetActiveLayoutName()
-end
-
-function EditMode:_resolveLayoutNameByIndex(layoutIndex)
-	if not layoutIndex then return nil end
-	local lib = self.lib
-	local layoutNames = lib and lib.layoutNames
-	return layoutNames and layoutNames[layoutIndex]
-end
-
-function EditMode:_layoutHasData(layoutName)
-	if not layoutName then return false end
-	local layouts = self:_ensureDB()
-	if not layouts then return false end
-	local data = layouts[layoutName]
-	return data ~= nil and next(data) ~= nil
-end
-
-function EditMode:_copyLayoutData(sourceLayoutName, targetLayoutName, force)
-	if not sourceLayoutName or not targetLayoutName or sourceLayoutName == targetLayoutName then return false end
-	local layouts = self:_ensureDB()
-	if not layouts then return false end
-	local source = layouts[sourceLayoutName]
-	if not source or next(source) == nil then return false end
-	local target = layouts[targetLayoutName]
-	if target and next(target) ~= nil and not force then return false end
-	layouts[targetLayoutName] = CopyTable(source)
-	return true
-end
-
-function EditMode:_getLayoutCopySource(targetLayoutName)
-	local source = self:GetActiveLayoutName()
-	if source == targetLayoutName then source = self.lastActiveLayout end
-	if source == targetLayoutName then source = nil end
-	return source
-end
-
-function EditMode:_applyLayoutIfActive(layoutName)
-	if not layoutName then return end
-	if self:GetActiveLayoutName() == layoutName then self:OnLayoutChanged(layoutName) end
 end
 
 local function isInCombat() return InCombatLockdown and InCombatLockdown() end
@@ -197,6 +290,35 @@ function EditMode:_applyLayoutPosition(entry, data, immediate)
 	frame:SetPoint(point, relative, relativePoint, x, y)
 end
 
+function EditMode:_seedStoredPosition(record, entry)
+	record.point = record.point or (entry and entry.defaults and entry.defaults.point) or "CENTER"
+	record.relativePoint = record.relativePoint or record.point or (entry and entry.defaults and entry.defaults.relativePoint) or "CENTER"
+	if record.x == nil then record.x = (entry and entry.defaults and entry.defaults.x) or 0 end
+	if record.y == nil then record.y = (entry and entry.defaults and entry.defaults.y) or 0 end
+end
+
+function EditMode:_writeStoredPosition(id, entry, point, relativePoint, x, y)
+	local container = self:_ensureDB()
+	if not container then return end
+	local record = container[id]
+	if type(record) ~= "table" then
+		record = {}
+		container[id] = record
+	end
+	pruneRecordToPositionOnly(record)
+	self:_seedStoredPosition(record, entry)
+
+	if point ~= nil then record.point = point end
+	if relativePoint ~= nil then
+		record.relativePoint = relativePoint
+	elseif point ~= nil then
+		record.relativePoint = point
+	end
+	if x ~= nil then record.x = x end
+	if y ~= nil then record.y = y end
+	if not record.relativePoint then record.relativePoint = record.point end
+end
+
 function EditMode:EnsureLayoutData(id, layoutName)
 	local entry = self.frames[id]
 	if not entry then return nil end
@@ -204,37 +326,72 @@ function EditMode:EnsureLayoutData(id, layoutName)
 	local container = self:_ensureDB()
 	if not container then
 		entry._fallback = entry._fallback or {}
-		local layoutKey = self:_resolveLayoutName(layoutName)
-		local record = entry._fallback[layoutKey]
-		if not record then
-			record = {}
-			entry._fallback[layoutKey] = record
-		end
-		copyDefaults(record, entry.defaults)
-		return record
+		copyDefaults(entry._fallback, entry.defaults)
+		return entry._fallback
 	end
 
-	local layoutKey = self:_resolveLayoutName(layoutName)
-	local layout = container[layoutKey]
-	if not layout then
-		layout = {}
-		container[layoutKey] = layout
-	end
-
-	local record = layout[id]
-	if not record then
+	local record = container[id]
+	if type(record) ~= "table" then
 		record = {}
+		container[id] = record
+	end
+	local hadStoredPoint = record.point ~= nil
+	local hadStoredRelativePoint = record.relativePoint ~= nil
+	local hadStoredX = record.x ~= nil
+	local hadStoredY = record.y ~= nil
+	pruneRecordToPositionOnly(record)
+	self:_seedStoredPosition(record, entry)
+
+	self.runtimeLayoutData = self.runtimeLayoutData or {}
+	local runtime = self.runtimeLayoutData[id]
+	if type(runtime) ~= "table" then
+		runtime = {}
 		if entry.legacy then
 			for field, key in pairs(entry.legacy) do
 				local value = addon.db and addon.db[key]
-				if value ~= nil then record[field] = value end
+				if value ~= nil then runtime[field] = value end
 			end
 		end
-		copyDefaults(record, entry.defaults)
-		layout[id] = record
+		copyDefaults(runtime, entry.defaults)
+		self.runtimeLayoutData[id] = runtime
 	end
 
-	return record
+	-- Persisted position must always win; for legacy migration, keep runtime values
+	-- when no stored position existed yet.
+	if hadStoredPoint then
+		runtime.point = record.point
+	elseif runtime.point == nil then
+		runtime.point = record.point or (entry.defaults and entry.defaults.point) or "CENTER"
+	end
+
+	if hadStoredRelativePoint then
+		runtime.relativePoint = record.relativePoint
+	elseif runtime.relativePoint == nil then
+		runtime.relativePoint = record.relativePoint or runtime.point
+	end
+
+	if hadStoredX then
+		runtime.x = record.x
+	elseif runtime.x == nil then
+		runtime.x = record.x
+	end
+
+	if hadStoredY then
+		runtime.y = record.y
+	elseif runtime.y == nil then
+		runtime.y = record.y
+	end
+
+	if runtime.point == nil then runtime.point = (entry.defaults and entry.defaults.point) or "CENTER" end
+	if runtime.relativePoint == nil then runtime.relativePoint = runtime.point end
+	if runtime.x == nil then runtime.x = (entry.defaults and entry.defaults.x) or 0 end
+	if runtime.y == nil then runtime.y = (entry.defaults and entry.defaults.y) or 0 end
+
+	if record.point ~= runtime.point or record.relativePoint ~= runtime.relativePoint or record.x ~= runtime.x or record.y ~= runtime.y then
+		self:_writeStoredPosition(id, entry, runtime.point, runtime.relativePoint, runtime.x, runtime.y)
+	end
+
+	return runtime
 end
 
 function EditMode:GetLayoutData(id, layoutName) return self:EnsureLayoutData(id, layoutName) end
@@ -242,11 +399,13 @@ function EditMode:GetLayoutData(id, layoutName) return self:EnsureLayoutData(id,
 function EditMode:SetFramePosition(id, point, x, y, layoutName, skipApply)
 	local data = self:EnsureLayoutData(id, layoutName)
 	if not data then return end
+	local entry = self.frames[id]
 
 	data.point = point
 	data.relativePoint = point
 	data.x = x
 	data.y = y
+	self:_writeStoredPosition(id, entry, data.point, data.relativePoint, data.x, data.y)
 
 	if not skipApply then self:ApplyLayout(id, layoutName) end
 end
@@ -254,8 +413,10 @@ end
 function EditMode:SetValue(id, field, value, layoutName, skipApply)
 	local data = self:EnsureLayoutData(id, layoutName)
 	if not data then return end
+	local entry = self.frames[id]
 
 	data[field] = value
+	if POSITION_FIELDS[field] then self:_writeStoredPosition(id, entry, data.point, data.relativePoint, data.x, data.y) end
 	if not skipApply then self:ApplyLayout(id, layoutName) end
 end
 
@@ -321,6 +482,7 @@ function EditMode:ApplyLayout(id, layoutName)
 	layoutName = self:_resolveLayoutName(layoutName)
 	local data = self:EnsureLayoutData(id, layoutName)
 	if not data then return end
+	self:_writeStoredPosition(id, entry, data.point, data.relativePoint, data.x, data.y)
 
 	if entry.managePosition ~= false then
 		local position = {
@@ -344,22 +506,6 @@ function EditMode:_registerCallbacks()
 
 	self.lib:RegisterCallback("enter", function() self:OnEnterEditMode() end)
 	self.lib:RegisterCallback("exit", function() self:OnExitEditMode() end)
-	self.lib:RegisterCallback("layout", function(layoutName)
-		if layoutName and layoutName ~= "" then
-			if self.activeLayout and self.activeLayout ~= layoutName then self.lastActiveLayout = self.activeLayout end
-			self.activeLayout = layoutName
-		end
-		self:OnLayoutChanged(layoutName)
-	end)
-	self.lib:RegisterCallback("layoutrenamed", function(oldName, newName, layoutIndex) self:OnLayoutRenamed(oldName, newName, layoutIndex) end)
-	self.lib:RegisterCallback(
-		"layoutadded",
-		function(layoutIndex, activateNewLayout, isLayoutImported, layoutType, layoutName) self:OnLayoutAdded(layoutIndex, activateNewLayout, isLayoutImported, layoutType, layoutName) end
-	)
-	self.lib:RegisterCallback(
-		"layoutduplicate",
-		function(addedLayoutIndex, dupes, isLayoutImported, layoutType, newName) self:OnLayoutDuplicate(addedLayoutIndex, dupes, isLayoutImported, layoutType, newName) end
-	)
 end
 
 function EditMode:OnEnterEditMode()
@@ -378,70 +524,24 @@ function EditMode:OnExitEditMode()
 end
 
 function EditMode:OnLayoutChanged(layoutName)
-	local resolved = self:_resolveLayoutName(layoutName)
-	if resolved and not self:_layoutHasData(resolved) then
-		if not self.layoutFresh[resolved] then self.layoutFresh[resolved] = true end
-	end
-	for id in pairs(self.frames) do
-		self:ApplyLayout(id, layoutName)
-	end
+	-- Edit Mode layout switches must not mutate addon-managed frame state.
+	-- Data is layout-agnostic (single store per addon profile), so applying
+	-- all frames here only causes redundant SetPoint churn and visible jitter.
+	return
 end
 
 function EditMode:OnLayoutRenamed(oldName, newName, layoutIndex)
 	if not oldName or oldName == "" or not newName or newName == "" or oldName == newName then return end
-	local layouts = self:_ensureDB()
-	if layouts then
-		local data = layouts[oldName]
-		if data then
-			layouts[newName] = data
-			layouts[oldName] = nil
-		end
-	else
-		for _, entry in pairs(self.frames) do
-			local fallback = entry._fallback
-			if fallback and fallback[oldName] then
-				fallback[newName] = fallback[oldName]
-				fallback[oldName] = nil
-			end
-		end
-	end
 	if self.activeLayout == oldName then self.activeLayout = newName end
 	if self.lastActiveLayout == oldName then self.lastActiveLayout = newName end
-	if self.layoutFresh and self.layoutFresh[oldName] then
-		self.layoutFresh[newName] = true
-		self.layoutFresh[oldName] = nil
-	end
 end
 
 function EditMode:OnLayoutAdded(layoutIndex, activateNewLayout, isLayoutImported, layoutType, layoutName)
-	local targetName = layoutName or self:_resolveLayoutNameByIndex(layoutIndex)
-	if not targetName or targetName == "" then return end
-	local sourceName = self:_getLayoutCopySource(targetName)
-	if not sourceName then return end
-	local force = self.layoutFresh and self.layoutFresh[targetName] and true or false
-	if self:_copyLayoutData(sourceName, targetName, force) then self:_applyLayoutIfActive(targetName) end
-	if self.layoutFresh then self.layoutFresh[targetName] = nil end
+	if activateNewLayout then self:OnLayoutChanged(layoutName or self:GetActiveLayoutName()) end
 end
 
 function EditMode:OnLayoutDuplicate(addedLayoutIndex, dupes, isLayoutImported, layoutType, newName)
-	local targetName = newName or self:_resolveLayoutNameByIndex(addedLayoutIndex)
-	if not targetName or targetName == "" then return end
-
-	local sourceName
-	if type(dupes) == "table" then
-		for _, dupeIndex in ipairs(dupes) do
-			local dupeName = self:_resolveLayoutNameByIndex(dupeIndex)
-			if dupeName and self:_layoutHasData(dupeName) then
-				sourceName = dupeName
-				break
-			end
-		end
-	end
-
-	if not sourceName then sourceName = self:_getLayoutCopySource(targetName) end
-	if not sourceName then return end
-	if self:_copyLayoutData(sourceName, targetName, true) then self:_applyLayoutIfActive(targetName) end
-	if self.layoutFresh then self.layoutFresh[targetName] = nil end
+	if newName and newName ~= "" and self:GetActiveLayoutName() == newName then self:OnLayoutChanged(newName) end
 end
 
 function EditMode:_prepareSetting(id, setting)
@@ -599,16 +699,16 @@ function EditMode:RegisterFrame(id, opts)
 
 	self:ApplyLayout(id, self:GetActiveLayoutName())
 	-- self.lib:AddManagerCheckbox({
-    --     label = frame.editModeName,
-    --     frames = frame,
-    --     category = "EnhanceQoL",
-    --     id = id,
-    -- })
+	--     label = frame.editModeName,
+	--     frames = frame,
+	--     category = "EnhanceQoL",
+	--     id = id,
+	-- })
 
 	return frame
 end
 
-function EditMode:UnregisterFrame(id)
+function EditMode:UnregisterFrame(id, purgeData)
 	if not id then return end
 	id = tostring(id)
 	local entry = self.frames and self.frames[id]
@@ -633,15 +733,9 @@ function EditMode:UnregisterFrame(id)
 		if lib.frameButtons then lib.frameButtons[frame] = nil end
 	end
 
-	local layouts = addon.db and addon.db.editModeLayouts
-	if layouts then
-		for layoutName, layout in pairs(layouts) do
-			if type(layout) == "table" then
-				layout[id] = nil
-				if not next(layout) then layouts[layoutName] = nil end
-			end
-		end
-	end
+	local data = addon.db and addon.db[SHARED_STORAGE_KEY]
+	if purgeData and type(data) == "table" then data[id] = nil end
+	if self.runtimeLayoutData then self.runtimeLayoutData[id] = nil end
 
 	self.frames[id] = nil
 end

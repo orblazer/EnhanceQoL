@@ -6,6 +6,8 @@ local L = addon.L
 local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 local LSM = LibStub("LibSharedMedia-3.0", true)
+local LDB = LibStub("LibDataBroker-1.1", true)
+local issecretvalue = _G.issecretvalue
 
 local DEFAULT_TEXT_ALPHA = 100
 local DEFAULT_BACKDROP_ALPHA = 0.5
@@ -16,6 +18,10 @@ local DEFAULT_FONT_OUTLINE = true
 local DEFAULT_FONT_SHADOW = false
 local DEFAULT_STREAM_GAP = 5
 local DEFAULT_STREAM_FONT_SCALE = 100
+local PANEL_WIDTH_MIN = 50
+local PANEL_WIDTH_MAX = 5000
+local PANEL_HEIGHT_MIN = 16
+local PANEL_HEIGHT_MAX = 800
 local SHADOW_OFFSET_X = 1
 local SHADOW_OFFSET_Y = -1
 local SHADOW_ALPHA = 0.8
@@ -25,6 +31,8 @@ local SOLID_TEXTURE = "Interface\\Buttons\\WHITE8x8"
 local DEFAULT_BACKDROP_COLOR = { r = 0, g = 0, b = 0, a = DEFAULT_BACKDROP_ALPHA }
 local DEFAULT_BORDER_COLOR = { r = 1, g = 1, b = 1, a = DEFAULT_BORDER_ALPHA }
 local BACKDROP_INSET = 4
+local LDB_STREAM_PREFIX = "ldb:"
+local LDB_BRIDGE_OWNER = addonName .. "_DataPanelLDBBridge"
 
 local DELETE_BUTTON_LABEL = L["DataPanelDelete"] or "Delete panel"
 local DELETE_CONFIRM_TEXT = L["DataPanelDeleteConfirm"] or 'Are you sure you want to delete "%s"? This cannot be undone.'
@@ -47,6 +55,8 @@ if not StaticPopupDialogs[DELETE_PANEL_POPUP] then
 end
 
 local panels = {}
+local ldbObjectsByStream = {}
+local ldbStreamsByObject = {}
 local STRATA_ORDER = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 local VALID_STRATA = {}
 for _, strata in ipairs(STRATA_ORDER) do
@@ -82,6 +92,13 @@ local function clamp(value, minV, maxV)
 	return value
 end
 
+local function isSecretValue(value) return issecretvalue and issecretvalue(value) end
+
+local function sanitizeValue(value)
+	if isSecretValue(value) then return nil end
+	return value
+end
+
 local function normalizeStreamGap(value, fallback)
 	local num = tonumber(value)
 	if not num then num = tonumber(fallback) end
@@ -100,6 +117,20 @@ local function normalizeStreamFontScale(value, fallback)
 	return num
 end
 
+local function normalizePanelWidth(value, fallback)
+	local num = tonumber(value)
+	if not num then num = tonumber(fallback) end
+	if not num then return 300 end
+	return clamp(num, PANEL_WIDTH_MIN, PANEL_WIDTH_MAX)
+end
+
+local function normalizePanelHeight(value, fallback)
+	local num = tonumber(value)
+	if not num then num = tonumber(fallback) end
+	if not num then return 40 end
+	return clamp(num, PANEL_HEIGHT_MIN, PANEL_HEIGHT_MAX)
+end
+
 local function normalizeBorderSize(value, fallback)
 	local num = tonumber(value)
 	if not num then num = tonumber(fallback) end
@@ -114,11 +145,42 @@ local function normalizeBorderOffset(value, fallback)
 	return clamp(num, -20, 20)
 end
 
-local function defaultFontFace() return (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT end
+local function defaultFontFace()
+	if addon.functions and addon.functions.GetGlobalDefaultFontFace then return addon.functions.GetGlobalDefaultFontFace() end
+	return (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT
+end
+
+local function globalFontConfigKey()
+	if addon.functions and addon.functions.GetGlobalFontConfigKey then return addon.functions.GetGlobalFontConfigKey() end
+	return "__EQOL_GLOBAL_FONT__"
+end
+
+local function globalFontConfigLabel()
+	if addon.functions and addon.functions.GetGlobalFontConfigLabel then return addon.functions.GetGlobalFontConfigLabel() end
+	return "Use global font config"
+end
 
 local function normalizeFontFace(value)
 	if type(value) ~= "string" or value == "" then return nil end
 	return value
+end
+
+local function normalizeFontSetting(value, fallback)
+	local selected = normalizeFontFace(value)
+	if selected then return selected end
+	local fallbackValue = normalizeFontFace(fallback)
+	if fallbackValue then return fallbackValue end
+	return globalFontConfigKey()
+end
+
+local function resolveFontFace(value, fallback)
+	local fallbackFace = normalizeFontFace(fallback) or defaultFontFace()
+	local resolver = addon.functions and addon.functions.ResolveFontFace
+	if resolver then
+		local resolved = resolver(value, fallbackFace)
+		if type(resolved) == "string" and resolved ~= "" then return resolved end
+	end
+	return normalizeFontFace(value) or fallbackFace
 end
 
 local function normalizeMediaKey(value, fallback)
@@ -172,21 +234,38 @@ local function resolveBorderTexture(key)
 	return key
 end
 
+local function getCachedMediaNames(mediaType)
+	if addon.functions and addon.functions.GetLSMMediaNames then
+		local names = addon.functions.GetLSMMediaNames(mediaType)
+		if type(names) == "table" then return names end
+	end
+	return {}
+end
+
+local function getCachedMediaHash(mediaType)
+	if addon.functions and addon.functions.GetLSMMediaHash then
+		local hash = addon.functions.GetLSMMediaHash(mediaType)
+		if type(hash) == "table" then return hash end
+	end
+	return {}
+end
+
 local function fontFaceOptions()
 	local list = {}
 	local defaultPath = defaultFontFace()
 	local hasDefault = false
-	if LSM and LSM.HashTable then
-		local hash = LSM:HashTable("font") or {}
-		for name, path in pairs(hash) do
-			if type(path) == "string" and path ~= "" then
-				list[#list + 1] = { value = path, label = tostring(name) }
-				if path == defaultPath then hasDefault = true end
-			end
+	local names = getCachedMediaNames("font")
+	local hash = getCachedMediaHash("font")
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then
+			list[#list + 1] = { value = path, label = tostring(name) }
+			if path == defaultPath then hasDefault = true end
 		end
 	end
 	if defaultPath and not hasDefault then list[#list + 1] = { value = defaultPath, label = DEFAULT } end
-	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+	table.insert(list, 1, { value = globalFontConfigKey(), label = globalFontConfigLabel() })
 	return list
 end
 
@@ -201,12 +280,13 @@ local function backgroundTextureOptions()
 	end
 	add("DEFAULT", _G.DEFAULT or "Default")
 	add("SOLID", "Solid")
-	if LSM and LSM.HashTable then
-		for name, path in pairs(LSM:HashTable("background") or {}) do
-			if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
-		end
+	local names = getCachedMediaNames("background")
+	local hash = getCachedMediaHash("background")
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
 	end
-	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
 	return list
 end
 
@@ -221,12 +301,13 @@ local function borderTextureOptions()
 	end
 	add("DEFAULT", _G.DEFAULT or "Default")
 	add("SOLID", "Solid")
-	if LSM and LSM.HashTable then
-		for name, path in pairs(LSM:HashTable("border") or {}) do
-			if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
-		end
+	local names = getCachedMediaNames("border")
+	local hash = getCachedMediaHash("border")
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
 	end
-	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
 	return list
 end
 
@@ -321,6 +402,23 @@ local function copyList(source)
 	return result
 end
 
+local function sanitizeStreamList(source)
+	local list = {}
+	local set = {}
+	if type(source) ~= "table" then return list, set end
+	for _, name in ipairs(source) do
+		if type(name) == "string" and name ~= "" and not set[name] then
+			set[name] = true
+			list[#list + 1] = name
+		end
+	end
+	return list, set
+end
+
+local function isStreamAvailable(name)
+	return type(name) == "string" and name ~= "" and DataHub and DataHub.streams and DataHub.streams[name] ~= nil
+end
+
 local function streamDisplayName(name)
 	local stream = DataHub and DataHub.streams and DataHub.streams[name]
 	if stream and stream.meta then return stream.meta.title or stream.meta.name or name end
@@ -337,6 +435,218 @@ local function sortedStreams()
 	table.sort(list, function(a, b) return streamDisplayName(a) < streamDisplayName(b) end)
 	return list
 end
+
+local function ldbStreamName(name)
+	if type(name) ~= "string" or name == "" then return nil end
+	return LDB_STREAM_PREFIX .. name
+end
+
+local function ldbTitle(name, dataobj)
+	local label = dataobj and dataobj.label
+	if type(label) == "string" and label ~= "" then return "LDB: " .. label end
+	return "LDB: " .. tostring(name)
+end
+
+local function ldbValueToText(value)
+	if value == nil then return nil end
+	if type(value) == "string" then return value end
+	if type(value) == "number" or type(value) == "boolean" then return tostring(value) end
+	return nil
+end
+
+local function ldbCoordToPixel(value, fallback)
+	local num = tonumber(value)
+	if not num then num = fallback end
+	num = clamp(num or fallback or 0, 0, 1)
+	return math.floor(num * 64 + 0.5)
+end
+
+local function ldbBuildIconTag(dataobj, size)
+	local icon = dataobj and dataobj.icon
+	if type(icon) ~= "string" or icon == "" then return nil end
+	local iconSize = tonumber(dataobj.iconSize) or tonumber(size) or 14
+	if iconSize < 8 then iconSize = 8 end
+	local iconCoords = dataobj.iconCoords
+	if type(iconCoords) == "table" then
+		local left = ldbCoordToPixel(iconCoords[1] or iconCoords.left, 0)
+		local right = ldbCoordToPixel(iconCoords[2] or iconCoords.right, 1)
+		local top = ldbCoordToPixel(iconCoords[3] or iconCoords.top, 0)
+		local bottom = ldbCoordToPixel(iconCoords[4] or iconCoords.bottom, 1)
+		return ("|T%s:%d:%d:0:0:64:64:%d:%d:%d:%d|t"):format(icon, iconSize, iconSize, left, right, top, bottom)
+	end
+	return ("|T%s:%d:%d:0:0|t"):format(icon, iconSize, iconSize)
+end
+
+local function ldbBuildText(name, dataobj, fontSize)
+	local label = ldbValueToText(dataobj and dataobj.label)
+	local text = ldbValueToText(dataobj and dataobj.text)
+	if not text or text == "" then
+		local value = ldbValueToText(dataobj and dataobj.value)
+		if value and value ~= "" and label and label ~= "" then
+			text = label .. ": " .. value
+		else
+			text = value or label
+		end
+	end
+	if not text or text == "" then text = tostring(name) end
+	local icon = ldbBuildIconTag(dataobj, fontSize)
+	if not icon then return text end
+	if text and text ~= "" then return icon .. " " .. text end
+	return icon
+end
+
+local function ldbWrapClick(dataobj)
+	local fn = dataobj and dataobj.OnClick
+	if type(fn) ~= "function" then return false end
+	return function(button, btn, ...)
+		local ok, err = pcall(fn, button, btn, ...)
+		if not ok and geterrorhandler then geterrorhandler()(err) end
+	end
+end
+
+local function ldbWrapMouseEnter(dataobj)
+	local onEnter = dataobj and dataobj.OnEnter
+	local onTooltipShow = dataobj and dataobj.OnTooltipShow
+	if type(onEnter) ~= "function" and type(onTooltipShow) ~= "function" then return nil end
+	return function(button)
+		if type(onEnter) == "function" then
+			local ok, err = pcall(onEnter, button)
+			if not ok and geterrorhandler then geterrorhandler()(err) end
+		end
+		if type(onTooltipShow) == "function" and GameTooltip and GameTooltip.SetOwner and GameTooltip.ClearLines then
+			if not (GameTooltip.IsOwned and GameTooltip:IsOwned(button)) then
+				GameTooltip:SetOwner(button, "ANCHOR_TOPLEFT")
+				GameTooltip:ClearLines()
+			end
+			local ok, err = pcall(onTooltipShow, GameTooltip)
+			if not ok and geterrorhandler then geterrorhandler()(err) end
+			GameTooltip:Show()
+		end
+	end
+end
+
+local function ldbWrapMouseLeave(dataobj)
+	local onLeave = dataobj and dataobj.OnLeave
+	if type(onLeave) ~= "function" then return nil end
+	return function(button)
+		local ok, err = pcall(onLeave, button)
+		if not ok and geterrorhandler then geterrorhandler()(err) end
+	end
+end
+
+local function ldbBuildTooltip(name, dataobj, text)
+	local tooltip = ldbValueToText((dataobj and dataobj.tooltiptext) or (dataobj and dataobj.tooltipText))
+	if tooltip and tooltip ~= "" then return tooltip end
+	if dataobj and (type(dataobj.OnEnter) == "function" or type(dataobj.OnTooltipShow) == "function") then return nil end
+	local label = ldbValueToText(dataobj and dataobj.label)
+	if label and label ~= "" and text and text ~= "" and label ~= text then return label .. "\n" .. text end
+	if label and label ~= "" then return label end
+	return tostring(name)
+end
+
+local function ldbBuildPayload(name, dataobj)
+	local hidden = true
+	if type(dataobj) == "table" then hidden = dataobj.hidden == true or dataobj.isHidden == true end
+	local payload = {
+		fontSize = tonumber(dataobj and dataobj.fontSize) or 14,
+		hidden = hidden,
+		ignoreMenuModifier = true,
+		OnClick = ldbWrapClick(dataobj),
+		OnMouseEnter = ldbWrapMouseEnter(dataobj),
+		OnMouseLeave = ldbWrapMouseLeave(dataobj),
+	}
+	if payload.hidden then
+		payload.text = ""
+		payload.tooltip = nil
+		return payload
+	end
+	local text = ldbBuildText(name, dataobj, payload.fontSize)
+	payload.text = text
+	payload.tooltip = ldbBuildTooltip(name, dataobj, text)
+	return payload
+end
+
+local function ensureLDBStream(name, dataobj)
+	if not LDB or not DataHub then return nil end
+	local streamName = ldbStreamsByObject[name]
+	if not streamName then
+		streamName = ldbStreamName(name)
+		if not streamName then return nil end
+		ldbStreamsByObject[name] = streamName
+	end
+	ldbObjectsByStream[streamName] = dataobj
+
+	local stream = DataHub.streams and DataHub.streams[streamName]
+	if not stream then
+		stream = DataHub:RegisterStream({
+			id = streamName,
+			version = 1,
+			title = ldbTitle(name, dataobj),
+			ldb = true,
+			ldbName = name,
+			update = function(s)
+				local obj = ldbObjectsByStream[s.name]
+				local payload = ldbBuildPayload(name, obj)
+				if type(s.snapshot) ~= "table" then
+					s.snapshot = {}
+				else
+					wipe(s.snapshot)
+				end
+				for key, value in pairs(payload) do
+					s.snapshot[key] = value
+				end
+			end,
+		})
+	end
+
+	if stream and stream.meta then
+		stream.meta.title = ldbTitle(name, dataobj)
+		stream.meta.name = name
+		stream.meta.ldb = true
+		stream.meta.ldbName = name
+	end
+
+	return streamName, stream
+end
+
+local function restoreConfiguredPanelsForStream(streamName)
+	if not isStreamAvailable(streamName) then return end
+	for _, panel in pairs(panels) do
+		if panel and panel.info and panel.info.streamSet and panel.info.streamSet[streamName] and not panel.streams[streamName] and panel.ApplyStreams then
+			panel:ApplyStreams(copyList(panel.info.streams))
+		end
+	end
+end
+
+local function onLDBDataObjectCreated(_, name, dataobj)
+	local streamName = ensureLDBStream(name, dataobj)
+	if streamName then
+		restoreConfiguredPanelsForStream(streamName)
+		DataHub:RequestUpdate(streamName)
+	end
+end
+
+local function onLDBAttributeChanged(_, name, attr, _, dataobj)
+	local streamName, stream = ensureLDBStream(name, dataobj or (LDB and LDB.GetDataObjectByName and LDB:GetDataObjectByName(name)))
+	if not streamName then return end
+	if stream and stream.meta and (attr == "label" or attr == "type") then stream.meta.title = ldbTitle(name, dataobj or ldbObjectsByStream[streamName]) end
+	DataHub:RequestUpdate(streamName)
+end
+
+local function initLDBBridge()
+	if not LDB or not DataHub then return end
+	if LDB.DataObjectIterator then
+		for name, dataobj in LDB:DataObjectIterator() do
+			ensureLDBStream(name, dataobj)
+		end
+	end
+	if LDB.RegisterCallback then
+		LDB.RegisterCallback(LDB_BRIDGE_OWNER, "LibDataBroker_DataObjectCreated", onLDBDataObjectCreated)
+		LDB.RegisterCallback(LDB_BRIDGE_OWNER, "LibDataBroker_AttributeChanged", onLDBAttributeChanged)
+	end
+end
+
+initLDBBridge()
 
 local function shouldShowOptionsHint()
 	local opts = addon.db and addon.db.dataPanelsOptions
@@ -356,11 +666,18 @@ function DataPanel.GetStreamOptionsTitle(streamTitle)
 end
 
 local function partsOnEnter(b)
-	local s = b.slot
+	local s = b and b.slot
 	if not s then return end
 	if not slotTooltipsEnabled(s) then return end
-	GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
+
+	-- Let stream-specific handlers (e.g. LDB) fully control tooltip behavior.
+	if s.OnMouseEnter then
+		s.OnMouseEnter(b)
+		return
+	end
+
 	if s.perCurrency and b.currencyID then
+		GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
 		GameTooltip:SetCurrencyByID(b.currencyID)
 		if s.showDescription == false then
 			local info = C_CurrencyInfo.GetCurrencyInfo(b.currencyID)
@@ -380,13 +697,19 @@ local function partsOnEnter(b)
 			GameTooltip:AddLine(" ")
 			GameTooltip:AddLine(hint)
 		end
+		GameTooltip:Show()
 	elseif s.tooltip then
+		GameTooltip:SetOwner(b, "ANCHOR_TOPLEFT")
 		GameTooltip:SetText(s.tooltip)
+		GameTooltip:Show()
 	end
-	GameTooltip:Show()
 end
 
-local function partsOnLeave() GameTooltip:Hide() end
+local function partsOnLeave(b)
+	local s = b and b.slot
+	if s and s.OnMouseLeave then s.OnMouseLeave(b) end
+	GameTooltip:Hide()
+end
 
 local function partsOnClick(b, btn, ...)
 	local s = b.slot
@@ -427,6 +750,38 @@ local function payloadHasSecureParts(payload)
 	return false
 end
 
+local function seedEditModeRecordFromPanelInfo(panel, defaults, record)
+	if type(panel) ~= "table" or type(defaults) ~= "table" or type(record) ~= "table" then return end
+	local info = panel.info or {}
+
+	record.point = info.point or defaults.point or "CENTER"
+	record.relativePoint = record.point
+	record.x = info.x or defaults.x or 0
+	record.y = info.y or defaults.y or 0
+	record.width = normalizePanelWidth(info.width, defaults.width)
+	record.height = normalizePanelHeight(info.height, defaults.height)
+	record.hideBorder = info.hideBorder and true or false
+	record.clickThrough = info.clickThrough == true
+	record.strata = normalizeStrata(info.strata, defaults.strata)
+	record.contentAnchor = normalizeContentAnchor(info.contentAnchor, defaults.contentAnchor)
+	record.streams = copyList(info.streams or defaults.streams)
+	record.streamGap = normalizeStreamGap(info.streamGap, defaults.streamGap)
+	record.fontOutline = info.fontOutline ~= false
+	record.fontShadow = info.fontShadow == true
+	record.streamFontScale = normalizeStreamFontScale(info.streamFontScale, defaults.streamFontScale)
+	record.useClassTextColor = info.useClassTextColor == true
+	record.fontFace = normalizeFontSetting(info.fontFace, defaults.fontFace)
+	record.backgroundTexture = normalizeMediaKey(info.backgroundTexture, defaults.backgroundTexture)
+	record.backgroundColor = normalizeColorTable(info.backgroundColor, defaults.backgroundColor)
+	record.borderTexture = normalizeMediaKey(info.borderTexture, defaults.borderTexture)
+	record.borderColor = normalizeColorTable(info.borderColor, defaults.borderColor)
+	record.borderSize = normalizeBorderSize(info.borderSize, defaults.borderSize)
+	record.borderOffset = normalizeBorderOffset(info.borderOffset, defaults.borderOffset)
+	record.showTooltips = info.showTooltips ~= false
+	record.textAlphaInCombat = normalizePercent(info.textAlphaInCombat, defaults.textAlphaInCombat)
+	record.textAlphaOutOfCombat = normalizePercent(info.textAlphaOutOfCombat, defaults.textAlphaOutOfCombat)
+end
+
 local function registerEditModePanel(panel)
 	if not EditMode or not EditMode.RegisterFrame then return end
 	if panel.editModeRegistered then
@@ -441,8 +796,8 @@ local function registerEditModePanel(panel)
 		point = panel.info.point or "CENTER",
 		x = panel.info.x or 0,
 		y = panel.info.y or 0,
-		width = panel.info.width or panel.frame:GetWidth() or 200,
-		height = panel.info.height or panel.frame:GetHeight() or 20,
+		width = normalizePanelWidth(panel.info.width, panel.frame:GetWidth() or 200),
+		height = normalizePanelHeight(panel.info.height, panel.frame:GetHeight() or 20),
 		hideBorder = panel.info.hideBorder or false,
 		clickThrough = panel.info.clickThrough == true,
 		strata = normalizeStrata(panel.info.strata, panel.frame:GetFrameStrata()),
@@ -453,7 +808,7 @@ local function registerEditModePanel(panel)
 		fontShadow = panel.info.fontShadow == true,
 		streamFontScale = normalizeStreamFontScale(panel.info.streamFontScale, DEFAULT_STREAM_FONT_SCALE),
 		useClassTextColor = panel.info.useClassTextColor == true,
-		fontFace = normalizeFontFace(panel.info.fontFace) or defaultFontFace(),
+		fontFace = normalizeFontSetting(panel.info.fontFace, globalFontConfigKey()),
 		backgroundTexture = normalizeMediaKey(panel.info.backgroundTexture, "DEFAULT"),
 		backgroundColor = normalizeColorTable(panel.info.backgroundColor, DEFAULT_BACKDROP_COLOR),
 		borderTexture = normalizeMediaKey(panel.info.borderTexture, "DEFAULT"),
@@ -499,17 +854,40 @@ local function registerEditModePanel(panel)
 				kind = SettingType.Slider,
 				field = "width",
 				default = defaults.width,
-				minValue = 50,
-				maxValue = 800,
+				minValue = PANEL_WIDTH_MIN,
+				maxValue = PANEL_WIDTH_MAX,
 				valueStep = 1,
+				allowInput = true,
+				formatter = function(value)
+					local num = normalizePanelWidth(value, defaults.width)
+					return tostring(math.floor(num + 0.5))
+				end,
+				get = function(layoutName)
+					local value
+					if EditMode and EditMode.GetValue then
+						value = EditMode:GetValue(id, "width", layoutName)
+					elseif panel.info then
+						value = panel.info.width
+					end
+					return normalizePanelWidth(value, defaults.width)
+				end,
+				set = function(layoutName, value)
+					local width = normalizePanelWidth(value, defaults.width)
+					if EditMode and EditMode.SetValue then
+						EditMode:SetValue(id, "width", width, layoutName)
+					elseif panel.info then
+						panel.info.width = width
+						panel.frame:SetWidth(width)
+					end
+				end,
 			},
 			{
 				name = L["DataPanelHeight"],
 				kind = SettingType.Slider,
 				field = "height",
 				default = defaults.height,
-				minValue = 16,
-				maxValue = 800,
+				minValue = PANEL_HEIGHT_MIN,
+				maxValue = PANEL_HEIGHT_MAX,
 				valueStep = 1,
 			},
 			{
@@ -718,14 +1096,14 @@ local function registerEditModePanel(panel)
 				default = defaults.fontFace,
 				height = 200,
 				get = function(layoutName)
-					if EditMode and EditMode.GetValue then return EditMode:GetValue(id, "fontFace", layoutName) end
-					return panel.info and panel.info.fontFace or defaults.fontFace
+					if EditMode and EditMode.GetValue then return normalizeFontSetting(EditMode:GetValue(id, "fontFace", layoutName), defaults.fontFace) end
+					return normalizeFontSetting(panel.info and panel.info.fontFace, defaults.fontFace)
 				end,
 				set = function(layoutName, value)
 					if EditMode and EditMode.SetValue then
 						EditMode:SetValue(id, "fontFace", value, layoutName)
 					elseif panel.info then
-						panel.info.fontFace = normalizeFontFace(value) or defaultFontFace()
+						panel.info.fontFace = normalizeFontSetting(value, panel.info.fontFace or globalFontConfigKey())
 						panel:ApplyTextStyle()
 					end
 				end,
@@ -799,7 +1177,18 @@ local function registerEditModePanel(panel)
 		frame = panel.frame,
 		title = panel.name,
 		layoutDefaults = defaults,
-		onApply = function(_, _, data) panel:ApplyEditMode(data or {}) end,
+		onApply = function(_, layoutName, data)
+			if not panel._eqolEditModeHydrated then
+				panel._eqolEditModeHydrated = true
+				local record = data or {}
+				seedEditModeRecordFromPanelInfo(panel, defaults, record)
+				if EditMode and EditMode.SetFramePosition then
+					EditMode:SetFramePosition(id, record.point or "CENTER", record.x or 0, record.y or 0, layoutName)
+					return
+				end
+			end
+			panel:ApplyEditMode(data or {})
+		end,
 		onPositionChanged = function(_, _, data) panel:UpdatePositionInfo(data) end,
 		settings = settings,
 		buttons = buttons,
@@ -890,7 +1279,7 @@ local function ensureSettings(id, name)
 			fontShadow = DEFAULT_FONT_SHADOW,
 			streamFontScale = DEFAULT_STREAM_FONT_SCALE,
 			useClassTextColor = false,
-			fontFace = defaultFontFace(),
+			fontFace = globalFontConfigKey(),
 			backgroundTexture = "DEFAULT",
 			backgroundColor = { r = 0, g = 0, b = 0, a = DEFAULT_BACKDROP_ALPHA },
 			borderTexture = "DEFAULT",
@@ -925,7 +1314,7 @@ local function ensureSettings(id, name)
 		if info.fontShadow == nil then info.fontShadow = DEFAULT_FONT_SHADOW end
 		info.streamFontScale = normalizeStreamFontScale(info.streamFontScale, DEFAULT_STREAM_FONT_SCALE)
 		if info.useClassTextColor == nil then info.useClassTextColor = false end
-		if not info.fontFace or info.fontFace == "" then info.fontFace = defaultFontFace() end
+		info.fontFace = normalizeFontSetting(info.fontFace, globalFontConfigKey())
 		info.backgroundTexture = normalizeMediaKey(info.backgroundTexture, "DEFAULT")
 		info.backgroundColor = normalizeColorTable(info.backgroundColor, DEFAULT_BACKDROP_COLOR)
 		info.borderTexture = normalizeMediaKey(info.borderTexture, "DEFAULT")
@@ -936,13 +1325,13 @@ local function ensureSettings(id, name)
 		info.textAlphaInCombat = normalizePercent(info.textAlphaInCombat, DEFAULT_TEXT_ALPHA)
 		info.textAlphaOutOfCombat = normalizePercent(info.textAlphaOutOfCombat, info.textAlphaInCombat)
 	end
+	info.width = normalizePanelWidth(info.width, 300)
+	info.height = normalizePanelHeight(info.height, 40)
 
 	addon.db.dataPanels[id] = info
 	if addon.db.dataPanels[tonumber(id)] then addon.db.dataPanels[tonumber(id)] = nil end
 
-	for _, n in ipairs(info.streams) do
-		info.streamSet[n] = true
-	end
+	info.streams, info.streamSet = sanitizeStreamList(info.streams)
 
 	return info
 end
@@ -956,8 +1345,8 @@ local function savePosition(frame, id)
 	if not addon.db or not addon.db.dataPanels or not addon.db.dataPanels[id] then return end
 	local info = addon.db.dataPanels[id]
 	info.point, _, _, info.x, info.y = frame:GetPoint()
-	info.width = round2(frame:GetWidth())
-	info.height = round2(frame:GetHeight())
+	info.width = normalizePanelWidth(round2(frame:GetWidth()), info.width or 300)
+	info.height = normalizePanelHeight(round2(frame:GetHeight()), info.height or 40)
 	local panel = panels[id]
 	if panel then
 		panel:SyncEditModePosition(info.point, info.x, info.y)
@@ -1102,11 +1491,20 @@ function DataPanel.Create(id, name, existingOnly)
 		return "OUTLINE"
 	end
 
-	function panel:GetFontFace() return (self.info and self.info.fontFace) or defaultFontFace() end
+	function panel:GetFontFace() return resolveFontFace(self.info and self.info.fontFace, defaultFontFace()) end
 
 	function panel:ApplyFontStyle(fontString, font, size)
-		if not fontString or not fontString.SetFont or not font or not size then return end
-		fontString:SetFont(font, size, self:GetFontFlags())
+		if not fontString or not fontString.SetFont or not size then return end
+		local targetFont = resolveFontFace(font, self:GetFontFace())
+		if not targetFont then return end
+		local fontFlags = self:GetFontFlags()
+		local ok = fontString:SetFont(targetFont, size, fontFlags)
+		if ok == false then
+			local fallback = resolveFontFace(defaultFontFace(), STANDARD_TEXT_FONT)
+			local fallbackOk
+			if fallback then fallbackOk = fontString:SetFont(fallback, size, fontFlags) end
+			if fallbackOk == false and STANDARD_TEXT_FONT and STANDARD_TEXT_FONT ~= fallback then fontString:SetFont(STANDARD_TEXT_FONT, size, fontFlags) end
+		end
 		if fontString.SetShadowColor then
 			if self.info and self.info.fontShadow then
 				fontString:SetShadowColor(0, 0, 0, SHADOW_ALPHA)
@@ -1115,6 +1513,11 @@ function DataPanel.Create(id, name, existingOnly)
 				fontString:SetShadowColor(0, 0, 0, 0)
 				fontString:SetShadowOffset(0, 0)
 			end
+		end
+		-- Force an immediate redraw for style-only changes (font face/size/flags/shadow).
+		if fontString.GetText and fontString.SetText then
+			local currentText = fontString:GetText()
+			if currentText ~= nil then fontString:SetText(currentText) end
 		end
 	end
 
@@ -1306,25 +1709,23 @@ function DataPanel.Create(id, name, existingOnly)
 
 	function panel:ApplyStreams(streamList)
 		self.suspendEditSync = true
-		local desired = {}
-		for _, name in ipairs(streamList or {}) do
-			desired[name] = true
-		end
+		local configured, desired = sanitizeStreamList(streamList)
+		local removeList = {}
 		for existing in pairs(self.streams) do
-			if not desired[existing] then self:RemoveStream(existing) end
+			if not desired[existing] then removeList[#removeList + 1] = existing end
 		end
-		for _, name in ipairs(streamList or {}) do
-			if not self.streams[name] then self:AddStream(name) end
+		for _, name in ipairs(removeList) do
+			self:RemoveStream(name)
+		end
+		for _, name in ipairs(configured) do
+			if isStreamAvailable(name) and not self.streams[name] then self:AddStream(name) end
 		end
 		self.order = {}
-		self.info.streams = {}
-		self.info.streamSet = {}
-		for _, name in ipairs(streamList or {}) do
-			if self.streams[name] then
-				self.order[#self.order + 1] = name
-				self.info.streams[#self.info.streams + 1] = name
-				self.info.streamSet[name] = true
-			end
+		-- Preserve configured-but-missing streams so external LDB providers can reattach later.
+		self.info.streams = configured
+		self.info.streamSet = desired
+		for _, name in ipairs(configured) do
+			if self.streams[name] then self.order[#self.order + 1] = name end
 		end
 		self:Refresh()
 		self.suspendEditSync = nil
@@ -1342,11 +1743,11 @@ function DataPanel.Create(id, name, existingOnly)
 		local backdropColorChanged = false
 		local layoutChanged = false
 		if data.width then
-			info.width = round2(data.width)
+			info.width = normalizePanelWidth(round2(data.width), info.width or 300)
 			self.frame:SetWidth(info.width)
 		end
 		if data.height then
-			info.height = round2(data.height)
+			info.height = normalizePanelHeight(round2(data.height), info.height or 40)
 			self.frame:SetHeight(info.height)
 		end
 		if data.hideBorder ~= nil then
@@ -1418,7 +1819,7 @@ function DataPanel.Create(id, name, existingOnly)
 			end
 		end
 		if data.fontFace ~= nil then
-			local desired = normalizeFontFace(data.fontFace) or defaultFontFace()
+			local desired = normalizeFontSetting(data.fontFace, info.fontFace or globalFontConfigKey())
 			if info.fontFace ~= desired then
 				info.fontFace = desired
 				fontFaceChanged = true
@@ -1563,7 +1964,7 @@ function DataPanel.Create(id, name, existingOnly)
 	end
 
 	function panel:AddStream(name)
-		if self.streams[name] then return end
+		if self.streams[name] or not isStreamAvailable(name) then return end
 		local button = CreateFrame("Button", nil, self.frame)
 		button:SetHeight(self.frame:GetHeight())
 		local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1601,7 +2002,8 @@ function DataPanel.Create(id, name, existingOnly)
 		self.order[#self.order + 1] = name
 
 		local function cb(payload)
-			payload = payload or {}
+			payload = sanitizeValue(payload) or {}
+			if type(payload) ~= "table" then payload = {} end
 			data.lastPayload = payload
 			local layoutNeedsRefresh = false
 			local hasSecureParts = payloadHasSecureParts(payload)
@@ -1638,8 +2040,9 @@ function DataPanel.Create(id, name, existingOnly)
 				data.hover = nil
 				data.OnMouseEnter = nil
 				data.OnMouseLeave = nil
-				data.ignoreMenuModifier = payload.ignoreMenuModifier
-				if payload.OnClick ~= nil then data.OnClick = payload.OnClick end
+				data.ignoreMenuModifier = sanitizeValue(payload.ignoreMenuModifier)
+				local onClick = sanitizeValue(payload.OnClick)
+				if onClick ~= nil then data.OnClick = onClick end
 				return
 			elseif data.hidden then
 				data.hidden = nil
@@ -1969,14 +2372,15 @@ function DataPanel.Create(id, name, existingOnly)
 					end
 				end
 			end
-			data.tooltip = payload.tooltip
-			data.perCurrency = payload.perCurrency
-			data.showDescription = payload.showDescription
-			data.hover = payload.hover
-			data.OnMouseEnter = payload.OnMouseEnter
-			data.OnMouseLeave = payload.OnMouseLeave
-			data.ignoreMenuModifier = payload.ignoreMenuModifier
-			if payload.OnClick ~= nil then data.OnClick = payload.OnClick end
+			data.tooltip = sanitizeValue(payload.tooltip)
+			data.perCurrency = sanitizeValue(payload.perCurrency)
+			data.showDescription = sanitizeValue(payload.showDescription)
+			data.hover = sanitizeValue(payload.hover)
+			data.OnMouseEnter = sanitizeValue(payload.OnMouseEnter)
+			data.OnMouseLeave = sanitizeValue(payload.OnMouseLeave)
+			data.ignoreMenuModifier = sanitizeValue(payload.ignoreMenuModifier)
+			local onClick = sanitizeValue(payload.OnClick)
+			if onClick ~= nil then data.OnClick = onClick end
 			if hasSecureParts then data.secureInitialized = true end
 			if data.pendingPayload then
 				data.pendingPayload = nil
@@ -2134,7 +2538,7 @@ function DataPanel.Delete(id)
 
 	if panel then
 		if EditMode and panel.editModeId then
-			local ok, err = pcall(function() EditMode:UnregisterFrame(panel.editModeId) end)
+			local ok, err = pcall(function() EditMode:UnregisterFrame(panel.editModeId, true) end)
 			if not ok then geterrorhandler()(err) end
 			panel.editModeRegistered = nil
 			panel.editModeId = nil

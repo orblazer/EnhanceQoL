@@ -1,6 +1,7 @@
 local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
+local wipe = wipe
 
 local cGearUpgrade = addon.SettingsLayout.rootGENERAL
 local expandable = addon.functions.SettingsCreateExpandableSection(cGearUpgrade, {
@@ -22,10 +23,19 @@ local function ensureDisplayOptions()
 	end
 end
 
+local function refreshItemLevelDisplays()
+	if addon.functions and addon.functions.refreshItemLevelDisplays then
+		addon.functions.refreshItemLevelDisplays()
+	elseif addon.functions and addon.functions.setCharFrame then
+		addon.functions.setCharFrame()
+	end
+end
+
 local function isCharDisplaySelected(key)
 	ensureDisplayOptions()
 	local t = addon.db.charDisplayOptions
 	if key == "ilvl" then return t.ilvl == true end
+	if key == "tracks" then return t.tracks == true end
 	if key == "gems" then return t.gems == true end
 	if key == "enchants" then return t.enchants == true end
 	if key == "gemtip" then return t.gemtip == true end
@@ -39,7 +49,7 @@ end
 local function setCharDisplayOption(key, value)
 	ensureDisplayOptions()
 	local enabled = value and true or false
-	if key == "ilvl" or key == "gems" or key == "enchants" or key == "gemtip" then
+	if key == "ilvl" or key == "tracks" or key == "gems" or key == "enchants" or key == "gemtip" then
 		addon.db.charDisplayOptions[key] = enabled
 		addon.functions.setCharFrame()
 	elseif key == "durability" then
@@ -64,6 +74,7 @@ local function applyCharDisplaySelection(selection)
 	selection = selection or {}
 	ensureDisplayOptions()
 	addon.db.charDisplayOptions.ilvl = selection.ilvl == true
+	addon.db.charDisplayOptions.tracks = selection.tracks == true
 	addon.db.charDisplayOptions.gems = selection.gems == true
 	addon.db.charDisplayOptions.enchants = selection.enchants == true
 	addon.db.charDisplayOptions.gemtip = selection.gemtip == true
@@ -81,11 +92,93 @@ local function applyCharDisplaySelection(selection)
 	if addon.CharacterStatsFormatting and addon.CharacterStatsFormatting.Refresh then addon.CharacterStatsFormatting.Refresh() end
 end
 
+local ilvlFontOrder = {}
+local ilvlOutlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE" }
+local ilvlOutlineOptions = {
+	NONE = L["fontOutlineNone"] or NONE,
+	OUTLINE = L["fontOutlineThin"] or "Outline",
+	THICKOUTLINE = L["fontOutlineThick"] or "Thick Outline",
+	MONOCHROMEOUTLINE = L["fontOutlineMono"] or "Monochrome Outline",
+}
+local ENCHANT_DISPLAY_MODE_FULL = "FULL"
+local ENCHANT_DISPLAY_MODE_FULL_ICON = "FULL_ICON"
+local ENCHANT_DISPLAY_MODE_BADGE = "BADGE"
+local ENCHANT_DISPLAY_MODE_BADGE_ICON = "BADGE_ICON"
+local ENCHANT_DISPLAY_MODE_WARNING = "WARNING"
+local ENCHANT_DISPLAY_MODE_WARNING_ICON = "WARNING_ICON"
+local ENCHANT_DISPLAY_MODE_APPLIED = "APPLIED"
+local ENCHANT_DISPLAY_MODE_APPLIED_ICON = "APPLIED_ICON"
+
+local enchantDisplayModeOrder = {
+	ENCHANT_DISPLAY_MODE_FULL,
+	ENCHANT_DISPLAY_MODE_FULL_ICON,
+	ENCHANT_DISPLAY_MODE_BADGE,
+	ENCHANT_DISPLAY_MODE_BADGE_ICON,
+	ENCHANT_DISPLAY_MODE_WARNING,
+	ENCHANT_DISPLAY_MODE_WARNING_ICON,
+	ENCHANT_DISPLAY_MODE_APPLIED,
+	ENCHANT_DISPLAY_MODE_APPLIED_ICON,
+}
+local enchantDisplayModeOptions = {
+	[ENCHANT_DISPLAY_MODE_FULL] = L["gearEnchantDisplayModeFull"] or "Full text",
+	[ENCHANT_DISPLAY_MODE_FULL_ICON] = L["gearEnchantDisplayModeFullIcon"] or "Full text + missing icon",
+	[ENCHANT_DISPLAY_MODE_BADGE] = L["gearEnchantDisplayModeBadge"] or "Badge (E)",
+	[ENCHANT_DISPLAY_MODE_BADGE_ICON] = L["gearEnchantDisplayModeBadgeIcon"] or "Badge (E) + missing icon",
+	[ENCHANT_DISPLAY_MODE_WARNING] = L["gearEnchantDisplayModeWarningOnly"] or "Missing text only",
+	[ENCHANT_DISPLAY_MODE_WARNING_ICON] = L["gearEnchantDisplayModeWarningIcon"] or "Missing text + icon",
+	[ENCHANT_DISPLAY_MODE_APPLIED] = L["gearEnchantDisplayModeAppliedOnly"] or "Applied only",
+	[ENCHANT_DISPLAY_MODE_APPLIED_ICON] = L["gearEnchantDisplayModeAppliedIcon"] or "Applied text + missing icon",
+}
+
+local function normalizeEnchantDisplayMode(mode, showMissingOverlay)
+	if mode == ENCHANT_DISPLAY_MODE_FULL_ICON or mode == ENCHANT_DISPLAY_MODE_BADGE_ICON or mode == ENCHANT_DISPLAY_MODE_WARNING_ICON or mode == ENCHANT_DISPLAY_MODE_APPLIED_ICON then return mode end
+
+	local overlayEnabled = showMissingOverlay ~= false
+	if mode == ENCHANT_DISPLAY_MODE_BADGE then return overlayEnabled and ENCHANT_DISPLAY_MODE_BADGE_ICON or ENCHANT_DISPLAY_MODE_BADGE end
+	if mode == ENCHANT_DISPLAY_MODE_WARNING then return overlayEnabled and ENCHANT_DISPLAY_MODE_WARNING_ICON or ENCHANT_DISPLAY_MODE_WARNING end
+	if mode == ENCHANT_DISPLAY_MODE_APPLIED then return overlayEnabled and ENCHANT_DISPLAY_MODE_APPLIED_ICON or ENCHANT_DISPLAY_MODE_APPLIED end
+	return overlayEnabled and ENCHANT_DISPLAY_MODE_FULL_ICON or ENCHANT_DISPLAY_MODE_FULL
+end
+
+local function modeShowsMissingOverlay(mode)
+	return mode == ENCHANT_DISPLAY_MODE_FULL_ICON or mode == ENCHANT_DISPLAY_MODE_BADGE_ICON or mode == ENCHANT_DISPLAY_MODE_WARNING_ICON or mode == ENCHANT_DISPLAY_MODE_APPLIED_ICON
+end
+
+local function getCachedFontMedia()
+	local names = addon.functions and addon.functions.GetLSMMediaNames and addon.functions.GetLSMMediaNames("font")
+	local hash = addon.functions and addon.functions.GetLSMMediaHash and addon.functions.GetLSMMediaHash("font")
+	if type(names) == "table" and type(hash) == "table" then return names, hash end
+	return {}, {}
+end
+
+local function buildIlvlFontDropdown()
+	local map = {
+		[addon.variables.defaultFont] = L["actionBarFontDefault"] or "Blizzard font",
+	}
+	local globalFontKey = addon.functions and addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__"
+	local globalFontLabel = addon.functions and addon.functions.GetGlobalFontConfigLabel and addon.functions.GetGlobalFontConfigLabel() or "Use global font config"
+	map[globalFontKey] = globalFontLabel
+	local names, hash = getCachedFontMedia()
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
+	end
+	local list, order = addon.functions.prepareListForDropdown(map)
+	wipe(ilvlFontOrder)
+	if list[globalFontKey] then ilvlFontOrder[#ilvlFontOrder + 1] = globalFontKey end
+	for _, key in ipairs(order) do
+		if key ~= globalFontKey then ilvlFontOrder[#ilvlFontOrder + 1] = key end
+	end
+	return list
+end
+
 local charDisplayDropdown = addon.functions.SettingsCreateMultiDropdown(cGearUpgrade, {
 	var = "charframe_display",
 	text = L["gearDisplayElements"] or "Elements",
 	options = {
 		{ value = "ilvl", text = STAT_AVERAGE_ITEM_LEVEL, tooltip = L["gearDisplayOptionItemLevelDesc"] },
+		{ value = "tracks", text = L["gearDisplayOptionTracks"] or "Upgrade tracks", tooltip = L["gearDisplayOptionTracksDesc"] or "Show the upgrade track abbreviation on equipped gear slots." },
 		{ value = "gems", text = AUCTION_CATEGORY_GEMS, tooltip = L["gearDisplayOptionGemsDesc"] },
 		{ value = "enchants", text = ENCHANTS, tooltip = L["gearDisplayOptionEnchantsDesc"] },
 		{ value = "gemtip", text = L["Gem slot tooltip"], tooltip = L["gearDisplayOptionGemTooltipDesc"] },
@@ -98,14 +191,21 @@ local charDisplayDropdown = addon.functions.SettingsCreateMultiDropdown(cGearUpg
 	setSelectedFunc = function(key, selected) setCharDisplayOption(key, selected) end,
 	setSelection = applyCharDisplaySelection,
 	parentSection = expandable,
-	notify = "showMissingEnchantOverlayOnCharframe",
 })
 
-local missingOverlayCheckbox = addon.functions.SettingsCreateCheckbox(cGearUpgrade, {
-	var = "showMissingEnchantOverlayOnCharframe",
-	text = L["gearDisplayOptionMissingEnchantOverlay"] or "Show missing enchant overlay",
-	func = function(value) addon.db["showMissingEnchantOverlayOnCharframe"] = value and true or false end,
-	default = true,
+local enchantDisplayDropdown = addon.functions.SettingsCreateDropdown(cGearUpgrade, {
+	var = "charEnchantDisplayMode",
+	text = L["gearEnchantDisplayMode"] or "Enchant display",
+	desc = L["gearEnchantDisplayModeDesc"] or "Choose whether applied enchants, missing enchants, and the missing enchant icon should be shown.",
+	list = enchantDisplayModeOptions,
+	order = enchantDisplayModeOrder,
+	default = ENCHANT_DISPLAY_MODE_FULL_ICON,
+	get = function() return normalizeEnchantDisplayMode(addon.db["charEnchantDisplayMode"], addon.db["showMissingEnchantOverlayOnCharframe"]) end,
+	set = function(key)
+		addon.db["charEnchantDisplayMode"] = key
+		addon.db["showMissingEnchantOverlayOnCharframe"] = modeShowsMissingOverlay(key)
+		refreshItemLevelDisplays()
+	end,
 	parent = charDisplayDropdown,
 	parentCheck = function() return isCharDisplaySelected("enchants") end,
 	parentSection = expandable,
@@ -115,8 +215,33 @@ addon.functions.SettingsCreateColorPicker(cGearUpgrade, {
 	var = "missingEnchantOverlayColor",
 	text = L["gearDisplayOptionMissingEnchantOverlayColor"] or "Missing enchant overlay color",
 	hasOpacity = true,
-	element = missingOverlayCheckbox and missingOverlayCheckbox.element,
-	parentCheck = function() return isCharDisplaySelected("enchants") and addon.db["showMissingEnchantOverlayOnCharframe"] == true end,
+	element = enchantDisplayDropdown and enchantDisplayDropdown.element,
+	parentCheck = function()
+		local mode = normalizeEnchantDisplayMode(addon.db["charEnchantDisplayMode"], addon.db["showMissingEnchantOverlayOnCharframe"])
+		return isCharDisplaySelected("enchants") and modeShowsMissingOverlay(mode)
+	end,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateDropdown(cGearUpgrade, {
+	list = {
+		LEFT = L["left"],
+		TOP = L["top"],
+		RIGHT = L["right"],
+		BOTTOM = L["bottom"],
+		OUTSIDE = L["outsideNearGems"] or "Outside (next to gems)",
+	},
+	text = L["charTrackPosition"] or "Upgrade track position",
+	get = function() return addon.db["charTrackPosition"] or "LEFT" end,
+	set = function(key)
+		addon.db["charTrackPosition"] = key
+		refreshItemLevelDisplays()
+	end,
+	parent = charDisplayDropdown,
+	parentCheck = function() return isCharDisplaySelected("tracks") end,
+	default = "LEFT",
+	var = "charTrackPosition",
+	type = Settings.VarType.String,
 	parentSection = expandable,
 })
 
@@ -131,18 +256,99 @@ addon.functions.SettingsCreateDropdown(cGearUpgrade, {
 		BOTTOMLEFT = L["bottomLeft"],
 		BOTTOM = L["bottom"],
 		BOTTOMRIGHT = L["bottomRight"],
+		OUTSIDE = L["outsideNearGems"] or "Outside (next to gems)",
 	},
 	text = L["charIlvlPosition"],
-	get = function() return addon.db["charIlvlPosition"] or "BOTTOMLEFT" end,
+	get = function() return addon.db["charIlvlPosition"] or "TOPRIGHT" end,
 	set = function(key)
 		addon.db["charIlvlPosition"] = key
-		addon.functions.setCharFrame()
+		refreshItemLevelDisplays()
 	end,
 	parent = charDisplayDropdown,
 	parentCheck = function() return isCharDisplaySelected("ilvl") end,
-	default = "BOTTOMLEFT",
+	default = "TOPRIGHT",
 	var = "charIlvlPosition",
 	type = Settings.VarType.String,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateHeadline(cGearUpgrade, L["ilvlTextStyleHeader"] or "Item level text style", { parentSection = expandable })
+
+local ilvlQualityColorCheckbox = addon.functions.SettingsCreateCheckbox(cGearUpgrade, {
+	var = "ilvlUseItemQualityColor",
+	text = L["ilvlUseQualityColor"] or "Use item-quality colors",
+	func = function(value)
+		addon.db["ilvlUseItemQualityColor"] = value and true or false
+		refreshItemLevelDisplays()
+	end,
+	default = true,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateColorPicker(cGearUpgrade, {
+	var = "ilvlTextColor",
+	text = L["ilvlCustomColor"] or "Custom item level color",
+	hasOpacity = true,
+	element = ilvlQualityColorCheckbox and ilvlQualityColorCheckbox.element,
+	parentCheck = function() return addon.db["ilvlUseItemQualityColor"] ~= true end,
+	callback = function() refreshItemLevelDisplays() end,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateScrollDropdown(cGearUpgrade, {
+	var = "ilvlFontFace",
+	text = L["ilvlFontLabel"] or "Item level font",
+	listFunc = buildIlvlFontDropdown,
+	order = ilvlFontOrder,
+	default = addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__",
+	get = function()
+		local globalFontKey = addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__"
+		local current = addon.db.ilvlFontFace or globalFontKey
+		local list = buildIlvlFontDropdown()
+		if not list[current] then current = globalFontKey end
+		return current
+	end,
+	set = function(key)
+		addon.db.ilvlFontFace = key
+		refreshItemLevelDisplays()
+	end,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateSlider(cGearUpgrade, {
+	var = "ilvlFontSize",
+	text = L["ilvlFontSize"] or "Item level font size",
+	min = 8,
+	max = 32,
+	step = 1,
+	default = 14,
+	get = function()
+		local value = tonumber(addon.db.ilvlFontSize) or 14
+		if value < 8 then value = 8 end
+		if value > 32 then value = 32 end
+		return value
+	end,
+	set = function(value)
+		value = math.floor((tonumber(value) or 14) + 0.5)
+		if value < 8 then value = 8 end
+		if value > 32 then value = 32 end
+		addon.db.ilvlFontSize = value
+		refreshItemLevelDisplays()
+	end,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateDropdown(cGearUpgrade, {
+	var = "ilvlFontOutline",
+	text = L["ilvlFontOutline"] or "Item level font outline",
+	list = ilvlOutlineOptions,
+	order = ilvlOutlineOrder,
+	default = "OUTLINE",
+	get = function() return addon.db.ilvlFontOutline or "OUTLINE" end,
+	set = function(key)
+		addon.db.ilvlFontOutline = key
+		refreshItemLevelDisplays()
+	end,
 	parentSection = expandable,
 })
 
@@ -161,6 +367,7 @@ end
 local function setInspectDisplayOption(key, value)
 	ensureDisplayOptions()
 	addon.db.inspectDisplayOptions[key] = value and true or false
+	refreshItemLevelDisplays()
 end
 
 local function applyInspectDisplaySelection(selection)
@@ -170,6 +377,7 @@ local function applyInspectDisplaySelection(selection)
 	addon.db.inspectDisplayOptions.gems = selection.gems == true
 	addon.db.inspectDisplayOptions.enchants = selection.enchants == true
 	addon.db.inspectDisplayOptions.gemtip = selection.gemtip == true
+	refreshItemLevelDisplays()
 end
 
 addon.functions.SettingsCreateMultiDropdown(cGearUpgrade, {
@@ -256,7 +464,14 @@ addon.functions.SettingsCreateCheckboxes(cGearUpgrade, data)
 function addon.functions.initGearUpgrade()
 	addon.functions.InitDBValue("charDisplayOptions", {})
 	addon.functions.InitDBValue("inspectDisplayOptions", {})
+	addon.functions.InitDBValue("charTrackPosition", "LEFT")
+	addon.functions.InitDBValue("charEnchantDisplayMode", "FULL")
 	addon.functions.InitDBValue("missingEnchantOverlayColor", { r = 1, g = 0, b = 0, a = 0.6 })
+	addon.functions.InitDBValue("ilvlUseItemQualityColor", true)
+	addon.functions.InitDBValue("ilvlTextColor", { r = 1, g = 1, b = 1, a = 1 })
+	addon.functions.InitDBValue("ilvlFontFace", addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__")
+	addon.functions.InitDBValue("ilvlFontSize", 14)
+	addon.functions.InitDBValue("ilvlFontOutline", "OUTLINE")
 end
 
 local eventHandlers = {}

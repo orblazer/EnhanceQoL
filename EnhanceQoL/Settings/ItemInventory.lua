@@ -87,6 +87,103 @@ local function AnyInspectEnabled()
 	return t.ilvl or t.gems or t.enchants or t.gemtip
 end
 
+local upgradeTrackLocaleKeys = {
+	explorer = true,
+	adventurer = true,
+	veteran = "upgradeLevelVeteran",
+	champion = "upgradeLevelChampion",
+	hero = "upgradeLevelHero",
+	myth = "upgradeLevelMythic",
+	mythic = "upgradeLevelMythic",
+}
+
+local upgradeTrackQualityMap = {
+	explorer = (Enum and Enum.ItemQuality and Enum.ItemQuality.Poor) or 0,
+	adventurer = (Enum and Enum.ItemQuality and Enum.ItemQuality.Common) or 1,
+	veteran = (Enum and Enum.ItemQuality and Enum.ItemQuality.Uncommon) or 2,
+	champion = (Enum and Enum.ItemQuality and Enum.ItemQuality.Rare) or 3,
+	hero = (Enum and Enum.ItemQuality and Enum.ItemQuality.Epic) or 4,
+	myth = (Enum and Enum.ItemQuality and Enum.ItemQuality.Legendary) or 5,
+}
+
+local function normalizeUpgradeTrackKey(trackKey)
+	if type(trackKey) ~= "string" then return nil end
+	trackKey = strlower(trackKey)
+	if trackKey == "mythic" then return "myth" end
+	return upgradeTrackLocaleKeys[trackKey] and trackKey or nil
+end
+
+local function getUpgradeTrackInfoFromLink(itemLink)
+	if not itemLink or not (C_Item and C_Item.GetItemUpgradeInfo) then return nil, nil end
+	local info = C_Item.GetItemUpgradeInfo(itemLink)
+	if type(info) ~= "table" then return nil, nil end
+
+	local trackKey = nil
+	if addon.functions and addon.functions.GetUpgradeTrackKeyFromItemLink then trackKey = normalizeUpgradeTrackKey(addon.functions.GetUpgradeTrackKeyFromItemLink(itemLink)) end
+	if not trackKey and type(info.trackString) == "string" then trackKey = normalizeUpgradeTrackKey(info.trackString) end
+	if not trackKey then return info, nil end
+	return info, trackKey
+end
+
+local function getUpgradeTrackKeyFromLink(itemLink)
+	local _, trackKey = getUpgradeTrackInfoFromLink(itemLink)
+	return trackKey
+end
+
+local function getUpgradeTrackShortLabel(trackKey)
+	if addon.functions and addon.functions.GetUpgradeTrackAbbreviation then return addon.functions.GetUpgradeTrackAbbreviation(trackKey) end
+	trackKey = normalizeUpgradeTrackKey(trackKey)
+	local localeKey = trackKey and upgradeTrackLocaleKeys[trackKey]
+	local label = nil
+	if type(localeKey) == "string" then label = L[localeKey] end
+	if not label and trackKey == "explorer" then label = "Explorer" end
+	if not label and trackKey == "adventurer" then label = "Adventurer" end
+	if type(label) ~= "string" or label == "" then return nil end
+	return label:match("[%z\1-\127\194-\244][\128-\191]*")
+end
+
+local function getUpgradeTrackDisplayText(itemLink)
+	local upgradeInfo, trackKey = getUpgradeTrackInfoFromLink(itemLink)
+	if not trackKey then return nil, nil end
+	local shortLabel = getUpgradeTrackShortLabel(trackKey)
+	if not shortLabel then return trackKey, nil end
+
+	local currentLevel = tonumber(upgradeInfo and upgradeInfo.currentLevel)
+	local maxLevel = tonumber(upgradeInfo and upgradeInfo.maxLevel)
+	if currentLevel and maxLevel and currentLevel >= 0 and maxLevel > 0 then return trackKey, string.format("%s(%d/%d)", shortLabel, currentLevel, maxLevel) end
+
+	return trackKey, shortLabel
+end
+
+local function applyUpgradeTrackTextStyle(fontString)
+	if not fontString then return end
+	if addon.functions and addon.functions.ApplyItemLevelTextStyle then addon.functions.ApplyItemLevelTextStyle(fontString) end
+	local face, _, flags = fontString:GetFont()
+	local size = tonumber(addon.db and addon.db["ilvlFontSize"]) or 14
+	size = math.max(8, math.floor(size - 3))
+	if face then fontString:SetFont(face, size, flags) end
+	fontString:SetShadowOffset(1, -1)
+	fontString:SetShadowColor(0, 0, 0, 1)
+end
+
+local function applyUpgradeTrackTextColor(fontString, trackKey)
+	if not fontString then return end
+	if addon.functions and addon.functions.GetUpgradeTrackColor then
+		fontString:SetTextColor(addon.functions.GetUpgradeTrackColor(trackKey))
+		return
+	end
+	trackKey = normalizeUpgradeTrackKey(trackKey)
+	local quality = trackKey and upgradeTrackQualityMap[trackKey]
+	if quality then
+		local r, g, b = C_Item.GetItemQualityColor(quality)
+		if r and g and b then
+			fontString:SetTextColor(r, g, b, 1)
+			return
+		end
+	end
+	fontString:SetTextColor(1, 1, 1, 1)
+end
+
 local charIlvlAnchors = {
 	TOPLEFT = { bgPoint = "TOPLEFT", bgX = -1, bgY = 1, textPoint = "TOPLEFT", textX = 1, textY = -2 },
 	TOP = { bgPoint = "TOP", bgX = 0, bgY = 1, textPoint = "TOP", textX = 0, textY = -2 },
@@ -99,14 +196,99 @@ local charIlvlAnchors = {
 	BOTTOMRIGHT = { bgPoint = "BOTTOMRIGHT", bgX = 1, bgY = -1, textPoint = "BOTTOMRIGHT", textX = -1, textY = 1 },
 }
 
-local function applyCharIlvlPosition(element)
+local function isCharIlvlOutsidePosition() return (addon.db["charIlvlPosition"] or "TOPRIGHT") == "OUTSIDE" end
+
+local function hideIlvlBackground(element)
+	if not element or not element.ilvlBackground then return end
+	element.ilvlBackground:SetColorTexture(0, 0, 0, 0)
+	element.ilvlBackground:Hide()
+end
+
+local function applyCharIlvlPosition(element, slot)
 	if not element or not element.ilvlBackground or not element.ilvl then return end
 	local pos = addon.db["charIlvlPosition"] or "TOPRIGHT"
-	local anchor = charIlvlAnchors[pos] or charIlvlAnchors.TOPRIGHT
 	element.ilvlBackground:ClearAllPoints()
 	element.ilvl:ClearAllPoints()
+
+	if pos == "OUTSIDE" then
+		local side = addon.variables.itemSlotSide and addon.variables.itemSlotSide[slot] or 0
+		if side == 1 then
+			element.ilvlBackground:SetPoint("TOPRIGHT", element, "TOPLEFT", -5, -1)
+		elseif side == 2 then
+			element.ilvlBackground:SetPoint("BOTTOM", element, "TOPLEFT", -1, 5)
+		else
+			element.ilvlBackground:SetPoint("TOPLEFT", element, "TOPRIGHT", 5, -1)
+		end
+		element.ilvl:SetPoint("CENTER", element.ilvlBackground, "CENTER", 0, 0)
+		hideIlvlBackground(element)
+		return
+	end
+
+	local anchor = charIlvlAnchors[pos] or charIlvlAnchors.TOPRIGHT
 	element.ilvlBackground:SetPoint(anchor.bgPoint, element, anchor.bgPoint, anchor.bgX, anchor.bgY)
 	element.ilvl:SetPoint(anchor.textPoint, element.ilvlBackground, anchor.textPoint, anchor.textX, anchor.textY)
+	hideIlvlBackground(element)
+end
+
+local function applyCharTrackPosition(element, slot)
+	if not element or not element.trackLabel or not element.ilvlBackground then return end
+	local pos = addon.db["charTrackPosition"] or "LEFT"
+	element.trackLabel:ClearAllPoints()
+
+	if pos == "OUTSIDE" then
+		local side = addon.variables.itemSlotSide and addon.variables.itemSlotSide[slot] or 0
+		if side == 1 then
+			element.trackLabel:SetPoint("RIGHT", element, "LEFT", -3, -2)
+		elseif side == 2 then
+			element.trackLabel:SetPoint("BOTTOM", element, "TOPLEFT", -1, 5)
+		else
+			element.trackLabel:SetPoint("LEFT", element, "RIGHT", 3, -2)
+		end
+		return
+	end
+
+	if pos == "RIGHT" then
+		element.trackLabel:SetPoint("LEFT", element.ilvlBackground, "RIGHT", 2, 0)
+	elseif pos == "TOP" then
+		element.trackLabel:SetPoint("BOTTOM", element.ilvlBackground, "TOP", 0, 1)
+	elseif pos == "BOTTOM" then
+		element.trackLabel:SetPoint("TOP", element.ilvlBackground, "BOTTOM", 0, -1)
+	else
+		element.trackLabel:SetPoint("RIGHT", element.ilvlBackground, "LEFT", -2, 0)
+	end
+end
+
+local function positionGemFrame(element, slot, gemIndex, outsideWithIlvl)
+	if not element or not element.gems or not element.gems[gemIndex] then return end
+	local gemFrame = element.gems[gemIndex]
+	local side = addon.variables.itemSlotSide and addon.variables.itemSlotSide[slot] or 0
+	gemFrame:ClearAllPoints()
+
+	if outsideWithIlvl and element.ilvlBackground then
+		if side == 1 then
+			gemFrame:SetPoint("TOPRIGHT", element.ilvlBackground, "TOPLEFT", -2 - (gemIndex - 1) * 16, 0)
+		elseif side == 2 then
+			gemFrame:SetPoint("BOTTOM", element.ilvlBackground, "TOP", 0, 3 + (gemIndex - 1) * 16)
+		else
+			gemFrame:SetPoint("TOPLEFT", element.ilvlBackground, "TOPRIGHT", 2 + (gemIndex - 1) * 16, 0)
+		end
+		return
+	end
+
+	if side == 0 then
+		gemFrame:SetPoint("TOPLEFT", element, "TOPRIGHT", 5 + (gemIndex - 1) * 16, 0)
+	elseif side == 1 then
+		gemFrame:SetPoint("TOPRIGHT", element, "TOPLEFT", -5 - (gemIndex - 1) * 16, 0)
+	else
+		gemFrame:SetPoint("BOTTOM", element, "TOPLEFT", -1, 6 + (gemIndex - 1) * 16)
+	end
+end
+
+local function applyGemLayout(element, slot, displayCount, outsideWithIlvl)
+	if not element or not element.gems or displayCount <= 0 then return end
+	for i = 1, displayCount do
+		if element.gems[i] then positionGemFrame(element, slot, i, outsideWithIlvl) end
+	end
 end
 
 local function getMissingEnchantOverlayColor()
@@ -126,6 +308,112 @@ local function applyMissingEnchantOverlayStyle(texture)
 	local topAlpha = math.min(1, a + 0.35)
 	local bottomAlpha = math.max(0, a - 0.15)
 	if texture.SetGradientAlpha then texture:SetGradientAlpha("VERTICAL", r, g, b, topAlpha, r, g, b, bottomAlpha) end
+end
+
+local function normalizeItemDetailOutline(outline)
+	if outline == nil then return "OUTLINE" end
+	if outline == "" or outline == "NONE" then return nil end
+	return outline
+end
+
+local function applyEnchantTextStyle(fontString)
+	if not fontString or not fontString.SetFont then return end
+	local defaultFace = (addon.functions and addon.functions.GetGlobalDefaultFontFace and addon.functions.GetGlobalDefaultFontFace())
+		or (addon.variables and addon.variables.defaultFont)
+		or STANDARD_TEXT_FONT
+	local configuredFace = addon.db and addon.db["ilvlFontFace"]
+	local face = defaultFace
+	if addon.functions and addon.functions.ResolveFontFace then
+		face = addon.functions.ResolveFontFace(configuredFace, defaultFace) or defaultFace
+	elseif type(configuredFace) == "string" and configuredFace ~= "" then
+		face = configuredFace
+	end
+	local outline = normalizeItemDetailOutline(addon.db and addon.db["ilvlFontOutline"])
+	local ok = fontString:SetFont(face, 12, outline)
+	if ok == false then fontString:SetFont(defaultFace, 12, outline) end
+end
+
+local function applyCharacterFrameElementTextStyle(fontString, size)
+	if not fontString or not fontString.SetFont then return end
+	local globalFace = (addon.functions and addon.functions.GetGlobalDefaultFontFace and addon.functions.GetGlobalDefaultFontFace())
+		or (addon.variables and addon.variables.defaultFont)
+		or STANDARD_TEXT_FONT
+	local fallbackFace = (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT
+	local ok = fontString:SetFont(globalFace, size, "OUTLINE")
+	if ok == false then fontString:SetFont(fallbackFace, size, "OUTLINE") end
+end
+
+local function refreshCharacterFrameElementFonts()
+	if addon.general and addon.general.iconFrame and addon.general.iconFrame.count then applyCharacterFrameElementTextStyle(addon.general.iconFrame.count, 14) end
+	if addon.general and addon.general.durabilityIconFrame and addon.general.durabilityIconFrame.count then applyCharacterFrameElementTextStyle(addon.general.durabilityIconFrame.count, 12) end
+	if addon.variables and addon.variables.itemSlots then
+		for _, value in pairs(addon.variables.itemSlots) do
+			if value and value.trackLabel then applyUpgradeTrackTextStyle(value.trackLabel) end
+		end
+	end
+end
+
+addon.functions.refreshCharacterFrameElementFonts = refreshCharacterFrameElementFonts
+
+local ENCHANT_DISPLAY_MODE_FULL = "FULL"
+local ENCHANT_DISPLAY_MODE_FULL_ICON = "FULL_ICON"
+local ENCHANT_DISPLAY_MODE_BADGE = "BADGE"
+local ENCHANT_DISPLAY_MODE_BADGE_ICON = "BADGE_ICON"
+local ENCHANT_DISPLAY_MODE_WARNING = "WARNING"
+local ENCHANT_DISPLAY_MODE_WARNING_ICON = "WARNING_ICON"
+local ENCHANT_DISPLAY_MODE_APPLIED = "APPLIED"
+local ENCHANT_DISPLAY_MODE_APPLIED_ICON = "APPLIED_ICON"
+
+local function normalizeEnchantDisplayMode(mode, showMissingOverlay)
+	if mode == ENCHANT_DISPLAY_MODE_FULL_ICON or mode == ENCHANT_DISPLAY_MODE_BADGE_ICON or mode == ENCHANT_DISPLAY_MODE_WARNING_ICON or mode == ENCHANT_DISPLAY_MODE_APPLIED_ICON then return mode end
+
+	local overlayEnabled = showMissingOverlay ~= false
+	if mode == ENCHANT_DISPLAY_MODE_BADGE then return overlayEnabled and ENCHANT_DISPLAY_MODE_BADGE_ICON or ENCHANT_DISPLAY_MODE_BADGE end
+	if mode == ENCHANT_DISPLAY_MODE_WARNING then return overlayEnabled and ENCHANT_DISPLAY_MODE_WARNING_ICON or ENCHANT_DISPLAY_MODE_WARNING end
+	if mode == ENCHANT_DISPLAY_MODE_APPLIED then return overlayEnabled and ENCHANT_DISPLAY_MODE_APPLIED_ICON or ENCHANT_DISPLAY_MODE_APPLIED end
+	return overlayEnabled and ENCHANT_DISPLAY_MODE_FULL_ICON or ENCHANT_DISPLAY_MODE_FULL
+end
+
+local function getEnchantDisplayModeBase(mode)
+	if mode == ENCHANT_DISPLAY_MODE_FULL_ICON then return ENCHANT_DISPLAY_MODE_FULL end
+	if mode == ENCHANT_DISPLAY_MODE_BADGE_ICON then return ENCHANT_DISPLAY_MODE_BADGE end
+	if mode == ENCHANT_DISPLAY_MODE_WARNING_ICON then return ENCHANT_DISPLAY_MODE_WARNING end
+	if mode == ENCHANT_DISPLAY_MODE_APPLIED_ICON then return ENCHANT_DISPLAY_MODE_APPLIED end
+	return mode
+end
+
+local function shouldShowMissingEnchantOverlayForMode(mode)
+	return mode == ENCHANT_DISPLAY_MODE_FULL_ICON or mode == ENCHANT_DISPLAY_MODE_BADGE_ICON or mode == ENCHANT_DISPLAY_MODE_WARNING_ICON or mode == ENCHANT_DISPLAY_MODE_APPLIED_ICON
+end
+
+local function getEnchantDisplayMode()
+	local mode = addon.db and addon.db["charEnchantDisplayMode"]
+	local showMissingOverlay = addon.db and addon.db["showMissingEnchantOverlayOnCharframe"]
+	return normalizeEnchantDisplayMode(mode, showMissingOverlay)
+end
+
+local function shouldShowMissingEnchant(slot, link, itemLevel)
+	local hasStaticRule = addon.variables.shouldEnchanted[slot] == true
+	local dynamicRule = addon.variables.shouldEnchantedChecks[slot]
+
+	if not hasStaticRule and dynamicRule == nil then return false end
+	if dynamicRule ~= nil and not dynamicRule.func(itemLevel) then return false end
+	if slot ~= 17 then return true end
+	local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(link)
+	return addon.variables.allowedEnchantTypesForOffhand[itemEquipLoc] == true
+end
+
+local function getEnchantDisplayText(mode, enchantText, missingEnchant)
+	mode = getEnchantDisplayModeBase(mode)
+	if missingEnchant then
+		if mode == ENCHANT_DISPLAY_MODE_APPLIED then return nil end
+		if mode == ENCHANT_DISPLAY_MODE_BADGE then return "|cffff4040E|r" end
+		return ("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r"
+	end
+	if not enchantText then return nil end
+	if mode == ENCHANT_DISPLAY_MODE_BADGE then return "|cff00ff00E|r" end
+	if mode == ENCHANT_DISPLAY_MODE_WARNING then return nil end
+	return enchantText
 end
 
 local function CheckItemGems(element, itemLink, emptySocketsCount, key, pdElement, attempts)
@@ -179,6 +467,74 @@ local function setEnchantTextLinkCache(link, value)
 	enchantTextLinkCache[link] = value
 end
 
+local function trimText(text)
+	if type(text) ~= "string" then return nil end
+	text = text:gsub("^%s+", ""):gsub("%s+$", "")
+	if text == "" then return nil end
+	return text
+end
+
+local enchantPrefixKeywords = nil
+local function getEnchantPrefixKeywords()
+	if enchantPrefixKeywords then return enchantPrefixKeywords end
+	enchantPrefixKeywords = {}
+	local seen = {}
+	local function addKeyword(keyword)
+		keyword = trimText(keyword)
+		if not keyword then return end
+		if seen[keyword] then return end
+		seen[keyword] = true
+		table.insert(enchantPrefixKeywords, keyword)
+	end
+
+	addKeyword(TRADEFRAME_ENCHANT_SLOT_LABEL)
+	addKeyword(_G.ENCHANT)
+	addKeyword(ENCHANTS)
+	addKeyword(_G.PROFESSIONS_ENCHANTING)
+
+	return enchantPrefixKeywords
+end
+
+local function prefixLooksLikeEnchant(prefixText)
+	local keywords = getEnchantPrefixKeywords()
+	if #keywords == 0 then return false end
+	local loweredPrefix = strlower(prefixText)
+	for _, keyword in ipairs(keywords) do
+		if prefixText:find(keyword, 1, true) then return true end
+		local loweredKeyword = strlower(keyword)
+		if loweredKeyword ~= keyword and loweredPrefix:find(loweredKeyword, 1, true) then return true end
+	end
+	return false
+end
+
+local function stripEnchantCraftPrefix(text)
+	text = trimText(text)
+	if not text then return nil end
+
+	for _, separator in ipairs({ " - " }) do
+		local separatorPos = text:find(separator, 1, true)
+		if separatorPos then
+			local left = trimText(text:sub(1, separatorPos - 1))
+			local right = trimText(text:sub(separatorPos + #separator))
+			if left and right and not left:find("%d") then
+				if prefixLooksLikeEnchant(left) then return right end
+
+				-- Language-agnostic fallback:
+				-- New crafted enchant names commonly follow "<craft prefix> - <enchant name>".
+				-- Keep this conservative to avoid stripping arbitrary long names.
+				local wordCount = 0
+				for _ in left:gmatch("%S+") do
+					wordCount = wordCount + 1
+					if wordCount > 4 then break end
+				end
+				if wordCount >= 1 and wordCount <= 4 and #left <= 32 and #right >= 2 then return right end
+			end
+		end
+	end
+
+	return text
+end
+
 local function getTooltipInfoFromLink(link)
 	if not link then return nil end
 
@@ -207,11 +563,14 @@ local function getTooltipInfoFromLink(link)
 					local text = strmatch(gsub(gsub(gsub(v.leftText, "%s?|A.-|a", ""), "|cn.-:(.-)|r", "%1"), "[&+] ?", ""), addon.variables.enchantString)
 					local icons = {}
 					v.leftText:gsub("(|A.-|a)", function(iconString) table.insert(icons, iconString) end)
-					text = text:gsub("(%d+)", "%1")
-					text = text:gsub("(%a%a%a)%a+", "%1")
-					text = text:gsub("%%", "%%%%")
-					enchantText = colorHex .. text .. (icons[1] or "") .. "|r"
-					break
+					text = stripEnchantCraftPrefix(text)
+					if text then
+						text = text:gsub("(%d+)", "%1")
+						text = text:gsub("(%a%a%a)%a+", "%1")
+						text = text:gsub("%%", "%%%%")
+						enchantText = colorHex .. text .. (icons[1] or "") .. "|r"
+						break
+					end
 				end
 			end
 		end
@@ -298,13 +657,13 @@ local function onInspect(arg1)
 	if not InspectOpt("ilvl") and pdElement.ilvl then pdElement.ilvl:SetText("") end
 	if not pdElement.ilvl and InspectOpt("ilvl") then
 		pdElement.ilvlBackground = pdElement:CreateTexture(nil, "BACKGROUND")
-		pdElement.ilvlBackground:SetColorTexture(0, 0, 0, 0.8) -- Schwarzer Hintergrund mit 80% Transparenz
+		pdElement.ilvlBackground:SetColorTexture(0, 0, 0, 0)
 		pdElement.ilvlBackground:SetPoint("TOPRIGHT", pdElement, "TOPRIGHT", -2, -28)
-		pdElement.ilvlBackground:SetSize(20, 16) -- Größe des Hintergrunds (muss ggf. angepasst werden)
+		pdElement.ilvlBackground:SetSize(20, 16)
 
 		pdElement.ilvl = pdElement:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-		pdElement.ilvl:SetPoint("TOPRIGHT", pdElement.ilvlBackground, "TOPRIGHT", -1, -1) -- Position des Textes im Zentrum des Hintergrunds
-		pdElement.ilvl:SetFont(addon.variables.defaultFont, 16, "OUTLINE") -- Setzt die Schriftart, -größe und -stil (OUTLINE)
+		pdElement.ilvl:SetPoint("TOPRIGHT", pdElement.ilvlBackground, "TOPRIGHT", -1, -1)
+		addon.functions.ApplyItemLevelTextStyle(pdElement.ilvl)
 
 		if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
 			local ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
@@ -312,10 +671,11 @@ local function onInspect(arg1)
 		else
 			pdElement.ilvl:SetFormattedText("")
 		end
-		pdElement.ilvl:SetTextColor(1, 1, 1, 1)
+		addon.functions.ApplyItemLevelTextColor(pdElement.ilvl, nil)
+		hideIlvlBackground(pdElement)
 
 		local textWidth = pdElement.ilvl:GetStringWidth()
-		pdElement.ilvlBackground:SetSize(textWidth + 6, pdElement.ilvl:GetStringHeight() + 4) -- Mehr Padding für bessere Lesbarkeit
+		pdElement.ilvlBackground:SetSize(textWidth + 6, pdElement.ilvl:GetStringHeight() + 4)
 	end
 	for _, key in ipairs(inspectSlotOrder) do
 		local frameName = inspectSlotFrameNames[key]
@@ -342,6 +702,7 @@ local function onInspect(arg1)
 								return
 							end
 							inspectDone[key] = true
+							local displayCount = 0
 							if InspectOpt("gems") then
 								local itemStats = C_Item.GetItemStats(itemLink)
 								local socketCount = 0
@@ -349,13 +710,13 @@ local function onInspect(arg1)
 									if (statName:find("EMPTY_SOCKET") or statName:find("empty_socket")) and addon.variables.allowedSockets[statName] then socketCount = socketCount + statValue end
 								end
 								local neededSockets = addon.variables.shouldSocketed[key] or 0
-								if neededSockets then
+								if neededSockets > 0 then
 									local cSeason, isPvP = getTooltipInfo(itemLink)
 									if addon.variables.shouldSocketedChecks[key] then
 										if not addon.variables.shouldSocketedChecks[key].func(cSeason, isPvP) then neededSockets = 0 end
 									end
 								end
-								local displayCount = math.max(socketCount, neededSockets)
+								displayCount = math.max(socketCount, neededSockets)
 								if element.gems and #element.gems > displayCount then
 									for i = displayCount + 1, #element.gems do
 										element.gems[i]:UnregisterAllEvents()
@@ -368,13 +729,6 @@ local function onInspect(arg1)
 									if not element.gems[i] then
 										element.gems[i] = CreateFrame("Frame", nil, pdElement)
 										element.gems[i]:SetSize(16, 16) -- Setze die Größe des Icons
-										if addon.variables.itemSlotSide[key] == 0 then
-											element.gems[i]:SetPoint("TOPLEFT", element, "TOPRIGHT", 5 + (i - 1) * 16, -1) -- Verschiebe jedes Icon um 20px
-										elseif addon.variables.itemSlotSide[key] == 1 then
-											element.gems[i]:SetPoint("TOPRIGHT", element, "TOPLEFT", -5 - (i - 1) * 16, -1)
-										else
-											element.gems[i]:SetPoint("BOTTOM", element, "TOPLEFT", -1, 5 + (i - 1) * 16)
-										end
 
 										element.gems[i]:SetFrameStrata("DIALOG")
 										element.gems[i]:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
@@ -382,6 +736,7 @@ local function onInspect(arg1)
 										element.gems[i].icon = element.gems[i]:CreateTexture(nil, "OVERLAY")
 										element.gems[i].icon:SetAllPoints(element.gems[i])
 									end
+									positionGemFrame(element, key, i, false)
 									element.gems[i].icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic")
 									if i > socketCount then
 										element.gems[i].icon:SetVertexColor(1, 0, 0)
@@ -403,13 +758,14 @@ local function onInspect(arg1)
 							if InspectOpt("ilvl") then
 								if not element.ilvlBackground then
 									element.ilvlBackground = element:CreateTexture(nil, "BACKGROUND")
-									element.ilvlBackground:SetColorTexture(0, 0, 0, 0.8) -- Schwarzer Hintergrund mit 80% Transparenz
+									element.ilvlBackground:SetColorTexture(0, 0, 0, 0)
 									element.ilvl = element:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-									element.ilvl:SetFont(addon.variables.defaultFont, 14, "OUTLINE") -- Setzt die Schriftart, -größe und -stil (OUTLINE)
 								end
+								addon.functions.ApplyItemLevelTextStyle(element.ilvl)
 
-								applyCharIlvlPosition(element)
-								element.ilvlBackground:SetSize(30, 16) -- Größe des Hintergrunds (muss ggf. angepasst werden)
+								applyCharIlvlPosition(element, key)
+								element.ilvlBackground:SetSize(30, 16)
+								hideIlvlBackground(element)
 
 								local color = eItem:GetItemQualityColor()
 
@@ -424,10 +780,15 @@ local function onInspect(arg1)
 								if not itemLevelText then itemLevelText = eItem:GetCurrentItemLevel() end
 
 								element.ilvl:SetFormattedText(itemLevelText)
-								element.ilvl:SetTextColor(color.r, color.g, color.b, 1)
+								addon.functions.ApplyItemLevelTextColor(element.ilvl, color)
 
 								local textWidth = element.ilvl:GetStringWidth()
-								element.ilvlBackground:SetSize(textWidth + 6, element.ilvl:GetStringHeight() + 4) -- Mehr Padding für bessere Lesbarkeit
+								element.ilvlBackground:SetSize(textWidth + 6, element.ilvl:GetStringHeight() + 4)
+								hideIlvlBackground(element)
+							end
+							if InspectOpt("gems") and displayCount > 0 then
+								local outsideWithIlvl = isCharIlvlOutsidePosition() and InspectOpt("ilvl")
+								applyGemLayout(element, key, displayCount, outsideWithIlvl)
 							end
 							if InspectOpt("enchants") then
 								if not element.enchant then
@@ -446,46 +807,30 @@ local function onInspect(arg1)
 										applyMissingEnchantOverlayStyle(element.borderGradient)
 										element.borderGradient:Hide()
 									end
-									element.enchant:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
 								end
+								applyEnchantTextStyle(element.enchant)
+								local mode = getEnchantDisplayMode()
+								local showMissingOverlay = shouldShowMissingEnchantOverlayForMode(mode)
+								local enchantText = getTooltipInfoFromLink(itemLink)
+								local foundEnchant = enchantText ~= nil
+								local showMissingEnchant = false
 								if element.borderGradient then
 									applyMissingEnchantOverlayStyle(element.borderGradient)
 									element.borderGradient:Hide()
-									local showMissingOverlay = addon.db["showMissingEnchantOverlayOnCharframe"] ~= false
-									local enchantText = getTooltipInfoFromLink(itemLink)
-									local foundEnchant = enchantText ~= nil
-									if foundEnchant then
-										element.enchant:SetFormattedText(enchantText)
-										if element.borderGradient then element.borderGradient:Hide() end
-									end
-
-									if not foundEnchant and UnitLevel(inspectUnit) == addon.variables.maxLevel then
-										element.enchant:SetText("")
-										if
-											nil == addon.variables.shouldEnchantedChecks[key]
-											or (nil ~= addon.variables.shouldEnchantedChecks[key] and addon.variables.shouldEnchantedChecks[key].func(eItem:GetCurrentItemLevel()))
-										then
-											if key == 17 then
-												local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(itemLink)
-												if addon.variables.allowedEnchantTypesForOffhand[itemEquipLoc] then
-													if showMissingOverlay then
-														element.borderGradient:Show()
-													else
-														element.borderGradient:Hide()
-													end
-													element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
-												end
-											else
-												if showMissingOverlay then
-													element.borderGradient:Show()
-												else
-													element.borderGradient:Hide()
-												end
-												element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
-											end
-										end
+								end
+								if not foundEnchant and UnitLevel(inspectUnit) == addon.variables.maxLevel then
+									showMissingEnchant = shouldShowMissingEnchant(key, itemLink, eItem:GetCurrentItemLevel())
+								end
+								if element.borderGradient then
+									if showMissingEnchant and showMissingOverlay then
+										element.borderGradient:Show()
+									else
+										element.borderGradient:Hide()
 									end
 								end
+								local displayText = getEnchantDisplayText(mode, enchantText, showMissingEnchant)
+								element.enchant:SetText("")
+								if displayText then element.enchant:SetFormattedText(displayText) end
 							else
 								if element.borderGradient then element.borderGradient:Hide() end
 								if element.enchant then element.enchant:SetText("") end
@@ -501,11 +846,16 @@ local function onInspect(arg1)
 		end
 	end
 
-	if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
-		local ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
-		if ilvl then pdElement.ilvl:SetFormattedText(string.format("%.1f", ilvl)) end
-	else
-		pdElement.ilvl:SetFormattedText("")
+	if pdElement.ilvl then
+		if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
+			addon.functions.ApplyItemLevelTextStyle(pdElement.ilvl)
+			local ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
+			if ilvl then pdElement.ilvl:SetFormattedText(string.format("%.1f", ilvl)) end
+			addon.functions.ApplyItemLevelTextColor(pdElement.ilvl, nil)
+		else
+			pdElement.ilvl:SetFormattedText("")
+		end
+		hideIlvlBackground(pdElement)
 	end
 end
 
@@ -561,7 +911,11 @@ local function setIlvlText(element, slot)
 		end
 
 		if element.borderGradient then element.borderGradient:Hide() end
-		if not (CharOpt("gems") or CharOpt("ilvl") or CharOpt("enchants")) then
+		if element.trackLabel then
+			element.trackLabel:SetText("")
+			element.trackLabel:Hide()
+		end
+		if not (CharOpt("gems") or CharOpt("ilvl") or CharOpt("enchants") or CharOpt("tracks")) then
 			element.ilvl:SetFormattedText("")
 			element.enchant:SetText("")
 			element.ilvlBackground:Hide()
@@ -572,9 +926,10 @@ local function setIlvlText(element, slot)
 		if eItem and not eItem:IsItemEmpty() then
 			eItem:ContinueOnItemLoad(function()
 				local link = eItem:GetItemLink()
-				local itemQuality = link and select(3, GetItemInfo(link)) or nil
+				local itemQuality = link and select(3, C_Item.GetItemInfo(link)) or nil
 				updateCharRarityGlow(element, itemQuality)
 				local _, itemID, enchantID = string.match(link, "item:(%d+):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*):(%d*)")
+				local displayCount = 0
 				if CharOpt("gems") then
 					local itemStats = C_Item.GetItemStats(link)
 					local socketCount = 0
@@ -582,15 +937,16 @@ local function setIlvlText(element, slot)
 						if (statName:find("EMPTY_SOCKET") or statName:find("empty_socket")) and addon.variables.allowedSockets[statName] then socketCount = socketCount + statValue end
 					end
 					local neededSockets = addon.variables.shouldSocketed[slot] or 0
-					if neededSockets then
+					if neededSockets > 0 then
 						local cSeason, isPvP = getTooltipInfo(link)
 						if addon.variables.shouldSocketedChecks[slot] then
 							if not addon.variables.shouldSocketedChecks[slot].func(cSeason, isPvP) then neededSockets = 0 end
 						end
 					end
-					local displayCount = math.max(socketCount, neededSockets)
+					displayCount = math.max(socketCount, neededSockets)
 					for i = 1, #element.gems do
 						if i <= displayCount then
+							positionGemFrame(element, slot, i, false)
 							element.gems[i]:Show()
 							element.gems[i].icon:SetTexture("Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic")
 							if i > socketCount then
@@ -613,48 +969,73 @@ local function setIlvlText(element, slot)
 				end
 
 				local enchantText = getTooltipInfoFromLink(link)
+				local trackKey, trackDisplayText = nil, nil
+				if CharOpt("tracks") then
+					trackKey, trackDisplayText = getUpgradeTrackDisplayText(link)
+				end
+
+				if CharOpt("ilvl") or CharOpt("tracks") then
+					applyCharIlvlPosition(element, slot)
+					hideIlvlBackground(element)
+				end
 
 				if CharOpt("ilvl") then
 					local color = eItem:GetItemQualityColor()
 					local itemLevelText = eItem:GetCurrentItemLevel()
-
-					applyCharIlvlPosition(element)
+					addon.functions.ApplyItemLevelTextStyle(element.ilvl)
 
 					element.ilvl:SetFormattedText(itemLevelText)
-					element.ilvl:SetTextColor(color.r, color.g, color.b, 1)
+					addon.functions.ApplyItemLevelTextColor(element.ilvl, color)
 
 					local textWidth = element.ilvl:GetStringWidth()
-					element.ilvlBackground:SetSize(textWidth + 6, element.ilvl:GetStringHeight() + 4) -- Mehr Padding für bessere Lesbarkeit
+					element.ilvlBackground:SetSize(textWidth + 6, element.ilvl:GetStringHeight() + 4)
+					hideIlvlBackground(element)
 				else
 					element.ilvl:SetFormattedText("")
 					element.ilvlBackground:Hide()
 				end
+				if CharOpt("tracks") then
+					if trackKey and trackDisplayText then
+						applyUpgradeTrackTextStyle(element.trackLabel)
+						applyCharTrackPosition(element, slot)
+						element.trackLabel:SetText(trackDisplayText)
+						applyUpgradeTrackTextColor(element.trackLabel, trackKey)
+						element.trackLabel:Show()
+					else
+						element.trackLabel:SetText("")
+						element.trackLabel:Hide()
+					end
+				else
+					element.trackLabel:SetText("")
+					element.trackLabel:Hide()
+				end
+				if CharOpt("gems") and displayCount > 0 then
+					local outsideWithIlvl = isCharIlvlOutsidePosition() and CharOpt("ilvl")
+					applyGemLayout(element, slot, displayCount, outsideWithIlvl)
+				end
 
-				if CharOpt("enchants") and element.borderGradient then
-					applyMissingEnchantOverlayStyle(element.borderGradient)
-					element.borderGradient:Hide()
-					local showMissingOverlay = addon.db["showMissingEnchantOverlayOnCharframe"] ~= false
+				if CharOpt("enchants") then
+					applyEnchantTextStyle(element.enchant)
+					local mode = getEnchantDisplayMode()
+					local showMissingOverlay = shouldShowMissingEnchantOverlayForMode(mode)
+					local showMissingEnchant = false
+					if element.borderGradient then
+						applyMissingEnchantOverlayStyle(element.borderGradient)
+						element.borderGradient:Hide()
+					end
 					local foundEnchant = enchantText ~= nil
-					if foundEnchant then element.enchant:SetFormattedText(enchantText) end
 
-					if not foundEnchant and UnitLevel("player") == addon.variables.maxLevel then
-						element.enchant:SetText("")
-						if
-							nil == addon.variables.shouldEnchantedChecks[slot]
-							or (nil ~= addon.variables.shouldEnchantedChecks[slot] and addon.variables.shouldEnchantedChecks[slot].func(eItem:GetCurrentItemLevel()))
-						then
-							if slot == 17 then
-								local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(link)
-								if addon.variables.allowedEnchantTypesForOffhand[itemEquipLoc] then
-									if showMissingOverlay then element.borderGradient:Show() end
-									element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
-								end
-							else
-								if showMissingOverlay then element.borderGradient:Show() end
-								element.enchant:SetFormattedText(("|cff%02x%02x%02x"):format(255, 0, 0) .. L["MissingEnchant"] .. "|r")
-							end
+					if not foundEnchant and UnitLevel("player") == addon.variables.maxLevel then showMissingEnchant = shouldShowMissingEnchant(slot, link, eItem:GetCurrentItemLevel()) end
+					if element.borderGradient then
+						if showMissingEnchant and showMissingOverlay then
+							element.borderGradient:Show()
+						else
+							element.borderGradient:Hide()
 						end
 					end
+					local displayText = getEnchantDisplayText(mode, enchantText, showMissingEnchant)
+					element.enchant:SetText("")
+					if displayText then element.enchant:SetFormattedText(displayText) end
 				else
 					element.enchant:SetText("")
 				end
@@ -663,6 +1044,10 @@ local function setIlvlText(element, slot)
 			element.ilvl:SetFormattedText("")
 			element.ilvlBackground:Hide()
 			element.enchant:SetText("")
+			if element.trackLabel then
+				element.trackLabel:SetText("")
+				element.trackLabel:Hide()
+			end
 			if element.borderGradient then element.borderGradient:Hide() end
 			updateCharRarityGlow(element, nil)
 		end
@@ -733,20 +1118,10 @@ local function UpdateItemLevel()
 	local statFrame = CharacterStatsPane and CharacterStatsPane.ItemLevelFrame
 	if not (statFrame and statFrame.Value and GetAverageItemLevel) then return end
 
+	if not CharOpt("ilvl") then return end
+
 	local avgItemLevel, equippedItemLevel = GetAverageItemLevel()
 	if not avgItemLevel or not equippedItemLevel then return end
-
-	local showDetailed = addon.db and addon.db.charDisplayOptions and addon.db.charDisplayOptions["ilvl"]
-	if not showDetailed then
-		local minItemLevel = C_PaperDollInfo and C_PaperDollInfo.GetMinItemLevel and C_PaperDollInfo.GetMinItemLevel()
-		local displayItemLevel = math.max(minItemLevel or 0, equippedItemLevel)
-		statFrame.Value:SetText(math.floor(displayItemLevel))
-		if GetItemLevelColor then
-			local r, g, b = GetItemLevelColor()
-			if r and g and b then statFrame.Value:SetTextColor(r, g, b) end
-		end
-		return
-	end
 
 	local equippedText = string.format("%.2f", equippedItemLevel)
 	local avgText = string.format("%.2f", avgItemLevel)
@@ -764,6 +1139,7 @@ end
 hooksecurefunc("PaperDollFrame_SetItemLevel", function(statFrame, unit) UpdateItemLevel() end)
 
 local function setCharFrame()
+	if addon.functions and addon.functions.refreshCharacterFrameElementFonts then addon.functions.refreshCharacterFrameElementFonts() end
 	if InCombatLockdown and InCombatLockdown() then
 		addon.variables = addon.variables or {}
 		addon.variables.pendingCharFrameUpdate = true
@@ -800,7 +1176,7 @@ function addon.functions.createCatalystFrame()
 
 			addon.general.iconFrame.count = addon.general.iconFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 			addon.general.iconFrame.count:SetPoint("BOTTOMRIGHT", addon.general.iconFrame, "BOTTOMRIGHT", 1, 2)
-			addon.general.iconFrame.count:SetFont(addon.variables.defaultFont, 14, "OUTLINE")
+			applyCharacterFrameElementTextStyle(addon.general.iconFrame.count, 14)
 			addon.general.iconFrame.count:SetText(cataclystInfo.quantity)
 			addon.general.iconFrame.count:SetTextColor(1, 0.82, 0)
 			if addon.db["showCatalystChargesOnCharframe"] == false then addon.general.iconFrame:Hide() end
@@ -849,15 +1225,14 @@ local function updateFlyoutButtonInfo(button)
 					if not itemLevel then itemLevel = eItem:GetCurrentItemLevel() end
 					local quality = eItem:GetItemQualityColor()
 
-					if not button.ItemLevelText then
-						button.ItemLevelText = button:CreateFontString(nil, "OVERLAY")
-						button.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
-					end
-					addon.functions.ApplyBagItemLevelPosition(button.ItemLevelText, button, addon.db["bagIlvlPosition"])
+					if not button.ItemLevelText then button.ItemLevelText = button:CreateFontString(nil, "OVERLAY") end
+					addon.functions.ApplyItemLevelTextStyle(button.ItemLevelText)
+					local compareIlvlPosition = addon.db["charIlvlPosition"] or addon.db["bagIlvlPosition"] or "TOPRIGHT"
+					addon.functions.ApplyBagItemLevelPosition(button.ItemLevelText, button, compareIlvlPosition)
 
 					-- Setze den Text und die Farbe
 					button.ItemLevelText:SetText(itemLevel)
-					button.ItemLevelText:SetTextColor(quality.r, quality.g, quality.b, 1)
+					addon.functions.ApplyItemLevelTextColor(button.ItemLevelText, quality)
 					button.ItemLevelText:Show()
 
 					-- Upgrade icon for Flyout items: compare against the specific slot's equipped item
@@ -1272,21 +1647,22 @@ local function applyMerchantButtonInfo()
 
 							if not itemButton.ItemLevelText then
 								itemButton.ItemLevelText = itemButton:CreateFontString(nil, "OVERLAY")
-								itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
 								itemButton.ItemLevelText:SetShadowOffset(1, -1)
 								itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
 							end
+							addon.functions.ApplyItemLevelTextStyle(itemButton.ItemLevelText)
 							addon.functions.ApplyBagItemLevelPosition(itemButton.ItemLevelText, itemButton, addon.db["bagIlvlPosition"])
 
 							local color = eItem:GetItemQualityColor()
 							local candidateIlvl = eItem:GetCurrentItemLevel()
 							itemButton.ItemLevelText:SetText(candidateIlvl)
-							itemButton.ItemLevelText:SetTextColor(color.r, color.g, color.b, 1)
+							addon.functions.ApplyItemLevelTextColor(itemButton.ItemLevelText, color)
 							itemButton.ItemLevelText:Show()
 							local bType
 
 							-- Upgrade arrow for Merchant items
 							if addon.db["showUpgradeArrowOnBagItems"] then
+								local isRecommended = addon.functions.IsItemRecommendedForSpec and addon.functions.IsItemRecommendedForSpec(itemLink, itemEquipLoc, classID, subclassID)
 								local function getEquipSlotsFor(equipLoc)
 									if equipLoc == "INVTYPE_FINGER" then
 										return { 11, 12 }
@@ -1322,21 +1698,24 @@ local function applyMerchantButtonInfo()
 									return nil
 								end
 
-								local invSlot = select(4, C_Item.GetItemInfoInstant(itemLink))
-								local slots = getEquipSlotsFor(invSlot)
-								local baseline
-								if slots and #slots > 0 then
-									for _, s in ipairs(slots) do
-										local eqLink = GetInventoryItemLink("player", s)
-										local eqIlvl = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
-										if baseline == nil then
-											baseline = eqIlvl
-										else
-											baseline = math.min(baseline, eqIlvl)
+								local isUpgrade = false
+								if isRecommended then
+									local invSlot = select(4, C_Item.GetItemInfoInstant(itemLink))
+									local slots = getEquipSlotsFor(invSlot)
+									local baseline
+									if slots and #slots > 0 then
+										for _, s in ipairs(slots) do
+											local eqLink = GetInventoryItemLink("player", s)
+											local eqIlvl = eqLink and (C_Item.GetDetailedItemLevelInfo(eqLink) or 0) or 0
+											if baseline == nil then
+												baseline = eqIlvl
+											else
+												baseline = math.min(baseline, eqIlvl)
+											end
 										end
 									end
+									isUpgrade = baseline ~= nil and candidateIlvl and candidateIlvl > baseline
 								end
-								local isUpgrade = baseline ~= nil and candidateIlvl and candidateIlvl > baseline
 								if isUpgrade then
 									addon.functions.EnsureBagUpgradeIcon(itemButton)
 									local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
@@ -1440,15 +1819,15 @@ local function updateBuybackButtonInfo()
 
 						if not itemButton.ItemLevelText then
 							itemButton.ItemLevelText = itemButton:CreateFontString(nil, "OVERLAY")
-							itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
 							itemButton.ItemLevelText:SetShadowOffset(1, -1)
 							itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
 						end
+						addon.functions.ApplyItemLevelTextStyle(itemButton.ItemLevelText)
 						addon.functions.ApplyBagItemLevelPosition(itemButton.ItemLevelText, itemButton, addon.db["bagIlvlPosition"])
 
 						local color = eItem:GetItemQualityColor()
 						itemButton.ItemLevelText:SetText(eItem:GetCurrentItemLevel())
-						itemButton.ItemLevelText:SetTextColor(color.r, color.g, color.b, 1)
+						addon.functions.ApplyItemLevelTextColor(itemButton.ItemLevelText, color)
 						itemButton.ItemLevelText:Show()
 
 						local bType
@@ -1522,14 +1901,23 @@ function addon.functions.initItemInventory()
 	addon.functions.InitDBValue("bagFilterDockFrame", true)
 	addon.functions.InitDBValue("showBindOnBagItems", false)
 	addon.functions.InitDBValue("showUpgradeArrowOnBagItems", false)
+	addon.functions.InitDBValue("showUpgradeTrackOnBagItems", false)
 	addon.functions.InitDBValue("bagIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("bagUpgradeIconPosition", "BOTTOMRIGHT")
 	addon.functions.InitDBValue("charIlvlPosition", "TOPRIGHT")
+	addon.functions.InitDBValue("bagTrackPosition", "OUTSIDE")
+	addon.functions.InitDBValue("charTrackPosition", "LEFT")
+	addon.functions.InitDBValue("ilvlUseItemQualityColor", true)
+	addon.functions.InitDBValue("ilvlTextColor", { r = 1, g = 1, b = 1, a = 1 })
+	addon.functions.InitDBValue("ilvlFontFace", addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__")
+	addon.functions.InitDBValue("ilvlFontSize", 14)
+	addon.functions.InitDBValue("ilvlFontOutline", "OUTLINE")
 	addon.functions.InitDBValue("fadeBagQualityIcons", false)
 	addon.functions.InitDBValue("enhancedRarityGlow", false)
 	addon.functions.InitDBValue("showGemsOnCharframe", false)
 	addon.functions.InitDBValue("showGemsTooltipOnCharframe", false)
 	addon.functions.InitDBValue("showEnchantOnCharframe", false)
+	addon.functions.InitDBValue("charEnchantDisplayMode", ENCHANT_DISPLAY_MODE_FULL)
 	addon.functions.InitDBValue("showMissingEnchantOverlayOnCharframe", true)
 	addon.functions.InitDBValue("missingEnchantOverlayColor", { r = 1, g = 0, b = 0, a = 0.6 })
 	addon.functions.InitDBValue("showCatalystChargesOnCharframe", false)
@@ -1597,16 +1985,16 @@ function addon.functions.initItemInventory()
 
 	addon.general.durabilityIconFrame.count = addon.general.durabilityIconFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 	addon.general.durabilityIconFrame.count:SetPoint("BOTTOMRIGHT", addon.general.durabilityIconFrame, "BOTTOMRIGHT", 1, 2)
-	addon.general.durabilityIconFrame.count:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
+	applyCharacterFrameElementTextStyle(addon.general.durabilityIconFrame.count, 12)
 
 	if addon.db["showDurabilityOnCharframe"] == false or (addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner()) then addon.general.durabilityIconFrame:Hide() end
 
 	for key, value in pairs(addon.variables.itemSlots) do
-		-- Hintergrund für das Item-Level
 		value.ilvlBackground = value:CreateTexture(nil, "BACKGROUND")
-		value.ilvlBackground:SetColorTexture(0, 0, 0, 0.8) -- Schwarzer Hintergrund mit 80% Transparenz
+		value.ilvlBackground:SetColorTexture(0, 0, 0, 0)
 		value.ilvlBackground:SetPoint("TOPRIGHT", value, "TOPRIGHT", 1, 1)
-		value.ilvlBackground:SetSize(30, 16) -- Größe des Hintergrunds (muss ggf. angepasst werden)
+		value.ilvlBackground:SetSize(30, 16)
+		hideIlvlBackground(value)
 
 		-- Roter Rahmen mit Farbverlauf
 		if addon.variables.shouldEnchanted[key] or addon.variables.shouldEnchantedChecks[key] then
@@ -1618,33 +2006,31 @@ function addon.functions.initItemInventory()
 		end
 		-- Text für das Item-Level
 		value.ilvl = value:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-		value.ilvl:SetPoint("TOPRIGHT", value.ilvlBackground, "TOPRIGHT", -1, -2) -- Position des Textes im Zentrum des Hintergrunds
-		value.ilvl:SetFont(addon.variables.defaultFont, 14, "OUTLINE") -- Setzt die Schriftart, -größe und -stil (OUTLINE)
+		addon.functions.ApplyItemLevelTextStyle(value.ilvl)
+		applyCharIlvlPosition(value, key)
+
+		value.trackLabel = value:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+		applyUpgradeTrackTextStyle(value.trackLabel)
+		value.trackLabel:Hide()
 
 		value.enchant = value:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 		if addon.variables.itemSlotSide[key] == 0 then
-			value.enchant:SetPoint("BOTTOMLEFT", value, "BOTTOMRIGHT", 2, 1)
+			value.enchant:SetPoint("BOTTOMLEFT", value, "BOTTOMRIGHT", 2, -2)
 		elseif addon.variables.itemSlotSide[key] == 2 then
-			value.enchant:SetPoint("BOTTOMLEFT", value, "BOTTOMRIGHT", 2, 1)
+			value.enchant:SetPoint("BOTTOMLEFT", value, "BOTTOMRIGHT", 2, -2)
 		else
-			value.enchant:SetPoint("BOTTOMRIGHT", value, "BOTTOMLEFT", -2, 1)
+			value.enchant:SetPoint("BOTTOMRIGHT", value, "BOTTOMLEFT", -2, -2)
 		end
-		value.enchant:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
+		applyEnchantTextStyle(value.enchant)
 
 		value.gems = {}
 		for i = 1, 3 do
-			value.gems[i] = CreateFrame("Frame", nil, PaperDollFrame)
+			value.gems[i] = CreateFrame("Frame", nil, value)
 			value.gems[i]:SetSize(16, 16) -- Setze die Größe des Icons
+			positionGemFrame(value, key, i, false)
 
-			if addon.variables.itemSlotSide[key] == 0 then
-				value.gems[i]:SetPoint("TOPLEFT", value, "TOPRIGHT", 5 + (i - 1) * 16, -1) -- Verschiebe jedes Icon um 20px
-			elseif addon.variables.itemSlotSide[key] == 1 then
-				value.gems[i]:SetPoint("TOPRIGHT", value, "TOPLEFT", -5 - (i - 1) * 16, -1)
-			else
-				value.gems[i]:SetPoint("BOTTOM", value, "TOPLEFT", -1, 5 + (i - 1) * 16)
-			end
-
-			value.gems[i]:SetFrameStrata("HIGH")
+			value.gems[i]:SetFrameStrata("DIALOG")
+			value.gems[i]:SetFrameLevel(value:GetFrameLevel() + 20)
 
 			value.gems[i]:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
 
@@ -1700,9 +2086,29 @@ local function refreshMerchantButtons()
 	end
 end
 
+local function refreshBaganatorCornerWidgets()
+	if addon.Vendor and addon.Vendor.functions and addon.Vendor.functions.refreshBaganatorWidgets then addon.Vendor.functions.refreshBaganatorWidgets() end
+end
+
+local function refreshItemLevelDisplays()
+	if addon.functions and addon.functions.setCharFrame then addon.functions.setCharFrame() end
+	refreshBagFrames(true)
+	refreshBankSlots(addon.db["showIlvlOnBankFrame"] == true)
+	refreshMerchantButtons()
+	if EquipmentFlyoutFrame and EquipmentFlyoutFrame:IsShown() and EquipmentFlyout_UpdateItems then EquipmentFlyout_UpdateItems() end
+	if InspectFrame and InspectFrame:IsShown() and InspectFrame.unit and AnyInspectEnabled() then
+		local guid = UnitGUID(InspectFrame.unit)
+		if guid then onInspect(guid) end
+	end
+	refreshBaganatorCornerWidgets()
+end
+
+addon.functions.refreshItemLevelDisplays = refreshItemLevelDisplays
+
 local function isBagDisplaySelected(key)
 	if key == "ilvl" then return addon.db["showIlvlOnBagItems"] == true end
 	if key == "upgrade" then return addon.db["showUpgradeArrowOnBagItems"] == true end
+	if key == "track" then return addon.db["showUpgradeTrackOnBagItems"] == true end
 	if key == "bind" then return addon.db["showBindOnBagItems"] == true end
 	return false
 end
@@ -1715,6 +2121,10 @@ local function setBagDisplayOption(key, value)
 	elseif key == "upgrade" then
 		addon.db["showUpgradeArrowOnBagItems"] = enabled
 		refreshBagFrames(true)
+		refreshBaganatorCornerWidgets()
+	elseif key == "track" then
+		addon.db["showUpgradeTrackOnBagItems"] = enabled
+		refreshBagFrames(true)
 	elseif key == "bind" then
 		addon.db["showBindOnBagItems"] = enabled
 		refreshBagFrames(false)
@@ -1725,8 +2135,10 @@ local function applyBagDisplaySelection(selection)
 	selection = selection or {}
 	addon.db["showIlvlOnBagItems"] = selection.ilvl == true
 	addon.db["showUpgradeArrowOnBagItems"] = selection.upgrade == true
+	addon.db["showUpgradeTrackOnBagItems"] = selection.track == true
 	addon.db["showBindOnBagItems"] = selection.bind == true
 	refreshBagFrames(true)
+	refreshBaganatorCornerWidgets()
 end
 
 local bindDesc = L["showBindOnBagItemsDesc"]
@@ -1738,6 +2150,7 @@ local bagDisplayDropdown = addon.functions.SettingsCreateMultiDropdown(cInventor
 	options = {
 		{ value = "ilvl", text = L["showIlvlOnBagItems"], tooltip = L["showIlvlOnBagItemsDesc"] },
 		{ value = "upgrade", text = L["showUpgradeArrowOnBagItems"], tooltip = L["showUpgradeArrowOnBagItemsDesc"] },
+		{ value = "track", text = L["showUpgradeTrackOnBagItems"] or "Upgrade track", tooltip = L["showUpgradeTrackOnBagItemsDesc"] or "Show the upgrade track abbreviation on equippable bag items." },
 		{ value = "bind", text = L["showBindOnBagItems"], tooltip = bindDesc },
 	},
 	isSelectedFunc = function(key) return isBagDisplaySelected(key) end,
@@ -1757,14 +2170,40 @@ addon.functions.SettingsCreateDropdown(cInventory, {
 		BOTTOMLEFT = L["bottomLeft"],
 		BOTTOM = L["bottom"],
 		BOTTOMRIGHT = L["bottomRight"],
+		OUTSIDE = L["outside"] or "Outside",
 	},
 	text = L["bagIlvlPosition"],
 	get = function() return addon.db["bagIlvlPosition"] or "TOPLEFT" end,
-	set = function(key) addon.db["bagIlvlPosition"] = key end,
+	set = function(key)
+		addon.db["bagIlvlPosition"] = key
+		refreshItemLevelDisplays()
+	end,
 	parent = bagDisplayDropdown,
 	parentCheck = function() return isBagDisplaySelected("ilvl") end,
 	default = "BOTTOMLEFT",
 	var = "bagIlvlPosition",
+	type = Settings.VarType.String,
+	parentSection = expandable,
+})
+
+addon.functions.SettingsCreateDropdown(cInventory, {
+	list = {
+		LEFT = L["left"],
+		TOP = L["top"],
+		RIGHT = L["right"],
+		BOTTOM = L["bottom"],
+		OUTSIDE = L["outside"] or "Outside",
+	},
+	text = L["bagTrackPosition"] or "Upgrade track position",
+	get = function() return addon.db["bagTrackPosition"] or "OUTSIDE" end,
+	set = function(key)
+		addon.db["bagTrackPosition"] = key
+		refreshItemLevelDisplays()
+	end,
+	parent = bagDisplayDropdown,
+	parentCheck = function() return isBagDisplaySelected("track") end,
+	default = "OUTSIDE",
+	var = "bagTrackPosition",
 	type = Settings.VarType.String,
 	parentSection = expandable,
 })

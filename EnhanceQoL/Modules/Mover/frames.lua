@@ -232,6 +232,23 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "PVPMatchResults",
+		label = L["PvP Match Results"] or "PvP Match Results",
+		group = "activities",
+		names = { "PVPMatchResults" },
+		addon = "Blizzard_PVPMatch",
+		defaultEnabled = true,
+	},
+	{
+		id = "QueueStatusButton",
+		label = L["Queue Status Button"] or "Queue Status Button",
+		group = "activities",
+		names = { "QueueStatusButton" },
+		addon = "Blizzard_QueueStatusFrame",
+		skipOnHide = true,
+		defaultEnabled = false,
+	},
+	{
 		id = "EncounterJournal",
 		label = ADVENTURE_JOURNAL,
 		group = "activities",
@@ -335,6 +352,31 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "UIWidgetBelowMinimapContainerFrame",
+		label = L["Below Minimap Widgets"] or "Below Minimap Widgets",
+		group = "world",
+		names = { "UIWidgetBelowMinimapContainerFrame" },
+		addon = "Blizzard_UIWidgets",
+		ignoreFramePositionManager = true,
+		defaultEnabled = false,
+	},
+	{
+		id = "UIWidgetPowerBarContainerFrame",
+		label = L["Power Bar Widgets"] or "Power Bar Widgets",
+		group = "world",
+		names = { "UIWidgetPowerBarContainerFrame" },
+		addon = "Blizzard_UIWidgets",
+		defaultEnabled = false,
+	},
+	{
+		id = "UIWidgetTopCenterContainerFrame",
+		label = L["Top Center Widgets"] or "Top Center Widgets",
+		group = "world",
+		names = { "UIWidgetTopCenterContainerFrame" },
+		addon = "Blizzard_UIWidgets",
+		defaultEnabled = false,
+	},
+	{
 		id = "FlightMapFrame",
 		label = L["Flight Map"] or "Flight Map",
 		group = "world",
@@ -355,6 +397,14 @@ local frames = {
 		group = "vendors",
 		names = { "ItemUpgradeFrame" },
 		addon = "Blizzard_ItemUpgradeUI",
+		defaultEnabled = true,
+	},
+	{
+		id = "ItemSocketingFrame",
+		label = ITEM_SOCKETING,
+		group = "vendors",
+		names = { "ItemSocketingFrame" },
+		addon = "Blizzard_ItemSocketingUI",
 		defaultEnabled = true,
 	},
 	{
@@ -397,6 +447,14 @@ local frames = {
 		group = "vendors",
 		names = { "AuctionHouseFrame" },
 		addon = "Blizzard_AuctionHouseUI",
+		defaultEnabled = true,
+	},
+	{
+		id = "CurrencyTransferMenu",
+		label = L["Currency Transfer"] or "Currency Transfer",
+		group = "vendors",
+		names = { "CurrencyTransferMenu" },
+		addon = "Blizzard_TokenUI",
 		defaultEnabled = true,
 	},
 	{
@@ -670,7 +728,7 @@ local frames = {
 		addon = "Blizzard_CovenantSanctum",
 		defaultEnabled = true,
 	},
-  {
+	{
 		id = "CovenantMissionFrame",
 		label = L["Covenant Mission Frame"] or "Covenant Mission Frame",
 		group = "activities",
@@ -686,7 +744,7 @@ local frames = {
 		addon = "Blizzard_CovenantRenown",
 		defaultEnabled = true,
 	},
-  {
+	{
 		id = "CovenantPreviewFrame",
 		label = L["Covenant Preview Frame"] or "Covenant Preview Frame",
 		group = "activities",

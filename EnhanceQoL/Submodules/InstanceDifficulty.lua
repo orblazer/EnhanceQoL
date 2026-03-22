@@ -1,4 +1,4 @@
--- luacheck: globals MinimapCluster
+-- luacheck: globals MinimapCluster C_DelvesUI
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
@@ -31,23 +31,22 @@ end
 
 indicator:HookScript("OnShow", function() InstanceDifficulty:Update() end)
 
+local function defaultFontFace()
+	if addon.functions and addon.functions.GetGlobalDefaultFontFace then return addon.functions.GetGlobalDefaultFontFace() end
+	return (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT
+end
+
+function InstanceDifficulty:ApplyTextStyle()
+	if not self.text then return end
+	local fontSize = (addon.db and addon.db["instanceDifficultyFontSize"]) or 14
+	local font = defaultFontFace()
+	local ok = self.text:SetFont(font, fontSize, "OUTLINE")
+	if ok == false then self.text:SetFont((addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT, fontSize, "OUTLINE") end
+end
+
 InstanceDifficulty.text = InstanceDifficulty.text or indicator:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-InstanceDifficulty.text:SetFont(addon.variables.defaultFont, 14, "OUTLINE")
+InstanceDifficulty:ApplyTextStyle()
 InstanceDifficulty.text:Hide()
-
-InstanceDifficulty.icon = InstanceDifficulty.icon or indicator:CreateTexture(nil, "OVERLAY")
-InstanceDifficulty.icon:ClearAllPoints()
-InstanceDifficulty.icon:SetPoint("CENTER", indicator, "CENTER", 0, 4)
-InstanceDifficulty.icon:SetSize(50, 50)
-InstanceDifficulty.icon:Hide()
-
-InstanceDifficulty.icons = {
-	NM = "Interface\\AddOns\\EnhanceQoL\\Icons\\Difficulty_NM.tga",
-	HC = "Interface\\AddOns\\EnhanceQoL\\Icons\\Difficulty_HC.tga",
-	M = "Interface\\AddOns\\EnhanceQoL\\Icons\\Difficulty_M.tga",
-	MPLUS = "Interface\\AddOns\\EnhanceQoL\\Icons\\Difficulty_MPlus.tga",
-	LFR = "Interface\\AddOns\\EnhanceQoL\\Icons\\Difficulty_LFR.tga",
-}
 
 local nmNames = {
 	[RAID_DIFFICULTY1] = true,
@@ -65,6 +64,19 @@ local hcNames = {
 	[RAID_DIFFICULTY_25PLAYER_HEROIC] = true,
 }
 
+local function getActiveDelveTier()
+	if not C_DelvesUI or not C_GossipInfo then return nil end
+
+	local _, _, _, mapID = UnitPosition("player")
+	if not C_DelvesUI.HasActiveDelve(mapID) then return nil end
+
+	local gossipInfo = C_GossipInfo.GetActiveDelveGossip()
+	local orderIndex = gossipInfo and gossipInfo.orderIndex
+	if type(orderIndex) == "number" and orderIndex >= 0 then return orderIndex + 1 end
+
+	return nil
+end
+
 local function getShortLabel(difficultyID, difficultyName)
 	if difficultyID == 1 or difficultyID == 3 or difficultyID == 4 or difficultyID == 14 or difficultyID == 33 or difficultyID == 150 or nmNames[difficultyName] or difficultyID == 12 then
 		return "NM"
@@ -80,6 +92,10 @@ local function getShortLabel(difficultyID, difficultyName)
 		return "LFR"
 	elseif difficultyID == 24 then
 		return "TW"
+	elseif difficultyID == 208 then
+		local tier = getActiveDelveTier()
+		if tier then return "D" .. tier end
+		return "D"
 	end
 	return difficultyName
 end
@@ -88,7 +104,6 @@ function InstanceDifficulty:Update()
 	if not self.enabled or not addon.db then return end
 	if not IsInInstance() then
 		self.text:Hide()
-		self.icon:Hide()
 		return
 	end
 
@@ -110,8 +125,6 @@ function InstanceDifficulty:Update()
 		code = "TW"
 	end
 
-	-- Custom icons are temporarily disabled
-
 	local text
 	if maxPlayers and maxPlayers > 0 then
 		text = string.format("%d (%s)", maxPlayers, short)
@@ -126,9 +139,7 @@ function InstanceDifficulty:Update()
 	self.text:SetPoint(anchor, indicator, anchor, offX, offY)
 
 	self.text:SetText(text)
-	-- Apply font size
-	local fontSize = (addon.db and addon.db["instanceDifficultyFontSize"]) or 14
-	self.text:SetFont(addon.variables.defaultFont, fontSize, "OUTLINE")
+	self:ApplyTextStyle()
 	-- Apply optional difficulty colors
 	if addon.db and addon.db["instanceDifficultyUseColors"] then
 		local colors = addon.db["instanceDifficultyColors"] or {}
@@ -138,7 +149,6 @@ function InstanceDifficulty:Update()
 		self.text:SetTextColor(1, 1, 1)
 	end
 	self.text:Show()
-	self.icon:Hide()
 end
 
 function InstanceDifficulty:SetEnabled(value)
@@ -148,6 +158,7 @@ function InstanceDifficulty:SetEnabled(value)
 		self.frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 		self.frame:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
 		self.frame:RegisterEvent("CHALLENGE_MODE_START")
+		self.frame:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE")
 		if indicator.Default then
 			indicator.Default:Hide()
 			indicator.Default:SetScript("OnShow", indicator.Default.Hide)
@@ -158,8 +169,8 @@ function InstanceDifficulty:SetEnabled(value)
 		self.frame:UnregisterEvent("ZONE_CHANGED_NEW_AREA")
 		self.frame:UnregisterEvent("PLAYER_DIFFICULTY_CHANGED")
 		self.frame:UnregisterEvent("CHALLENGE_MODE_START")
+		self.frame:UnregisterEvent("ACTIVE_DELVE_DATA_UPDATE")
 		self.text:Hide()
-		self.icon:Hide()
 		if indicator.Default then
 			indicator.Default:SetScript("OnShow", nil)
 			if IsInInstance() then indicator.Default:Show() end

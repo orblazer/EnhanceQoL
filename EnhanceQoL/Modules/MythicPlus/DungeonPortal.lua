@@ -25,8 +25,8 @@ local checkCooldown
 
 local minFrameSize = 0
 
-local GetItemCooldown = C_Item.GetItemCooldown
-local GetItemCount = C_Item.GetItemCount
+local GetItemCooldownFn = C_Item.GetItemCooldown
+local GetItemCountFn = C_Item.GetItemCount
 local toyUsableCache = {}
 local toyUsableCacheTime = {}
 local TOY_USABLE_CACHE_TTL = 2
@@ -73,7 +73,7 @@ end
 local function FirstOwnedItemID(itemID)
 	if type(itemID) == "table" then
 		for _, id in ipairs(itemID) do
-			if GetItemCount(id) > 0 then return id end
+			if GetItemCountFn(id) > 0 then return id end
 		end
 		return itemID[1]
 	end
@@ -81,40 +81,64 @@ local function FirstOwnedItemID(itemID)
 end
 
 local function GetCooldownData(spellInfo)
-	if not spellInfo then return end
+	if not spellInfo then return nil end
 
-	local cooldownData, isSecret = nil, false
+	local startTime, duration, modRate, isEnabled, durObj
 	if spellInfo.isToy then
 		if spellInfo.toyID then
-			local startTime, duration, enable = GetItemCooldown(spellInfo.toyID)
-			cooldownData = {
-				startTime = startTime,
-				duration = duration,
-				modRate = 1,
-				isEnabled = enable,
-			}
+			local st, dur, en = GetItemCooldownFn(spellInfo.toyID)
+			startTime, duration, modRate, isEnabled = st, dur, 1, en
 		end
 	elseif spellInfo.isItem then
 		if spellInfo.itemID then
 			local id = FirstOwnedItemID(spellInfo.itemID)
-			local startTime, duration, enable = GetItemCooldown(id)
-			cooldownData = {
-				startTime = startTime,
-				duration = duration,
-				modRate = 1,
-				isEnabled = enable,
-			}
+			local st, dur, en = GetItemCooldownFn(id)
+			startTime, duration, modRate, isEnabled = st, dur, 1, en
 		end
 	else
 		local spellID = spellInfo.spellID
-		if FindSpellOverrideByID(spellID) and FindSpellOverrideByID(spellID) ~= spellID then
-			spellID = FindSpellOverrideByID(spellID)
-			spellInfo.spellID = spellID
+		if C_SpellBook and C_SpellBook.FindSpellOverrideByID then
+			local overrideSpellID = C_SpellBook.FindSpellOverrideByID(spellID)
+			if overrideSpellID and overrideSpellID ~= spellID then
+				spellID = overrideSpellID
+				spellInfo.spellID = spellID
+			end
 		end
-		cooldownData = C_Spell.GetSpellCooldownDuration(spellID)
-		isSecret = true
+		durObj = C_Spell.GetSpellCooldownDuration(spellID)
 	end
-	return cooldownData, isSecret
+
+	if startTime == nil and duration == nil and modRate == nil and isEnabled == nil and durObj == nil then return nil end
+	return {
+		startTime = startTime,
+		duration = duration,
+		modRate = modRate,
+		isEnabled = isEnabled,
+		durObj = durObj,
+	}
+end
+
+local function ApplyCooldownToButton(button)
+	if not button or not button.cooldownFrame then return end
+
+	local cooldownData = GetCooldownData(button)
+	local startTime = cooldownData and cooldownData.startTime
+	local duration = cooldownData and cooldownData.duration
+	local modRate = cooldownData and cooldownData.modRate
+	local enabled = cooldownData and cooldownData.isEnabled
+
+	if cooldownData.durObj then
+		button.cooldownFrame:SetCooldownFromDurationObject(cooldownData.durObj)
+	elseif issecretvalue and issecretvalue(enabled) then
+		button.cooldownFrame:SetCooldown(startTime or 0, duration or 0, modRate or 1)
+	elseif enabled and duration and duration > 0 then
+		button.cooldownFrame:SetCooldown(startTime or 0, duration or 0, modRate or 1)
+	else
+		if button.cooldownFrame.Clear then
+			button.cooldownFrame:Clear()
+		else
+			button.cooldownFrame:SetCooldown(0, 0, 0)
+		end
+	end
 end
 
 local function getCurrentSeasonPortal()
@@ -527,9 +551,9 @@ end
 local GNOMISH = 20219
 local GOBLIN = 20222
 local function GetEngineeringBranch()
-	if IsPlayerSpell(GNOMISH) or IsSpellKnown(GNOMISH) then
+	if C_SpellBook.IsSpellKnown(GNOMISH, Enum.SpellBookSpellBank.Player) or C_SpellBook.IsSpellInSpellBook(GNOMISH, Enum.SpellBookSpellBank.Player, false) then
 		return true, false -- Gnomish Engineering
-	elseif IsPlayerSpell(GOBLIN) or IsSpellKnown(GOBLIN) then
+	elseif C_SpellBook.IsSpellKnown(GOBLIN, Enum.SpellBookSpellBank.Player) or C_SpellBook.IsSpellInSpellBook(GOBLIN, Enum.SpellBookSpellBank.Player, false) then
 		return false, true -- Goblin Engineering
 	else
 		return false, false -- keine Spezialisierung (oder kein Engineering)
@@ -1051,16 +1075,7 @@ function checkCooldown()
 	if addon.db["teleportFrame"] then CreatePortalButtonsWithCooldown(frameAnchor, portalSpells) end
 
 	for _, button in pairs(frameAnchor.buttons or {}) do
-		if isKnown[button.spellID] then
-			local cooldownData, isSecret = GetCooldownData(button)
-			if isSecret and button.cooldownFrame.SetCooldownFromDuration then
-				if cooldownData then button.cooldownFrame:SetCooldownFromDuration(cooldownData) end
-			elseif cooldownData and cooldownData.isEnabled then
-				button.cooldownFrame:SetCooldown(cooldownData.startTime, cooldownData.duration, cooldownData.modRate)
-			else
-				button.cooldownFrame:SetCooldown(0, 0)
-			end
-		end
+		if isKnown[button.spellID] then ApplyCooldownToButton(button) end
 	end
 end
 
@@ -1068,7 +1083,7 @@ local function waitCooldown(arg3)
 	C_Timer.After(0.1, function()
 		local spellInfo = allSpells[arg3]
 		local cooldownData = GetCooldownData(spellInfo)
-		if cooldownData and cooldownData.duration > 0 then
+		if cooldownData and cooldownData.duration and cooldownData.duration > 0 then
 			checkCooldown()
 		else
 			waitCooldown(arg3)
@@ -1337,30 +1352,39 @@ end
 
 local keyStoneFrame
 local measureFontString
+local function EnsureMeasureFontString()
+	if measureFontString then return measureFontString end
+	if not UIParent or not UIParent.CreateFontString then return nil end
+	measureFontString = UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	if measureFontString and measureFontString.Hide then measureFontString:Hide() end
+	return measureFontString
+end
+
 local function calculateMaxWidth(dataTable)
+	local fontString = EnsureMeasureFontString()
+	if not fontString then return 200 end
 	local maxWidth = 0
 	for key, data in pairs(dataTable) do
 		if UnitInParty(key) or key == UnitName("player") then
-			if not measureFontString then return end
 			local widthMap = 0
 			if data.challengeMapID and data.challengeMapID > 0 then
 				local mapData = mapInfo[data.challengeMapID]
 				if not mapData then mapData = { mapName = L["NoKeystone"] } end
-				measureFontString:SetText(mapData.mapName or "")
-				widthMap = measureFontString:GetStringWidth() + 25 + buttonSize
+				fontString:SetText(mapData.mapName or "")
+				widthMap = fontString:GetStringWidth() + 25 + buttonSize
 			else
-				measureFontString:SetText(L["NoKeystone"] or "")
-				widthMap = measureFontString:GetStringWidth() + 25 + buttonSize
+				fontString:SetText(L["NoKeystone"] or "")
+				widthMap = fontString:GetStringWidth() + 25 + buttonSize
 			end
 			local uName = UnitName(key)
 
-			measureFontString:SetText(uName or "")
-			local widthCharName = measureFontString:GetStringWidth() + 25 + buttonSize
+			fontString:SetText(uName or "")
+			local widthCharName = fontString:GetStringWidth() + 25 + buttonSize
 			local width = max(widthCharName, widthMap)
 			if width > maxWidth then maxWidth = width end
 		end
 	end
-	return maxWidth
+	return max(maxWidth, 200)
 end
 
 local function updateKeystoneInfo()
@@ -1411,8 +1435,9 @@ local function updateKeystoneInfo()
 							mapName = L["NoKeystone"],
 						}
 					end
+
 					local frame = CreateFrame("Frame", nil, keyStoneFrame, "BackdropTemplate")
-					SafeSetSize(frame, maxWidthKeystone, 50)
+					SafeSetSize(frame, maxWidthKeystone or 200, 50)
 					frame:SetPoint("TOPRIGHT", keyStoneFrame, "TOPRIGHT", 0, -50 * index)
 					frame:SetBackdrop({
 						bgFile = "Interface\\Buttons\\WHITE8x8", -- Hintergrund
@@ -1459,7 +1484,8 @@ local function updateKeystoneInfo()
 					-- Überprüfen, ob der Zauber bekannt ist
 					if mapData.spellId and C_SpellBook.IsSpellInSpellBook(mapData.spellId) then
 						local cooldownData = C_Spell.GetSpellCooldown(mapData.spellId)
-						if cooldownData and cooldownData.isEnabled then
+						local enabled = cooldownData and cooldownData.isEnabled
+						if cooldownData and ((issecretvalue and issecretvalue(enabled)) or enabled) then
 							button:EnableMouse(true) -- Aktiviert Klicks
 
 							-- Cooldown-Spirale
@@ -1480,6 +1506,7 @@ local function updateKeystoneInfo()
 						levelText:SetText((data.level or "0"))
 						levelText:SetTextColor(1, 1, 1)
 					end
+
 					-- Spielername in Klassenfarbe
 					local playerNameText = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 					playerNameText:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 5, 0)
@@ -1506,8 +1533,7 @@ function addon.MythicPlus.functions.togglePartyKeystone()
 		if addon.db["groupfinderShowPartyKeystone"] and not IsInRaid() then
 			if not isRegistered then
 				isRegistered = true
-				measureFontString = UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-				measureFontString:Hide()
+				EnsureMeasureFontString()
 				openRaidLib.RegisterCallback(addon.MythicPlus, "KeystoneUpdate", "onKeystoneUpdate")
 				openRaidLib.RequestKeystoneDataFromParty()
 			end

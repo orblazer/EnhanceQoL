@@ -601,8 +601,10 @@ local function updateOverlayVisibility(selection, hidden)
 	if not selection then return end
 	selection.overlayHidden = not not hidden
 	selection.overlayAlphas = selection.overlayAlphas or {}
-	for _, region in ipairs({ selection:GetRegions() }) do
-		if region.GetObjectType and region:GetObjectType() == "Texture" then
+	local numRegions = selection.GetNumRegions and selection:GetNumRegions() or 0
+	for i = 1, numRegions do
+		local region = select(i, selection:GetRegions())
+		if region and region.GetObjectType and region:GetObjectType() == "Texture" then
 			if hidden then
 				if selection.overlayAlphas[region] == nil then selection.overlayAlphas[region] = region:GetAlpha() or 1 end
 				region:SetAlpha(0)
@@ -1044,16 +1046,16 @@ local function ensureManagerEyeButton()
 	button:SetHighlightTexture([[Interface\Buttons\ButtonHilight-Square]])
 	local highlight = button:GetHighlightTexture()
 	if highlight then highlight:SetAlpha(0) end
-	button:SetScript("OnClick", function(self)
-		local allHidden, hasToggleable = areAllOverlayTogglesHidden()
-		if not hasToggleable then return end
-		setAllOverlayHidden(not allHidden)
-		updateManagerEyeButton()
-		if Internal.dialog and Internal.dialog.selection and Internal.dialog.HideLabelButton then
-			updateEyeButton(Internal.dialog.HideLabelButton, Internal.dialog.selection.overlayHidden)
-			Internal.dialog:Layout()
-		end
-	end)
+		button:SetScript("OnClick", function(self)
+			local allHidden, hasToggleable = areAllOverlayTogglesHidden()
+			if not hasToggleable then return end
+			setAllOverlayHidden(not allHidden)
+			updateManagerEyeButton()
+			if Internal.dialog and Internal.dialog.mode ~= "standalone" and Internal.dialog.selection and Internal.dialog.HideLabelButton then
+				updateEyeButton(Internal.dialog.HideLabelButton, Internal.dialog.selection.overlayHidden)
+				Internal.dialog:Layout()
+			end
+		end)
 	button:SetScript("OnEnter", function(self)
 		if not GameTooltip then return end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -2005,7 +2007,7 @@ local function buildMultiDropdown()
 			map[value] = shouldSelect and true or nil
 			self.setting.set(lib.activeLayoutName, map, lib:GetActiveLayoutIndex())
 		end
-		Internal:RequestRefreshSettings()
+		if self.setting.refreshOnSelect ~= false then Internal:RequestRefreshSettings() end
 	end
 
 	function mixin:ToggleOption(value)
@@ -2723,7 +2725,22 @@ local function buildSlider()
 			self.fixedHeight = sliderHeight
 			self:SetHeight(sliderHeight)
 		end
-		self.formatters[MinimalSliderWithSteppersMixin.Label.Right] = CreateMinimalSliderFormatter(MinimalSliderWithSteppersMixin.Label.Right, data.formatter)
+		local formatter = data.formatter
+		if not formatter then
+			local stepHint = tonumber(data.valueStep)
+			if stepHint and stepHint >= 1 and stepHint == math.floor(stepHint) then
+				formatter = function(value)
+					local n = tonumber(value) or 0
+					if n >= 0 then
+						n = math.floor(n + 0.5)
+					else
+						n = math.ceil(n - 0.5)
+					end
+					return tostring(n)
+				end
+			end
+		end
+		self.formatters[MinimalSliderWithSteppersMixin.Label.Right] = CreateMinimalSliderFormatter(MinimalSliderWithSteppersMixin.Label.Right, formatter)
 
 		local minV = tonumber(data.minValue) or 0
 		local maxV = tonumber(data.maxValue) or 1
@@ -2845,7 +2862,12 @@ local function buildSlider()
 
 		input:SetScript("OnEnterPressed", commitInput)
 		input:SetScript("OnEscapePressed", function(box)
-			if box:GetParent() and box:GetParent().currentValue then box:SetText(tostring(box:GetParent().currentValue)) end
+			local owner = box:GetParent()
+			local currentValue = owner and owner.currentValue
+			if currentValue ~= nil then
+				local fmt = owner and owner.formatters and owner.formatters[MinimalSliderWithSteppersMixin.Label.Right]
+				box:SetText(fmt and fmt(currentValue) or tostring(currentValue))
+			end
 			box:ClearFocus()
 		end)
 		input:SetScript("OnEditFocusLost", function(box)
@@ -2921,7 +2943,7 @@ local function buildCollapsible()
 
 			local selectionParent = selection and selection.parent
 			applyRowHeightOverride(self, selectionParent, "collapsible")
-			if not selectionParent and Internal.dialog and Internal.dialog.selection then selectionParent = Internal.dialog.selection.parent end
+			if not selectionParent and Internal.dialog then selectionParent = getDialogFrame(Internal.dialog) end
 
 			local collapsed = not not data.defaultCollapsed
 			local stored
@@ -3053,10 +3075,147 @@ local function setResetVisibility(buttonsFrame, visible)
 	end
 end
 
+local function getDialogFrame(dialog)
+	if not dialog then return nil end
+	local context = dialog.context
+	if type(context) == "table" and context.frame then return context.frame end
+	return dialog.selection and dialog.selection.parent or nil
+end
+
+local function getDialogTitle(dialog)
+	if not dialog then return "" end
+	local context = dialog.context
+	if type(context) == "table" and type(context.title) == "string" and context.title ~= "" then return context.title end
+	local frame = getDialogFrame(dialog)
+	if not frame then return "" end
+	return frame.editModeName or (frame.GetName and frame:GetName()) or ""
+end
+
+local function getDialogSettings(dialog)
+	if not dialog then return nil, 0 end
+	local context = dialog.context
+	local settings = type(context) == "table" and context.settings or nil
+	if type(settings) == "table" then return settings, #settings end
+	local frame = getDialogFrame(dialog)
+	if frame then return Internal:GetFrameSettings(frame) end
+	return nil, 0
+end
+
+local function getDialogButtons(dialog)
+	if not dialog then return nil, 0 end
+	local context = dialog.context
+	local buttons = type(context) == "table" and context.buttons or nil
+	if type(buttons) == "table" then return buttons, #buttons end
+	local frame = getDialogFrame(dialog)
+	if frame then return Internal:GetFrameButtons(frame) end
+	return nil, 0
+end
+
+local function getDialogSettingsSpacing(dialog)
+	local context = dialog and dialog.context
+	if type(context) == "table" and context.settingsSpacing ~= nil then return normalizeSpacing(context.settingsSpacing, DEFAULT_SETTINGS_SPACING) end
+	return getFrameSettingsSpacing(getDialogFrame(dialog))
+end
+
+local function getDialogSettingsMaxHeight(dialog)
+	local context = dialog and dialog.context
+	if type(context) == "table" then
+		local override = context.settingsMaxHeight
+		if override == nil then override = context.maxSettingsHeight end
+		if override ~= nil then return normalizePositive(override, nil) end
+	end
+	return getFrameSettingsMaxHeight(getDialogFrame(dialog))
+end
+
+local function getDialogShowSettingsReset(dialog)
+	local context = dialog and dialog.context
+	if type(context) == "table" and context.showSettingsReset ~= nil then return context.showSettingsReset == true end
+	local frame = getDialogFrame(dialog)
+	local showSettingsReset = frame and State.settingsResetToggles[frame]
+	if showSettingsReset == nil then showSettingsReset = true end
+	return showSettingsReset == true
+end
+
+local function getDialogShowReset(dialog)
+	local context = dialog and dialog.context
+	if type(context) == "table" and context.showReset ~= nil then return context.showReset == true end
+	local frame = getDialogFrame(dialog)
+	if not frame then return false end
+	if frame and State.resetToggles[frame] == false then return false end
+	local defaultPosition = type(context) == "table" and context.defaultPosition or nil
+	return defaultPosition ~= nil or lib:GetFrameDefaultPosition(frame) ~= nil
+end
+
+local function getDialogDefaultPosition(dialog)
+	local context = dialog and dialog.context
+	if type(context) == "table" and context.defaultPosition ~= nil then return context.defaultPosition end
+	local frame = getDialogFrame(dialog)
+	if not frame then return nil end
+	return lib:GetFrameDefaultPosition(frame)
+end
+
+local function applyDialogPositionOverride(dialog)
+	local context = dialog and dialog.context
+	if type(context) ~= "table" then return false end
+	local relativeTo = context.relativeTo or context.anchorTo
+	local point = context.point or context.anchorPoint
+	local relativePoint = context.relativePoint or context.anchorRelativePoint or point
+	if not point then return false end
+	dialog:ClearAllPoints()
+	dialog:SetPoint(point, relativeTo or UIParent, relativePoint or point, context.x or context.offsetX or 0, context.y or context.offsetY or 0)
+	return true
+end
+
+local function normalizeDialogContext(value)
+	if not value then return nil end
+	if value.parent then
+		return {
+			mode = "edit",
+			frame = value.parent,
+			selection = value,
+		}
+	end
+
+	local context = {}
+	for key, entry in pairs(value) do
+		context[key] = entry
+	end
+	context.mode = context.mode or "standalone"
+	context.frame = context.frame or (context.selection and context.selection.parent) or context.host
+	if not context.frame then return nil end
+	if not context.selection then
+		context.selection = {
+			parent = context.frame,
+			standalone = context.mode ~= "edit",
+			overlayHidden = false,
+			labelHidden = false,
+		}
+	elseif not context.selection.parent then
+		context.selection.parent = context.frame
+	end
+	if context.mode ~= "edit" then context.selection.standalone = true end
+	return context
+end
+
+local function applyDialogDefaultPosition(frame, pos)
+	if not (frame and pos) then return end
+	local point = pos.point or "CENTER"
+	local relativeTo = pos.relativeTo
+	local relativePoint = pos.relativePoint or point
+	local x = pos.x or 0
+	local y = pos.y or 0
+	frame:ClearAllPoints()
+	if relativeTo ~= nil or pos.relativePoint ~= nil then
+		frame:SetPoint(point, relativeTo or UIParent, relativePoint, x, y)
+	else
+		frame:SetPoint(point, x, y)
+	end
+end
+
 function Dialog:ApplyLayoutOverrides()
-	local selectionParent = self.selection and self.selection.parent
+	local selectionParent = getDialogFrame(self)
 	if self.Settings then
-		self.Settings.spacing = getFrameSettingsSpacing(selectionParent)
+		self.Settings.spacing = getDialogSettingsSpacing(self)
 		if self.Settings.Divider then
 			local height = getRowHeightOverride(selectionParent, "divider")
 			if height then self.Settings.Divider:SetHeight(height) end
@@ -3065,40 +3224,45 @@ function Dialog:ApplyLayoutOverrides()
 end
 
 function Dialog:Update(selection)
-	self.selection = selection
-	self.Title:SetText(selection.parent.editModeName or selection.parent:GetName())
+	local context = normalizeDialogContext(selection)
+	if not context then return end
+	self.context = context
+	self.mode = context.mode
+	self.selection = context.selection
+	local frame = getDialogFrame(self)
+	self.Title:SetText(getDialogTitle(self))
 	self:ApplyLayoutOverrides()
-	local allowOverlayToggle = State.overlayToggleFlags[selection.parent] == true
+	local allowOverlayToggle = self.mode == "edit" and State.overlayToggleFlags[frame] == true
 	if self.HideLabelButton then
 		if allowOverlayToggle then
 			self.HideLabelButton:Show()
-			updateSelectionVisuals(selection, selection.overlayHidden)
-			updateEyeButton(self.HideLabelButton, selection.overlayHidden)
+			updateSelectionVisuals(self.selection, self.selection.overlayHidden)
+			updateEyeButton(self.HideLabelButton, self.selection.overlayHidden)
 		else
 			self.HideLabelButton:Hide()
-			updateSelectionVisuals(selection, false)
+			if self.selection then self.selection.overlayHidden = false end
 		end
 	end
 	self:UpdateSettings()
 	self:UpdateButtons()
 	FixScrollBarInside(self.SettingsScroll)
 	UpdateScrollChildWidth(self)
-	if not self:IsShown() then applyDialogPosition(self) end
+	local appliedPositionOverride = applyDialogPositionOverride(self)
+	if not self:IsShown() and not appliedPositionOverride then applyDialogPosition(self) end
 	self:Show()
 	self:Layout()
 end
 
 function Dialog:UpdateSettings()
 	Pools:ReleaseAll()
-	local settings, num = Internal:GetFrameSettings(self.selection.parent)
+	local settings, num = getDialogSettings(self)
 	local layoutName = lib.activeLayoutName
 	local layoutIndex = lib:GetActiveLayoutIndex()
 	local collapsedById = {}
 	if num > 0 then
 		for _, data in next, settings do
 			if data.kind == lib.SettingType.Collapsible then
-				local selectionParent = self.selection and self.selection.parent
-				if not selectionParent and Internal.dialog and Internal.dialog.selection then selectionParent = Internal.dialog.selection.parent end
+				local selectionParent = getDialogFrame(self)
 				local collapsed = Collapse:Get(selectionParent, data.id or data.name)
 				if collapsed == nil and data.defaultCollapsed ~= nil then collapsed = not not data.defaultCollapsed end
 				if data.getCollapsed then
@@ -3142,10 +3306,9 @@ function Dialog:UpdateSettings()
 
 	self.Settings.ResetButton.layoutIndex = num + 1
 	self.Settings.Divider.layoutIndex = num + 2
-	local showSettingsReset = State.settingsResetToggles[self.selection.parent]
-	if showSettingsReset == nil then showSettingsReset = true end
+	local showSettingsReset = getDialogShowSettingsReset(self)
 	self.Settings.ResetButton:SetEnabled(num > 0)
-	self.Settings.ResetButton:SetShown(showSettingsReset)
+	self.Settings.ResetButton:SetShown(showSettingsReset == true)
 	if self.Settings and self.Settings.Layout then self.Settings:Layout() end
 end
 
@@ -3153,7 +3316,7 @@ function Dialog:UpdateButtons()
 	local buttonPool = Pools:Get("button")
 	if buttonPool then buttonPool:ReleaseAll() end
 	local anyVisible = false
-	local buttons, num = Internal:GetFrameButtons(self.selection.parent)
+	local buttons, num = getDialogButtons(self)
 	if num > 0 then
 		for index, data in next, buttons do
 			local button = buttonPool and buttonPool:Acquire(self.Buttons)
@@ -3170,8 +3333,7 @@ function Dialog:UpdateButtons()
 		end
 	end
 
-	local showReset = true
-	if State.resetToggles[self.selection.parent] == false then showReset = false end
+	local showReset = getDialogShowReset(self)
 	if showReset and buttonPool then
 		local resetPosition = buttonPool:Acquire(self.Buttons)
 		resetPosition.layoutIndex = num + 1
@@ -3197,7 +3359,7 @@ function Dialog:UpdateButtons()
 end
 
 function Dialog:ResetSettings()
-	local settings, num = Internal:GetFrameSettings(self.selection.parent)
+	local settings, num = getDialogSettings(self)
 	if num > 0 then
 		for _, data in next, settings do
 			local handledDefault = false
@@ -3223,11 +3385,11 @@ function Dialog:ResetSettings()
 end
 
 function Dialog:ResetPosition()
-	local parent = self.selection.parent
-	local pos = lib:GetFrameDefaultPosition(parent) or { point = "CENTER", x = 0, y = 0 }
-	parent:ClearAllPoints()
-	parent:SetPoint(pos.point, pos.x, pos.y)
-	Internal:TriggerCallback(parent, pos.point, roundOffset(pos.x), roundOffset(pos.y))
+	local parent = getDialogFrame(self)
+	if not parent then return end
+	local pos = getDialogDefaultPosition(self) or { point = "CENTER", x = 0, y = 0 }
+	applyDialogDefaultPosition(parent, pos)
+	Internal:TriggerCallback(parent, pos.point or "CENTER", roundOffset(pos.x or 0), roundOffset(pos.y or 0))
 end
 
 function Internal.CreateDialog()
@@ -3323,8 +3485,7 @@ function Internal.CreateDialog()
 		if not (scroll and settings) then return end
 		FixScrollBarInside(scroll)
 
-		local selectionParent = self.selection and self.selection.parent
-		local maxHeight = getFrameSettingsMaxHeight(selectionParent)
+		local maxHeight = getDialogSettingsMaxHeight(self)
 
 		if settings.Layout then settings:Layout() end
 
@@ -3380,6 +3541,16 @@ function Internal.CreateDialog()
 			return self:_eqolOriginalLayout(...)
 		end
 	end
+
+	dialog:HookScript("OnHide", function(self)
+		if self.mode == "standalone" then
+			local context = self.context
+			self.context = nil
+			self.mode = nil
+			self.selection = nil
+			if context and type(context.onHide) == "function" then securecallfunction(context.onHide, self, context.frame) end
+		end
+	end)
 
 	return dialog
 end
@@ -3642,7 +3813,8 @@ overlapGlobalFrame:RegisterEvent("GLOBAL_MOUSE_DOWN")
 overlapGlobalFrame:SetScript("OnEvent", overlapGlobalMouseDown)
 
 local function onEditModeEnter()
-	updateActiveLayoutFromAPI()
+	-- GetLayouts is allocation-heavy; only refresh when cache is missing.
+	if not lib.activeLayoutIndex or not State.layoutSnapshot then updateActiveLayoutFromAPI() end
 	restoreManagerExtraFrames(true)
 	lib.isEditing = true
 	resetSelectionIndicators()
@@ -3671,6 +3843,59 @@ lib.eventHandlersLayoutDeleted = lib.eventHandlersLayoutDeleted or {}
 lib.eventHandlersLayoutRenamed = lib.eventHandlersLayoutRenamed or {}
 lib.eventHandlersSpec = lib.eventHandlersSpec or {}
 lib.eventHandlersLayoutDuplicate = lib.eventHandlersLayoutDuplicate or {}
+
+function Internal:EnsureDialog()
+	if not self.dialog then
+		self.dialog = self.CreateDialog()
+		self.dialog:HookScript("OnHide", function() resetSelectionIndicators() end)
+		applyDialogPosition(self.dialog)
+	end
+
+	if not self._dialogInfrastructureReady then
+		self._dialogInfrastructureReady = true
+
+		local combatWatcher = CreateFrame("Frame")
+		combatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
+		combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+		combatWatcher:RegisterUnitEvent("PLAYER_SPECIALIZATION_CHANGED", "player")
+		combatWatcher:SetScript("OnEvent", function(_, event)
+			if event == "PLAYER_REGEN_DISABLED" then
+				resetSelectionIndicators()
+			elseif event == "PLAYER_REGEN_ENABLED" and lib.isEditing then
+				resetSelectionIndicators()
+			elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
+				Layout:HandleSpecChanged()
+			end
+			if lib.isEditing then Internal:RefreshManagerTogglePanel() end
+		end)
+		self.combatWatcher = combatWatcher
+
+		EventRegistry:RegisterFrameEventAndCallback("EDIT_MODE_LAYOUTS_UPDATED", function(_, layoutInfo) Layout:HandleLayoutsChanged(nil, layoutInfo) end)
+		EventRegistry:RegisterCallback("EditMode.SavedLayouts", function()
+			if C_EditMode and C_EditMode.GetLayouts then Layout:HandleLayoutsChanged(nil, C_EditMode.GetLayouts()) end
+		end)
+
+		if EditModeManagerFrame then
+			EditModeManagerFrame:HookScript("OnShow", onEditModeEnter)
+			EditModeManagerFrame:HookScript("OnHide", onEditModeExit)
+			ensureManagerEyeButton()
+			hooksecurefunc(EditModeManagerFrame, "SelectSystem", function() resetSelectionIndicators() end)
+		end
+
+		if C_EditMode then
+			if C_EditMode.OnLayoutDeleted then hooksecurefunc(C_EditMode, "OnLayoutDeleted", function(deletedLayoutIndex) Layout:HandleLayoutDeleted(deletedLayoutIndex) end) end
+			if C_EditMode.OnLayoutAdded then
+				hooksecurefunc(
+					C_EditMode,
+					"OnLayoutAdded",
+					function(addedLayoutIndex, activateNewLayout, isLayoutImported) Layout:HandleLayoutAdded(addedLayoutIndex, activateNewLayout, isLayoutImported) end
+				)
+			end
+		end
+	end
+
+	return self.dialog
+end
 
 -- API ------------------------------------------------------------------------------
 function lib:AddFrame(frame, callback, default)
@@ -3756,47 +3981,7 @@ function lib:AddFrame(frame, callback, default)
 		if default.collapsibleHeight ~= nil then setRowHeightOverride(frame, "collapsible", default.collapsibleHeight) end
 	end
 
-	if not Internal.dialog then
-		Internal.dialog = Internal.CreateDialog()
-		Internal.dialog:HookScript("OnHide", function() resetSelectionIndicators() end)
-		applyDialogPosition(Internal.dialog)
-
-		local combatWatcher = CreateFrame("Frame")
-		combatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
-		combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-		combatWatcher:RegisterUnitEvent("PLAYER_SPECIALIZATION_CHANGED", "player")
-		combatWatcher:SetScript("OnEvent", function(_, event)
-			if event == "PLAYER_REGEN_DISABLED" then
-				resetSelectionIndicators()
-			elseif event == "PLAYER_REGEN_ENABLED" and lib.isEditing then
-				resetSelectionIndicators()
-			elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
-				Layout:HandleSpecChanged()
-			end
-			if lib.isEditing then Internal:RefreshManagerTogglePanel() end
-		end)
-
-		EventRegistry:RegisterFrameEventAndCallback("EDIT_MODE_LAYOUTS_UPDATED", function(_, layoutInfo) Layout:HandleLayoutsChanged(nil, layoutInfo) end)
-		EventRegistry:RegisterCallback("EditMode.SavedLayouts", function()
-			if C_EditMode and C_EditMode.GetLayouts then Layout:HandleLayoutsChanged(nil, C_EditMode.GetLayouts()) end
-		end)
-
-		EditModeManagerFrame:HookScript("OnShow", onEditModeEnter)
-		EditModeManagerFrame:HookScript("OnHide", onEditModeExit)
-		ensureManagerEyeButton()
-
-		hooksecurefunc(EditModeManagerFrame, "SelectSystem", function() resetSelectionIndicators() end)
-		if C_EditMode then
-			if C_EditMode.OnLayoutDeleted then hooksecurefunc(C_EditMode, "OnLayoutDeleted", function(deletedLayoutIndex) Layout:HandleLayoutDeleted(deletedLayoutIndex) end) end
-			if C_EditMode.OnLayoutAdded then
-				hooksecurefunc(
-					C_EditMode,
-					"OnLayoutAdded",
-					function(addedLayoutIndex, activateNewLayout, isLayoutImported) Layout:HandleLayoutAdded(addedLayoutIndex, activateNewLayout, isLayoutImported) end
-				)
-			end
-		end
-	end
+	Internal:EnsureDialog()
 	updateManagerEyeButton()
 end
 
@@ -3808,6 +3993,57 @@ end
 function lib:AddFrameSettingsButton(frame, data)
 	if not State.buttonSpecs[frame] then State.buttonSpecs[frame] = {} end
 	table.insert(State.buttonSpecs[frame], data)
+end
+
+function lib:ShowStandaloneSettingsDialog(frame, options)
+	assert(frame, "frame is required")
+	assert(options == nil or type(options) == "table", "options must be a table")
+	if lib.isEditing then return nil, "standalone settings are unavailable while edit mode is active" end
+
+	options = options or {}
+	local context = normalizeDialogContext({
+		mode = "standalone",
+		frame = frame,
+		title = options.title,
+		settings = options.settings,
+		buttons = options.buttons,
+		defaultPosition = options.defaultPosition,
+		showReset = options.showReset,
+		showSettingsReset = options.showSettingsReset,
+		settingsSpacing = options.settingsSpacing,
+		settingsMaxHeight = options.settingsMaxHeight or options.maxSettingsHeight,
+		point = options.point or options.anchorPoint,
+		relativePoint = options.relativePoint or options.anchorRelativePoint,
+		relativeTo = options.relativeTo or options.anchorTo,
+		x = options.x or options.offsetX,
+		y = options.y or options.offsetY,
+		onHide = options.onHide,
+	})
+
+	local hasSettings = (type(context.settings) == "table" and #context.settings > 0) or State.settingSheets[frame] ~= nil
+	local hasButtons = (type(context.buttons) == "table" and #context.buttons > 0) or State.buttonSpecs[frame] ~= nil
+	local hasReset = options.showReset == true
+	if options.showReset ~= false and not hasReset then hasReset = options.defaultPosition ~= nil or lib:GetFrameDefaultPosition(frame) ~= nil end
+	if not hasSettings and not hasButtons and not hasReset then return nil, "no settings, buttons, or reset position were provided for this frame" end
+
+	local dialog = Internal:EnsureDialog()
+	dialog:Update(context)
+	return dialog
+end
+
+function lib:HideStandaloneSettingsDialog(frame)
+	local dialog = Internal.dialog
+	if not (dialog and dialog:IsShown() and dialog.mode == "standalone") then return false end
+	if frame and getDialogFrame(dialog) ~= frame then return false end
+	dialog:Hide()
+	return true
+end
+
+function lib:IsStandaloneSettingsDialogShown(frame)
+	local dialog = Internal.dialog
+	if not (dialog and dialog:IsShown() and dialog.mode == "standalone") then return false end
+	if frame and getDialogFrame(dialog) ~= frame then return false end
+	return true
 end
 
 function lib:AddManagerToggle(data)
@@ -3864,12 +4100,12 @@ end
 
 function lib:SetFrameResetVisible(frame, showReset)
 	State.resetToggles[frame] = not not showReset
-	if Internal.dialog and Internal.dialog.selection and Internal.dialog.selection.parent == frame then Internal.dialog:UpdateButtons() end
+	if Internal.dialog and getDialogFrame(Internal.dialog) == frame then Internal.dialog:UpdateButtons() end
 end
 
 function lib:SetFrameSettingsResetVisible(frame, showReset)
 	State.settingsResetToggles[frame] = not not showReset
-	if Internal.dialog and Internal.dialog.selection and Internal.dialog.selection.parent == frame then Internal.dialog:UpdateSettings() end
+	if Internal.dialog and getDialogFrame(Internal.dialog) == frame then Internal.dialog:UpdateSettings() end
 end
 
 function lib:SetFrameSettingsMaxHeight(frame, height)
@@ -3879,7 +4115,7 @@ function lib:SetFrameSettingsMaxHeight(frame, height)
 		State.settingsMaxHeightOverrides[frame] = normalizePositive(height, nil)
 	end
 
-	if Internal.dialog and Internal.dialog.selection and Internal.dialog.selection.parent == frame then Internal.dialog:Layout() end
+	if Internal.dialog and getDialogFrame(Internal.dialog) == frame then Internal.dialog:Layout() end
 end
 
 function lib:SetFrameDragEnabled(frame, enabledOrPredicate)
@@ -3987,26 +4223,87 @@ function Internal:GetFrameButtons(frame)
 	end
 end
 
-function Internal:RequestRefreshSettings()
-	if self._refreshQueued then return end
-	self._refreshQueued = true
-	if not (C_Timer and C_Timer.After) then
-		self._refreshQueued = false
-		self:RefreshSettings()
-		return
+local function hasOpenDropdownMenu()
+	local menuManager = Menu and Menu.GetManager and Menu.GetManager()
+	if menuManager and menuManager.GetOpenMenu then
+		local ok, openMenu = pcall(menuManager.GetOpenMenu, menuManager)
+		if ok and openMenu then return true end
 	end
-	Internal._refreshRunner = Internal._refreshRunner or function()
-		Internal._refreshQueued = false
-		Internal:RefreshSettings()
-	end
-	C_Timer.After(0, Internal._refreshRunner)
+	return UIDROPDOWNMENU_OPEN_MENU ~= nil
 end
 
-function Internal:RefreshSettings()
+local function mergeRefreshSettingValueTargets(existing, incoming)
+	if incoming == nil then return nil, true end
+	if type(incoming) ~= "table" then return existing, existing ~= nil end
+	if existing == nil then existing = {} end
+	for _, entry in ipairs(incoming) do
+		if type(entry) == "table" then existing[entry] = true end
+	end
+	for key, value in pairs(incoming) do
+		if type(key) == "table" and value then
+			existing[key] = true
+		elseif type(value) == "table" then
+			existing[value] = true
+		end
+	end
+	return existing, next(existing) ~= nil
+end
+
+function Internal:_scheduleSettingsRefresh(delay)
+	if self._refreshRunnerScheduled then return end
+	self._refreshRunnerScheduled = true
+	local wait = tonumber(delay) or 0
+	if wait < 0 then wait = 0 end
+	if not (C_Timer and C_Timer.After) then
+		self._refreshRunnerScheduled = false
+		self:_runDeferredSettingsRefresh()
+		return
+	end
+	self._refreshRunner = self._refreshRunner or function()
+		Internal._refreshRunnerScheduled = false
+		Internal:_runDeferredSettingsRefresh()
+	end
+	C_Timer.After(wait, self._refreshRunner)
+end
+
+function Internal:_runDeferredSettingsRefresh()
+	if hasOpenDropdownMenu() then
+		self:_scheduleSettingsRefresh(0.05)
+		return
+	end
+
+	local refreshLayout = self._refreshQueued == true
+	local refreshValues = self._refreshValuesQueued == true
+	local targets = self._refreshValueTargets
+
+	self._refreshQueued = nil
+	self._refreshValuesQueued = nil
+	self._refreshValueTargets = nil
+
+	if refreshLayout then self:RefreshSettings(true) end
+	if refreshValues then self:RefreshSettingValues(targets, true) end
+end
+
+function Internal:RequestRefreshSettings()
+	self._refreshQueued = true
+	self:_scheduleSettingsRefresh(0)
+end
+
+function Internal:RequestRefreshSettingValues(targetSettings)
+	self._refreshValuesQueued = true
+	self._refreshValueTargets = mergeRefreshSettingValueTargets(self._refreshValueTargets, targetSettings)
+	self:_scheduleSettingsRefresh(0)
+end
+
+function Internal:RefreshSettings(fromDeferred)
+	if not fromDeferred and hasOpenDropdownMenu() then
+		self:RequestRefreshSettings()
+		return
+	end
 	if not (Internal.dialog and Internal.dialog:IsShown()) then return end
 	local parent = Internal.dialog.Settings
 	if not parent then return end
-	local selectionParent = Internal.dialog.selection and Internal.dialog.selection.parent
+	local selectionParent = getDialogFrame(Internal.dialog)
 	local layoutName = lib.activeLayoutName
 	local layoutIndex = lib:GetActiveLayoutIndex()
 	local layoutDirty = false
@@ -4056,16 +4353,20 @@ function Internal:RefreshSettings()
 	end
 end
 
-function Internal:RefreshSettingValues(targetSettings)
+function Internal:RefreshSettingValues(targetSettings, fromDeferred)
+	if not fromDeferred and hasOpenDropdownMenu() then
+		self:RequestRefreshSettingValues(targetSettings)
+		return
+	end
 	if not (Internal.dialog and Internal.dialog:IsShown()) then return end
 	local parent = Internal.dialog.Settings
 	if not parent then return end
 	local selection = Internal.dialog.selection
 	if not selection then return end
-	local selectionParent = selection.parent
+	local selectionParent = getDialogFrame(Internal.dialog)
 	local layoutName = lib.activeLayoutName
 	local layoutIndex = lib:GetActiveLayoutIndex()
-	local settings, num = Internal:GetFrameSettings(selection.parent)
+	local settings, num = getDialogSettings(Internal.dialog)
 	if not settings or num == 0 then return end
 	local targets
 	if type(targetSettings) == "table" then

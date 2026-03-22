@@ -61,15 +61,53 @@ end
 local function getUnitFrameEntries()
 	local list = {}
 	local seen = {}
+	local excluded = {
+		MicroMenu = true,
+		BagsBar = true,
+		MinimapCluster = true,
+		BuffFrame = true,
+		DebuffFrame = true,
+	}
 	local entries = addon.variables and addon.variables.unitFrameNames
 	if type(entries) == "table" then
 		for _, info in ipairs(entries) do
 			local name = info and info.name
-			if type(name) == "string" and name ~= "" and not seen[name] then
+			if type(name) == "string" and name ~= "" and not excluded[name] and not seen[name] then
 				seen[name] = true
 				list[#list + 1] = { name = name, label = info.text or name, allowMissing = true }
 			end
 		end
+	end
+	return list
+end
+
+local function getUIFrameEntries()
+	local list = {}
+	local seen = {}
+	local included = {
+		MicroMenu = true,
+		BagsBar = true,
+		MinimapCluster = true,
+		BuffFrame = true,
+		DebuffFrame = true,
+	}
+	local entries = addon.variables and addon.variables.unitFrameNames
+	if type(entries) == "table" then
+		for _, info in ipairs(entries) do
+			local name = info and info.name
+			if type(name) == "string" and name ~= "" and included[name] and not seen[name] then
+				seen[name] = true
+				list[#list + 1] = { name = name, label = info.text or name, allowMissing = true }
+			end
+		end
+	end
+	if not seen.DamageMeter then
+		seen.DamageMeter = true
+		list[#list + 1] = {
+			name = "DamageMeter",
+			label = L["VisibilityDamageMeter"] or "Damage Meter",
+			allowMissing = true,
+		}
 	end
 	return list
 end
@@ -94,6 +132,78 @@ local function getCooldownViewerEntries()
 			seen[name] = true
 			list[#list + 1] = { name = name, label = labels[name] or name, allowMissing = true }
 		end
+	end
+	return list
+end
+
+local function getCooldownPanelEntries()
+	local list = {}
+	local seenFrames = {}
+	local function add(name, label)
+		if type(name) ~= "string" or name == "" or seenFrames[name] then return end
+		seenFrames[name] = true
+		list[#list + 1] = { name = name, label = label or name, allowMissing = true }
+	end
+
+	local panelLabel = L["VisibilityCooldownPanel"] or "Cooldown Panel"
+
+	local root = addon and addon.db and addon.db.cooldownPanels or nil
+	local panels = root and root.panels
+	if type(panels) ~= "table" then return list end
+
+	local seenPanelIds = {}
+	local orderedPanels = {}
+	local extraPanels = {}
+	local function collect(rawId, panel, destination)
+		if type(panel) ~= "table" then return end
+		local numericId = tonumber(rawId)
+		local idText = numericId and tostring(numericId) or tostring(rawId or "")
+		if idText == "" or seenPanelIds[idText] then return end
+		seenPanelIds[idText] = true
+		destination[#destination + 1] = {
+			idText = idText,
+			numericId = numericId,
+			panel = panel,
+		}
+	end
+
+	if type(root.order) == "table" then
+		for _, rawId in ipairs(root.order) do
+			local numericId = tonumber(rawId)
+			local panel = panels[numericId] or panels[tostring(rawId)]
+			collect(rawId, panel, orderedPanels)
+		end
+	end
+	for rawId, panel in pairs(panels) do
+		collect(rawId, panel, extraPanels)
+	end
+	table.sort(extraPanels, function(a, b)
+		local an = a and a.numericId
+		local bn = b and b.numericId
+		if an and bn and an ~= bn then return an < bn end
+		local ak = a and a.idText or ""
+		local bk = b and b.idText or ""
+		return ak < bk
+	end)
+
+	local function appendPanelEntry(info)
+		local idText = info and info.idText
+		if type(idText) ~= "string" or idText == "" then return end
+		local panelName = info and info.panel and info.panel.name
+		local label
+		if type(panelName) == "string" and panelName ~= "" then
+			label = string.format("%s %s: %s", panelLabel, idText, panelName)
+		else
+			label = string.format("%s %s", panelLabel, idText)
+		end
+		add("EQOL_CooldownPanel" .. idText, label)
+	end
+
+	for _, info in ipairs(orderedPanels) do
+		appendPanelEntry(info)
+	end
+	for _, info in ipairs(extraPanels) do
+		appendPanelEntry(info)
 	end
 	return list
 end
@@ -128,6 +238,77 @@ local function getResourceBarEntries()
 		end
 	end
 	return list
+end
+
+local KNOWN_FRAME_LABEL_FALLBACKS = {
+	MainMenuBar = BINDING_HEADER_ACTIONBAR or "Action Bar",
+	MainActionBar = BINDING_HEADER_ACTIONBAR or "Action Bar",
+	MultiBarBottomLeft = BINDING_HEADER_ACTIONBAR2 or "Action Bar 2",
+	MultiBarBottomRight = BINDING_HEADER_ACTIONBAR3 or "Action Bar 3",
+	MultiBarRight = BINDING_HEADER_ACTIONBAR4 or "Action Bar 4",
+	MultiBarLeft = BINDING_HEADER_ACTIONBAR5 or "Action Bar 5",
+	MultiBar5 = BINDING_HEADER_ACTIONBAR6 or "Action Bar 6",
+	MultiBar6 = BINDING_HEADER_ACTIONBAR7 or "Action Bar 7",
+	MultiBar7 = BINDING_HEADER_ACTIONBAR8 or "Action Bar 8",
+	PetActionBar = TUTORIAL_TITLE61_HUNTER or "Pet Action Bar",
+	PetActionBarFrame = TUTORIAL_TITLE61_HUNTER or "Pet Action Bar",
+	StanceBar = HUD_EDIT_MODE_STANCE_BAR_LABEL or "Stance Bar",
+	StanceBarFrame = HUD_EDIT_MODE_STANCE_BAR_LABEL or "Stance Bar",
+	PlayerFrame = HUD_EDIT_MODE_PLAYER_FRAME_LABEL or "Player Frame",
+	TargetFrame = HUD_EDIT_MODE_TARGET_FRAME_LABEL or "Target Frame",
+	FocusFrame = _G.HUD_EDIT_MODE_FOCUS_FRAME_LABEL or "Focus Frame",
+	PetFrame = _G.HUD_EDIT_MODE_PET_FRAME_LABEL or "Pet Frame",
+	BossTargetFrameContainer = HUD_EDIT_MODE_BOSS_FRAMES_LABEL or "Boss Frames",
+	MicroMenu = L["MicroMenu"] or "Micro Menu",
+	BagsBar = L["BagsBar"] or "Bags Bar",
+	MinimapCluster = _G.MINIMAP_LABEL or "Minimap",
+	BuffFrame = L["BuffFrame"] or "Buff Frame",
+	DebuffFrame = L["DebuffFrame"] or "Debuff Frame",
+	DamageMeter = L["VisibilityDamageMeter"] or "Damage Meter",
+	EssentialCooldownViewer = L["cooldownViewerEssential"] or "Essential Cooldown Viewer",
+	UtilityCooldownViewer = L["cooldownViewerUtility"] or "Utility Cooldown Viewer",
+	BuffBarCooldownViewer = L["cooldownViewerBuffBar"] or "Buff Bar Cooldowns",
+	BuffIconCooldownViewer = L["cooldownViewerBuffIcon"] or "Buff Icon Cooldowns",
+	EQOLHealthBar = HEALTH or "Health",
+}
+
+local function buildKnownFrameLabelMap()
+	local labels = {}
+	local function addEntries(entries)
+		for _, entry in ipairs(entries or {}) do
+			local name = entry and entry.name
+			local label = entry and entry.label
+			if type(name) == "string" and name ~= "" and type(label) == "string" and label ~= "" then labels[name] = label end
+		end
+	end
+
+	addEntries(getActionBarFrameEntries())
+	addEntries(getUnitFrameEntries())
+	addEntries(getUIFrameEntries())
+	addEntries(getResourceBarEntries())
+	addEntries(getCooldownViewerEntries())
+	addEntries(getCooldownPanelEntries())
+
+	for name, label in pairs(KNOWN_FRAME_LABEL_FALLBACKS) do
+		if labels[name] == nil and type(label) == "string" and label ~= "" then labels[name] = label end
+	end
+	return labels
+end
+
+local function getFrameDisplayLabel(name, knownFrameLabels)
+	if type(name) ~= "string" or name == "" then return name end
+	local labels = knownFrameLabels or buildKnownFrameLabelMap()
+	local label = labels[name]
+	if type(label) == "string" and label ~= "" then return label end
+
+	local powerType = name:match("^EQOL(.+)Bar$")
+	if powerType then
+		local rb = addon.Aura and addon.Aura.ResourceBars
+		if rb and rb.PowerLabels and type(rb.PowerLabels[powerType]) == "string" and rb.PowerLabels[powerType] ~= "" then return rb.PowerLabels[powerType] end
+		local globalLabel = _G["POWER_TYPE_" .. tostring(powerType)]
+		if type(globalLabel) == "string" and globalLabel ~= "" then return globalLabel end
+	end
+	return name
 end
 
 local function stopFade(target)
@@ -281,6 +462,13 @@ end
 local function resolveFrameByName(name)
 	if type(name) ~= "string" or name == "" then return nil end
 	local obj = _G[name]
+	if not obj then
+		if name == "PetActionBar" then
+			obj = _G.PetActionBarFrame
+		elseif name == "StanceBar" then
+			obj = _G.StanceBarFrame
+		end
+	end
 	if not obj or type(obj) ~= "table" then return nil end
 	if obj.IsForbidden and obj:IsForbidden() then return nil end
 	if obj.IsObjectType and not obj:IsObjectType("Frame") then return nil end
@@ -509,6 +697,13 @@ local function ensureWatcher()
 	watcher:RegisterEvent("ZONE_CHANGED")
 	watcher:RegisterEvent("ZONE_CHANGED_INDOORS")
 	watcher:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+	watcher:RegisterEvent("UNIT_ENTERED_VEHICLE")
+	watcher:RegisterEvent("UNIT_EXITED_VEHICLE")
+	watcher:RegisterEvent("UNIT_EXITING_VEHICLE")
+	watcher:RegisterEvent("VEHICLE_UPDATE")
+	watcher:RegisterEvent("PET_BATTLE_OPENING_START")
+	watcher:RegisterEvent("PET_BATTLE_OPENING_DONE")
+	watcher:RegisterEvent("PET_BATTLE_CLOSE")
 	safeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_START", "player")
 	safeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_STOP", "player")
 	safeRegisterUnitEvent(watcher, "UNIT_SPELLCAST_FAILED", "player")
@@ -761,6 +956,9 @@ local function getSortedRuleDefinitions()
 		defs[#defs + 1] = def
 	end
 	table.sort(defs, function(a, b)
+		local ao = tonumber(a.order) or 100000
+		local bo = tonumber(b.order) or 100000
+		if ao ~= bo then return ao < bo end
 		local la = (a.label or a.key or ""):lower()
 		local lb = (b.label or b.key or ""):lower()
 		if la == lb then return (a.key or "") < (b.key or "") end
@@ -849,8 +1047,10 @@ local function showKnownFramesMenu(owner)
 		root:CreateTitle(L["VisibilityKnownFrames"] or "Known frames")
 		addGroup(root, L["visibilityKindActionBars"] or "Action Bars", L["VisibilityAllActionBars"] or "All Action Bars", getActionBarFrameEntries())
 		addGroup(root, L["VisibilityKnownUnitFrames"] or "Unit Frames", L["VisibilityAllUnitFrames"] or "All Unit Frames", getUnitFrameEntries())
+		addGroup(root, L["VisibilityKnownUIFrames"] or "UI Frames", L["VisibilityAllUIFrames"] or "All UI Frames", getUIFrameEntries())
 		addGroup(root, L["VisibilityKnownResourceBars"] or "Resource Bars", L["VisibilityAllResourceBars"] or "All Resource Bars", getResourceBarEntries())
 		addGroup(root, L["VisibilityKnownCooldownViewer"] or "Cooldown Viewer", L["VisibilityAllCooldownViewers"] or "All Cooldown Viewers", getCooldownViewerEntries())
+		addGroup(root, L["VisibilityKnownCooldownPanels"] or "Cooldown Panels", L["VisibilityAllCooldownPanels"] or "All Cooldown Panels", getCooldownPanelEntries())
 	end)
 end
 
@@ -1294,7 +1494,7 @@ local function ensureEditor()
 
 	local frameScroll = CreateFrame("ScrollFrame", nil, middle, "UIPanelScrollFrameTemplate")
 	frameScroll:SetPoint("TOPLEFT", framesTitle, "BOTTOMLEFT", 0, -8)
-	frameScroll:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -26, 80)
+	frameScroll:SetPoint("BOTTOMRIGHT", middle, "BOTTOMRIGHT", -26, 48)
 	local frameContent = CreateFrame("Frame", nil, frameScroll)
 	frameContent:SetSize(1, 1)
 	frameScroll:SetScrollChild(frameContent)
@@ -1305,7 +1505,8 @@ local function ensureEditor()
 	pickButton:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 46)
 
 	local knownFramesButton = createButton(middle, L["VisibilityAddKnownFrames"] or "Add known frames", 140, 22)
-	knownFramesButton:SetPoint("LEFT", pickButton, "RIGHT", 8, 0)
+	knownFramesButton:ClearAllPoints()
+	knownFramesButton:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 20)
 
 	local frameNameLabel = createLabel(middle, L["VisibilityFrameName"] or "Frame name", 11, "OUTLINE")
 	frameNameLabel:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 20)
@@ -1316,6 +1517,15 @@ local function ensureEditor()
 
 	local addFrame = createButton(middle, L["VisibilityAddFrame"] or "Add", 60, 20)
 	addFrame:SetPoint("LEFT", frameNameBox, "RIGHT", 8, 0)
+
+	-- Keep manual/picker frame adding hidden for now.
+	pickButton:Hide()
+	pickButton:Disable()
+	frameNameLabel:Hide()
+	frameNameBox:Hide()
+	frameNameBox:Disable()
+	addFrame:Hide()
+	addFrame:Disable()
 
 	local statusText = middle:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 	statusText:SetPoint("BOTTOMLEFT", middle, "BOTTOMLEFT", 12, 6)
@@ -1542,9 +1752,13 @@ function Visibility:RefreshEditor()
 			editor.configNameBox:Enable()
 		end
 		if editor.frameNameBox then
-			editor.frameNameBox:Enable()
-			editor.addFrame:Enable()
-			editor.pickButton:Enable()
+			editor.frameNameBox:SetText("")
+			editor.frameNameBox:Disable()
+			editor.frameNameBox:Hide()
+			editor.addFrame:Disable()
+			editor.addFrame:Hide()
+			editor.pickButton:Disable()
+			editor.pickButton:Hide()
 		end
 		if editor.addKnownFrames then editor.addKnownFrames:Enable() end
 		editor.enabledCheck:SetChecked(cfg.enabled == true)
@@ -1566,8 +1780,11 @@ function Visibility:RefreshEditor()
 		if editor.frameNameBox then
 			editor.frameNameBox:SetText("")
 			editor.frameNameBox:Disable()
+			editor.frameNameBox:Hide()
 			editor.addFrame:Disable()
-			editor.pickButton:Enable()
+			editor.addFrame:Hide()
+			editor.pickButton:Disable()
+			editor.pickButton:Hide()
 		end
 		if editor.addKnownFrames then editor.addKnownFrames:Enable() end
 		editor.enabledCheck:SetChecked(false)
@@ -1590,6 +1807,7 @@ function Visibility:RefreshEditor()
 	local frameRows = editor.frameRows
 	local fContent = editor.frameList.content
 	local fIndex = 0
+	local knownFrameLabels = buildKnownFrameLabelMap()
 	if cfg and type(cfg.frames) == "table" then
 		for _, name in ipairs(cfg.frames) do
 			fIndex = fIndex + 1
@@ -1615,7 +1833,7 @@ function Visibility:RefreshEditor()
 				frameRows[fIndex] = row
 			end
 			row.frameName = name
-			row.text:SetText(name)
+			row.text:SetText(getFrameDisplayLabel(name, knownFrameLabels))
 			if resolveFrameByName(name) then
 				row.text:SetTextColor(1, 1, 1, 1)
 			else

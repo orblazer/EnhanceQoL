@@ -84,7 +84,9 @@
 - **Sort Mythic Dungeon applicants by Mythic Score.**
 
 ### Quest & Vendor Automation
-- **Automatically accept and complete Quests.**
+- **Automatically accept Quests.**
+- **Automatically turn in Quests.**
+- **Automatically handle Gossip.**
 - **Don't automatically handle daily/weekly quests.**
 - **Don't automatically handle trivial quests.**
 - **Don't automatically handle account-completed quests.**
@@ -113,7 +115,6 @@ Expose console variables as checkboxes:
 - Enable autodismount when using abilities (and while flying).
 - Enable mouse scroll in chat.
 - Disable death effects.
-- Enable Map Fade while moving.
 - Show LUA-Error on UI.
 - Show class colors on nameplates.
 - Show the Castbar of your Target.

@@ -16,6 +16,7 @@ local RANDOM_FAVORITE_SPELL_ID = 150544
 local GHOST_WOLF_SPELL_ID = 2645
 local SLOW_FALL_SPELL_ID = 130
 local LEVITATE_SPELL_ID = 1706
+local DRUID_TRAVEL_FORM_SPELL_ID = 783
 local DRACTHYR_RACE_TAG = "Dracthyr"
 local DRACTHYR_VISAGE_AURA_CHECK_SPELL_ID = 372014
 local DRACTHYR_VISAGE_SPELL_ID = 351239
@@ -146,7 +147,7 @@ local function getSourceName(sourceID)
 	if C_Spell and C_Spell.GetSpellName then name = C_Spell.GetSpellName(sourceID) end
 	if not name and GetSpellInfo then name = GetSpellInfo(sourceID) end
 	if not name and C_Item and C_Item.GetItemNameByID then name = C_Item.GetItemNameByID(sourceID) end
-	if not name and GetItemInfo then name = GetItemInfo(sourceID) end
+	if not name and C_Item and C_Item.GetItemInfo then name = C_Item.GetItemInfo(sourceID) end
 	return name
 end
 
@@ -160,8 +161,7 @@ end
 
 local function isSpellKnown(spellID)
 	if not spellID then return false end
-	if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(spellID) == true end
-	if IsSpellKnown then return IsSpellKnown(spellID) == true end
+	if C_SpellBook and C_SpellBook.IsSpellInSpellBook then return C_SpellBook.IsSpellInSpellBook(spellID, Enum.SpellBookSpellBank.Player, false) == true end
 	return false
 end
 
@@ -170,6 +170,7 @@ local function getFallingSafetySpellID()
 	if not (IsFalling and IsFalling()) then return nil end
 
 	local classTag = (addon.variables and addon.variables.unitClass) or select(2, UnitClass("player"))
+	if classTag == "DRUID" and isSpellKnown(DRUID_TRAVEL_FORM_SPELL_ID) then return DRUID_TRAVEL_FORM_SPELL_ID end
 	if classTag == "PRIEST" and isSpellKnown(LEVITATE_SPELL_ID) then return LEVITATE_SPELL_ID end
 	if classTag == "MAGE" and isSpellKnown(SLOW_FALL_SPELL_ID) then return SLOW_FALL_SPELL_ID end
 	return nil

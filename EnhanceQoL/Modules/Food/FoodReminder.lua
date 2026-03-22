@@ -17,11 +17,26 @@ else
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_DrinkMacro")
-local LSM = LibStub("LibSharedMedia-3.0")
 local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 local DEFAULT_SOUND_SENTINEL = "__DEFAULT_SOUND__"
 local NONE_SOUND_SENTINEL = "__NONE_SOUND__"
+
+local function getSoundHash()
+	if addon.functions and addon.functions.GetLSMMediaHash then
+		local hash = addon.functions.GetLSMMediaHash("sound")
+		if type(hash) == "table" then return hash end
+	end
+	return {}
+end
+
+local function getSoundNames()
+	if addon.functions and addon.functions.GetLSMMediaNames then
+		local names = addon.functions.GetLSMMediaNames("sound")
+		if type(names) == "table" then return names end
+	end
+	return {}
+end
 
 local defaultPos = { point = "TOP", x = 0, y = -100 }
 local function initReminderDefaults()
@@ -137,7 +152,7 @@ local function playReminderSound(kind)
 	if key == NONE_SOUND_SENTINEL then return end -- explicit opt-out
 
 	if key and key ~= "" then
-		local soundTable = LSM and LSM:HashTable("sound")
+		local soundTable = getSoundHash()
 		local file = soundTable and soundTable[key]
 		if file then
 			PlaySoundFile(file, "Master")
@@ -194,6 +209,28 @@ local function applyButtonSettings()
 	else
 		anchor:SetBackdropColor(0, 0, 0, 0)
 	end
+end
+
+local function buildReminderLayoutSnapshot()
+	local pos = addon.db["mageFoodReminderPos"] or defaultPos
+	local point = pos.point or defaultPos.point
+	local x = pos.x or defaultPos.x
+	local y = pos.y or defaultPos.y
+	local scale = addon.db["mageFoodReminderScale"] or 1
+	scale = math.floor(scale / 0.05 + 0.5) * 0.05
+	if scale < 0.1 then
+		scale = 0.1
+	elseif scale > 2.0 then
+		scale = 2.0
+	end
+	scale = tonumber(string.format("%.2f", scale))
+	return {
+		point = point,
+		relativePoint = point,
+		x = x,
+		y = y,
+		scale = scale,
+	}
 end
 
 local function createLeaveFrame()
@@ -310,6 +347,11 @@ local function hasEnoughMageFood()
 	return false
 end
 
+local function isInFollowerDungeon()
+	if C_LFGInfo and C_LFGInfo.IsInLFGFollowerDungeon then return C_LFGInfo.IsInLFGFollowerDungeon() end
+	return false
+end
+
 local joinSoundPlayed = false
 local leaveSoundPlayed = false
 local function checkShow()
@@ -347,7 +389,10 @@ local function checkShow()
 	end
 
 	local enoughFood = hasEnoughMageFood()
-	if queuedFollower and IsInLFGDungeon() then
+	local inFollowerDungeon = isInFollowerDungeon()
+	if queuedFollower and IsInLFGDungeon() and not inFollowerDungeon then queuedFollower = false end
+
+	if queuedFollower and inFollowerDungeon then
 		if enoughFood then
 			createLeaveFrame()
 			if not leaveSoundPlayed then
@@ -401,7 +446,7 @@ local function createSoundDropdownSetting(labelKey, dbKey)
 				addon.db[dbKey] = NONE_SOUND_SENTINEL
 			else
 				addon.db[dbKey] = value
-				local soundTable = LSM and LSM:HashTable("sound")
+				local soundTable = getSoundHash()
 				local file = soundTable and soundTable[value]
 				if file then PlaySoundFile(file, "Master") end
 			end
@@ -415,9 +460,9 @@ local function createSoundDropdownSetting(labelKey, dbKey)
 				addon.db[dbKey] = nil
 				PlaySound(SOUNDKIT.RAID_WARNING)
 			end)
-			local soundTable = LSM and LSM:HashTable("sound")
+			local soundTable = getSoundHash()
 			if soundTable then
-				for _, soundName in ipairs(LSM:List("sound")) do
+				for _, soundName in ipairs(getSoundNames()) do
 					rootDescription:CreateRadio(soundName, function() return addon.db[dbKey] == soundName end, function()
 						addon.db[dbKey] = soundName
 						local file = soundTable[soundName]
@@ -437,12 +482,13 @@ registerEditModeFrame = function()
 
 	local function performRegistration()
 		local anchor = ensureAnchor()
+		local snapshot = buildReminderLayoutSnapshot()
 		local defaults = {
-			point = defaultPos.point,
-			relativePoint = defaultPos.point,
-			x = defaultPos.x,
-			y = defaultPos.y,
-			scale = addon.db["mageFoodReminderScale"] or 1,
+			point = snapshot.point,
+			relativePoint = snapshot.relativePoint,
+			x = snapshot.x,
+			y = snapshot.y,
+			scale = snapshot.scale,
 		}
 
 		local settings
@@ -496,6 +542,25 @@ registerEditModeFrame = function()
 			title = L["mageFoodReminder"] or "Food Reminder",
 			layoutDefaults = defaults,
 			onApply = function(_, layoutName, data)
+				if not anchor._eqolEditModeHydrated then
+					anchor._eqolEditModeHydrated = true
+					local record = data or {}
+					local seed = buildReminderLayoutSnapshot()
+					record.point = seed.point
+					record.relativePoint = seed.relativePoint
+					record.x = seed.x
+					record.y = seed.y
+					record.scale = seed.scale
+					if EditMode and EditMode.SetFramePosition then
+						local okPos, errPos = pcall(EditMode.SetFramePosition, EditMode, editModeId, record.point, record.x, record.y, layoutName)
+						if not okPos and errPos then geterrorhandler()(errPos) end
+						if EditMode.SetValue then
+							local okScale, errScale = pcall(EditMode.SetValue, EditMode, editModeId, "scale", record.scale, layoutName, true)
+							if not okScale and errScale then geterrorhandler()(errScale) end
+						end
+						return
+					end
+				end
 				if not data then
 					addon.db["mageFoodReminderPos"] = CopyTable(defaultPos)
 					addon.db.mageFoodReminderScale = 1

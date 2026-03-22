@@ -18,6 +18,38 @@ local THRESHOLD_THICKNESS = (ResourceBars and ResourceBars.THRESHOLD_THICKNESS) 
 local THRESHOLD_DEFAULT = (ResourceBars and ResourceBars.THRESHOLD_DEFAULT) or { 1, 1, 1, 0.5 }
 local DEFAULT_THRESHOLDS = (ResourceBars and ResourceBars.DEFAULT_THRESHOLDS) or { 25, 50, 75, 90 }
 local DEFAULT_THRESHOLD_COUNT = (ResourceBars and ResourceBars.DEFAULT_THRESHOLD_COUNT) or 3
+local ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS) or 10
+local ABSOLUTE_THRESHOLD_COLOR_DEFAULT_COUNT = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_DEFAULT_COUNT) or 2
+local ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP) or 10
+local ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_VOID_METAMORPHOSIS = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_VOID_METAMORPHOSIS) or 50
+local ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_CONTINUOUS = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_CONTINUOUS) or 200
+local ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_PERCENT = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_PERCENT) or 100
+local ABSOLUTE_THRESHOLD_COLOR_DEFAULTS = (ResourceBars and ResourceBars.ABSOLUTE_THRESHOLD_COLOR_DEFAULTS)
+	or {
+		{ value = 2, color = { 1.00, 0.78, 0.25, 1.0 } },
+		{ value = 4, color = { 0.95, 0.55, 0.20, 1.0 } },
+		{ value = 6, color = { 0.95, 0.90, 0.20, 1.0 } },
+		{ value = 8, color = { 0.45, 0.90, 0.25, 1.0 } },
+		{ value = 10, color = { 0.20, 0.90, 0.40, 1.0 } },
+	}
+local MAELSTROM_WEAPON_SEGMENTS = (ResourceBars and ResourceBars.MAELSTROM_WEAPON_SEGMENTS) or 5
+local MAELSTROM_WEAPON_MAX_STACKS = (ResourceBars and ResourceBars.MAELSTROM_WEAPON_MAX_STACKS) or 10
+local MAELSTROM_MID_STACK_DEFAULT = (ResourceBars and ResourceBars.MAELSTROM_WEAPON_MID_STACK_DEFAULT) or MAELSTROM_WEAPON_SEGMENTS
+local MAELSTROM_MID_STACK_MAX = math.max(1, MAELSTROM_WEAPON_MAX_STACKS - 1)
+local ROGUE_CHARGED_COMBO_DEFAULTS = (ResourceBars and ResourceBars.ROGUE_CHARGED_COMBO_DEFAULTS)
+	or {
+		enabled = true,
+		affectFill = true,
+		affectBackground = true,
+		fillUseCustomColor = false,
+		fillColor = { 1.0, 0.95, 0.45, 1.0 },
+		fillLighten = 0.35,
+		fillAlphaBoost = 0.10,
+		backgroundUseCustomColor = false,
+		backgroundColor = { 0.75, 0.60, 0.25, 0.75 },
+		backgroundLighten = 0.30,
+		backgroundAlphaBoost = 0.10,
+	}
 local STAGGER_EXTRA_THRESHOLD_HIGH = (ResourceBars and ResourceBars.STAGGER_EXTRA_THRESHOLD_HIGH) or 200
 local STAGGER_EXTRA_THRESHOLD_EXTREME = (ResourceBars and ResourceBars.STAGGER_EXTRA_THRESHOLD_EXTREME) or 300
 local STAGGER_EXTRA_COLORS = (ResourceBars and ResourceBars.STAGGER_EXTRA_COLORS) or { high = { 0.62, 0.2, 1, 1 }, extreme = { 1, 0.2, 0.8, 1 } }
@@ -36,7 +68,19 @@ local AUTO_ENABLE_OPTIONS = {
 }
 local AUTO_ENABLE_ORDER = { "HEALTH", "MAIN", "SECONDARY" }
 
+local function getCachedLSMMedia(mediaType)
+	local names = addon.functions and addon.functions.GetLSMMediaNames and addon.functions.GetLSMMediaNames(mediaType)
+	local hash = addon.functions and addon.functions.GetLSMMediaHash and addon.functions.GetLSMMediaHash(mediaType)
+	if type(names) == "table" and type(hash) == "table" then return names, hash end
+	return {}, {}
+end
+
 local specSettingVars = {}
+local function getActiveSpecIndex()
+	local apiSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization and C_SpecializationInfo.GetSpecialization()
+	if apiSpec and apiSpec > 0 then return apiSpec end
+	return addon.variables and addon.variables.unitSpec
+end
 local function autoEnableSelection()
 	addon.db.resourceBarsAutoEnable = addon.db.resourceBarsAutoEnable or {}
 	-- Migrate legacy boolean flag into the new selection map
@@ -94,38 +138,71 @@ local function maybeAutoEnableBars(specIndex, specCfg)
 			specCfg[pType] = specCfg[pType] or {}
 			local ok = false
 			if ResourceBars.ApplyGlobalProfile then ok = ResourceBars.ApplyGlobalProfile(pType, specIndex, false) end
+			-- Fallback for fresh profiles/new chars without any saved global template yet.
+			if not ok then
+				specCfg[pType]._rbType = pType
+				ok = true
+			end
 			if ok then
 				applied = applied + 1
 				specCfg[pType].enabled = true
 				if pType == mainType and pType ~= "HEALTH" then
 					local a = specCfg[pType].anchor or {}
-					a.point = a.point or "CENTER"
-					a.relativePoint = a.relativePoint or "CENTER"
-					local targetFrame = a.relativeFrame or frameNameFor("HEALTH")
-					if not selection.HEALTH and targetFrame == frameNameFor("HEALTH") then targetFrame = nil end
-					a.relativeFrame = targetFrame
-					a.x = a.x or 0
-					a.y = a.y or -2
-					a.autoSpacing = a.autoSpacing or nil
-					a.matchRelativeWidth = a.matchRelativeWidth or true
+					local explicitRelative = type(a.relativeFrame) == "string" and a.relativeFrame ~= ""
+					local targetFrame = explicitRelative and a.relativeFrame or frameNameFor("HEALTH")
+					if not selection.HEALTH and targetFrame == frameNameFor("HEALTH") and not explicitRelative then targetFrame = nil end
+					if not explicitRelative and targetFrame and targetFrame ~= "" and targetFrame ~= "UIParent" then
+						a.point = "TOPLEFT"
+						a.relativePoint = "BOTTOMLEFT"
+						a.relativeFrame = targetFrame
+						a.x = 0
+						a.y = (ResourceBars and ResourceBars.DEFAULT_STACK_SPACING) or 0
+						a.autoSpacing = true
+						a.matchRelativeWidth = a.matchRelativeWidth or true
+					else
+						a.point = a.point or "CENTER"
+						a.relativePoint = a.relativePoint or "CENTER"
+						a.relativeFrame = targetFrame
+						a.x = a.x or 0
+						a.y = a.y or -2
+						a.autoSpacing = a.autoSpacing or nil
+						a.matchRelativeWidth = a.matchRelativeWidth or true
+					end
 					specCfg[pType].anchor = a
 					prevFrame = frameNameFor(pType)
 				elseif pType ~= "HEALTH" then
 					local a = specCfg[pType].anchor or {}
-					a.point = a.point or "CENTER"
-					a.relativePoint = a.relativePoint or "CENTER"
-					local targetFrame = a.relativeFrame or frameNameFor("HEALTH")
-					if class == "DRUID" then
-						if pType == "COMBO_POINTS" then targetFrame = frameNameFor("ENERGY") end
-						if not targetFrame or targetFrame == "" then targetFrame = prevFrame or (selection.MAIN and mainFrame or nil) end
-					else
-						targetFrame = prevFrame
+					local explicitRelative = type(a.relativeFrame) == "string" and a.relativeFrame ~= ""
+					local targetFrame = explicitRelative and a.relativeFrame or nil
+					if not explicitRelative then
+						targetFrame = frameNameFor("HEALTH")
+						if class == "DRUID" then
+							if pType == "COMBO_POINTS" then
+								targetFrame = frameNameFor("ENERGY")
+							else
+								targetFrame = prevFrame
+							end
+							if not targetFrame or targetFrame == "" then targetFrame = prevFrame or (selection.MAIN and mainFrame or nil) end
+						else
+							targetFrame = prevFrame
+						end
 					end
-					a.relativeFrame = targetFrame
-					a.x = a.x or 0
-					a.y = a.y or -2
-					a.autoSpacing = a.autoSpacing or nil
-					a.matchRelativeWidth = a.matchRelativeWidth or true
+					local chained = (not explicitRelative) and targetFrame and targetFrame ~= "" and targetFrame ~= "UIParent"
+					if chained then
+						a.point = "TOPLEFT"
+						a.relativePoint = "BOTTOMLEFT"
+						a.relativeFrame = targetFrame
+						a.x = 0
+						a.y = (ResourceBars and ResourceBars.DEFAULT_STACK_SPACING) or 0
+						a.autoSpacing = true
+						a.matchRelativeWidth = a.matchRelativeWidth or true
+					else
+						a.point = a.point or "CENTER"
+						a.relativePoint = a.relativePoint or "CENTER"
+						a.x = a.x or 0
+						if not explicitRelative then a.relativeFrame = targetFrame end
+						a.autoSpacing = a.autoSpacing or nil
+					end
 					specCfg[pType].anchor = a
 					if class ~= "DRUID" then prevFrame = frameNameFor(pType) end
 				else
@@ -152,6 +229,21 @@ end
 local function toUIColor(value, fallback)
 	local r, g, b, a = toColorComponents(value, fallback)
 	return { r = r, g = g, b = b, a = a }
+end
+
+local function globalFontDefaultPath()
+	if addon.functions and addon.functions.GetGlobalDefaultFontFace then return addon.functions.GetGlobalDefaultFontFace() end
+	return (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT
+end
+
+local function globalFontConfigKey()
+	if addon.functions and addon.functions.GetGlobalFontConfigKey then return addon.functions.GetGlobalFontConfigKey() end
+	return "__EQOL_GLOBAL_FONT__"
+end
+
+local function globalFontConfigLabel()
+	if addon.functions and addon.functions.GetGlobalFontConfigLabel then return addon.functions.GetGlobalFontConfigLabel() end
+	return "Use global font config"
 end
 
 local function resolveStatusbarPreviewPath(key)
@@ -252,7 +344,9 @@ local function setBarEnabled(specIndex, barType, enabled)
 	if ResourceBars.QueueRefresh then ResourceBars.QueueRefresh(specIndex) end
 	if ResourceBars.MaybeRefreshActive then ResourceBars.MaybeRefreshActive(specIndex) end
 	if EditMode and EditMode.RefreshFrame then
-		local id = "resourceBar_" .. tostring(barType)
+		local curSpec = tonumber(specIndex or getActiveSpecIndex()) or 0
+		local id = (ResourceBars.GetEditModeFrameId and ResourceBars.GetEditModeFrameId(barType, addon.variables.unitClass, curSpec))
+			or ("resourceBar_" .. tostring(addon.variables.unitClass or "UNKNOWN") .. "_" .. tostring(curSpec) .. "_" .. tostring(barType))
 		local layout = EditMode.GetActiveLayoutName and EditMode:GetActiveLayoutName()
 		EditMode:RefreshFrame(id, layout)
 	end
@@ -266,20 +360,34 @@ local function registerEditModeBars()
 	if not EditMode or not EditMode.RegisterFrame then return end
 	local registered = 0
 	local registeredFrames = ResourceBars._editModeRegisteredFrames or {}
+	local registeredByBar = ResourceBars._editModeRegisteredFrameByBar or {}
 	ResourceBars._editModeRegisteredFrames = registeredFrames
+	ResourceBars._editModeRegisteredFrameByBar = registeredByBar
 
 	local function registerBar(idSuffix, frameName, barType, widthDefault, heightDefault)
 		local frame = _G[frameName]
 		if not frame then return end
-		local frameId = "resourceBar_" .. idSuffix
+		local curSpec = tonumber(getActiveSpecIndex()) or 0
+		local registeredSpec = curSpec
+		local frameId = (ResourceBars.GetEditModeFrameId and ResourceBars.GetEditModeFrameId(idSuffix, addon.variables.unitClass, registeredSpec))
+			or ("resourceBar_" .. tostring(addon.variables.unitClass or "UNKNOWN") .. "_" .. tostring(curSpec) .. "_" .. tostring(idSuffix))
+		local prevId = registeredByBar[idSuffix]
+		if prevId and prevId ~= frameId and EditMode and EditMode.UnregisterFrame then
+			EditMode:UnregisterFrame(prevId, false)
+			registeredFrames[prevId] = nil
+		end
 		if registeredFrames[frameId] then return end
 		registeredFrames[frameId] = true
-		local cfg = ResourceBars and ResourceBars.getBarSettings and ResourceBars.getBarSettings(barType) or ResourceBars and ResourceBars.GetBarSettings and ResourceBars.GetBarSettings(barType)
-		local anchor = ResourceBars and ResourceBars.getAnchor and ResourceBars.getAnchor(barType, addon.variables.unitSpec)
+		registeredByBar[idSuffix] = frameId
+		local specCfg = ensureSpecCfg(registeredSpec) or {}
+		local cfg = specCfg[barType]
+		if not cfg and ResourceBars and ResourceBars.getBarSettings then cfg = ResourceBars.getBarSettings(barType) end
+		if not cfg and ResourceBars and ResourceBars.GetBarSettings then cfg = ResourceBars.GetBarSettings(barType) end
+		local anchor = ResourceBars and ResourceBars.getAnchor and ResourceBars.getAnchor(barType, registeredSpec)
 		local titleLabel = (barType == "HEALTH") and (HEALTH or "Health") or (ResourceBars.PowerLabels and ResourceBars.PowerLabels[barType]) or _G["POWER_TYPE_" .. barType] or _G[barType] or barType
 		local function currentSpecInfo()
 			local uc = addon.variables.unitClass
-			local us = addon.variables.unitSpec
+			local us = registeredSpec or getActiveSpecIndex()
 			return ResourceBars and ResourceBars.powertypeClasses and ResourceBars.powertypeClasses[uc] and ResourceBars.powertypeClasses[uc][us]
 		end
 
@@ -295,19 +403,101 @@ local function registerEditModeBars()
 		cfg.backdrop.outset = cfg.backdrop.outset or 0
 		cfg.backdrop.backgroundInset = max(0, cfg.backdrop.backgroundInset or 0)
 		local function curSpecCfg()
-			local spec = addon.variables.unitSpec
+			local spec = registeredSpec or getActiveSpecIndex()
 			local specCfg = ensureSpecCfg(spec)
 			if not specCfg then return nil end
 			specCfg[barType] = specCfg[barType] or {}
 			return specCfg[barType]
 		end
 		local function queueRefresh()
-			if ResourceBars.QueueRefresh then ResourceBars.QueueRefresh(addon.variables.unitSpec) end
-			if ResourceBars.MaybeRefreshActive then ResourceBars.MaybeRefreshActive(addon.variables.unitSpec) end
-			if EditMode and EditMode:IsInEditMode() and addon.variables.unitSpec then
+			local targetSpec = registeredSpec or getActiveSpecIndex()
+			if ResourceBars.QueueRefresh then ResourceBars.QueueRefresh(targetSpec) end
+			if ResourceBars.MaybeRefreshActive then ResourceBars.MaybeRefreshActive(targetSpec) end
+			if EditMode and EditMode:IsInEditMode() and targetSpec then
 				if ResourceBars.Refresh then ResourceBars.Refresh() end
 				if ResourceBars.ReanchorAll then ResourceBars.ReanchorAll() end
 			end
+		end
+		local visibilityGlobalKeys = {
+			hideOutOfCombat = "resourceBarsHideOutOfCombat",
+			hideMounted = "resourceBarsHideMounted",
+			hideVehicle = "resourceBarsHideVehicle",
+			hidePetBattle = "resourceBarsHidePetBattle",
+			hideClientScene = "resourceBarsHideClientScene",
+		}
+		local visibilityDefaults = {
+			hideOutOfCombat = false,
+			hideMounted = false,
+			hideVehicle = false,
+			hidePetBattle = false,
+			hideClientScene = true,
+		}
+		local function getGlobalVisibilityFallback(field)
+			local dbKey = visibilityGlobalKeys[field]
+			local defaultValue = visibilityDefaults[field] == true
+			if not dbKey then return defaultValue end
+			local db = addon and addon.db
+			if db and db[dbKey] ~= nil then return db[dbKey] == true end
+			return defaultValue
+		end
+		local visibilityRuleOptions = (ResourceBars.GetVisibilityRuleOptions and ResourceBars.GetVisibilityRuleOptions()) or {}
+		local function getBarVisibilitySelection()
+			local c = curSpecCfg()
+			if not c then return nil end
+			local normalized = ResourceBars.NormalizeVisibilityConfig and ResourceBars.NormalizeVisibilityConfig(c.visibility, c) or nil
+			if not normalized then
+				local fallbackLegacy = nil
+				local function ensureFallbackLegacy()
+					if fallbackLegacy == nil then fallbackLegacy = {} end
+				end
+				if getGlobalVisibilityFallback("hideOutOfCombat") then
+					ensureFallbackLegacy()
+					fallbackLegacy.ALWAYS_IN_COMBAT = true
+				end
+				if getGlobalVisibilityFallback("hideMounted") then
+					ensureFallbackLegacy()
+					fallbackLegacy.PLAYER_NOT_MOUNTED = true
+				end
+				if fallbackLegacy and ResourceBars.NormalizeVisibilityConfig then normalized = ResourceBars.NormalizeVisibilityConfig(fallbackLegacy) end
+			end
+			if ResourceBars.CopyVisibilitySelection then return ResourceBars.CopyVisibilitySelection(normalized) end
+			return normalized and CopyTable(normalized) or nil
+		end
+		local function setBarVisibilityRule(rule, state)
+			local c = curSpecCfg()
+			if not c then return end
+			local normalized = getBarVisibilitySelection() or {}
+			c.visibilityExplicit = true
+			if rule == "ALWAYS_HIDDEN" and state then
+				normalized = { ALWAYS_HIDDEN = true }
+			elseif state then
+				normalized[rule] = true
+				normalized.ALWAYS_HIDDEN = nil
+			else
+				normalized[rule] = nil
+			end
+			if not next(normalized) then
+				c.visibility = nil
+			elseif ResourceBars.CopyVisibilitySelection then
+				c.visibility = ResourceBars.CopyVisibilitySelection(normalized)
+			else
+				c.visibility = CopyTable(normalized)
+			end
+			-- Keep legacy flags removed once a per-bar visibility selection is set.
+			c.hideOutOfCombat = nil
+			c.hideMounted = nil
+			queueRefresh()
+		end
+		local function getBarVisibilitySetting(field)
+			local c = curSpecCfg()
+			if c and c[field] ~= nil then return c[field] == true end
+			return getGlobalVisibilityFallback(field)
+		end
+		local function setBarVisibilitySetting(field, value)
+			local c = curSpecCfg()
+			if not c then return end
+			c[field] = value and true or false
+			queueRefresh()
 		end
 		local function applyBarSize()
 			local c = curSpecCfg()
@@ -317,6 +507,11 @@ local function registerEditModeBars()
 			else
 				ResourceBars.SetPowerBarSize(c.width or widthDefault, c.height or heightDefault, barType)
 			end
+		end
+		local function syncEditModeSizeValues(width, height)
+			if not (EditMode and EditMode.SetValue and frameId) then return end
+			EditMode:SetValue(frameId, "width", width, nil, true)
+			EditMode:SetValue(frameId, "height", height, nil, true)
 		end
 		local function ensureBackdropTable(target)
 			if not target then return nil end
@@ -430,13 +625,11 @@ local function registerEditModeBars()
 					["Interface\\DialogFrame\\UI-DialogBox-Background"] = "Dialog Background",
 					["Interface\\Buttons\\WHITE8x8"] = "Solid (tintable)",
 				}
-				if LibStub then
-					local media = LibStub("LibSharedMedia-3.0", true)
-					if media then
-						for name, path in pairs(media:HashTable("background") or {}) do
-							if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-						end
-					end
+				local names, hash = getCachedLSMMedia("background")
+				for i = 1, #names do
+					local name = names[i]
+					local path = hash[name]
+					if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
 				end
 				return addon.functions.prepareListForDropdown(map)
 			end
@@ -446,13 +639,11 @@ local function registerEditModeBars()
 				for id, label in pairs(customBorderOptions() or {}) do
 					map[id] = label
 				end
-				if LibStub then
-					local media = LibStub("LibSharedMedia-3.0", true)
-					if media then
-						for name, path in pairs(media:HashTable("border") or {}) do
-							if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-						end
-					end
+				local names, hash = getCachedLSMMedia("border")
+				for i = 1, #names do
+					local name = names[i]
+					local path = hash[name]
+					if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
 				end
 				return addon.functions.prepareListForDropdown(map)
 			end
@@ -534,6 +725,66 @@ local function registerEditModeBars()
 					end,
 					isShown = function() return barType ~= "HEALTH" end,
 				},
+				{
+					name = L["Show when"] or "Show when",
+					kind = settingType.MultiDropdown,
+					field = "visibility",
+					parentId = "frame",
+					height = 220,
+					values = visibilityRuleOptions,
+					hideSummary = true,
+					default = getBarVisibilitySelection(),
+					isSelected = function(_, value)
+						local selection = getBarVisibilitySelection()
+						return selection and selection[value] == true or false
+					end,
+					setSelected = function(_, value, state) setBarVisibilityRule(value, state and true or false) end,
+					isShown = function() return visibilityRuleOptions and #visibilityRuleOptions > 0 end,
+					isEnabled = function() return visibilityRuleOptions and #visibilityRuleOptions > 0 end,
+				},
+				{
+					name = L["Combine Show when rules with AND"] or "Combine Show when rules with AND",
+					kind = settingType.Checkbox,
+					field = "visibilityMatchAll",
+					parentId = "frame",
+					default = false,
+					get = function()
+						local c = curSpecCfg()
+						return c and c.visibilityMatchAll == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.visibilityMatchAll = value and true or false
+						queueRefresh()
+					end,
+					isShown = function() return visibilityRuleOptions and #visibilityRuleOptions > 0 end,
+					isEnabled = function() return visibilityRuleOptions and #visibilityRuleOptions > 0 end,
+				},
+				{
+					name = L["Hide in vehicles"],
+					kind = settingType.Checkbox,
+					parentId = "frame",
+					get = function() return getBarVisibilitySetting("hideVehicle") end,
+					set = function(_, value) setBarVisibilitySetting("hideVehicle", value) end,
+					default = getGlobalVisibilityFallback("hideVehicle"),
+				},
+				{
+					name = L["Hide in pet battles"] or "Hide in pet battles",
+					kind = settingType.Checkbox,
+					parentId = "frame",
+					get = function() return getBarVisibilitySetting("hidePetBattle") end,
+					set = function(_, value) setBarVisibilitySetting("hidePetBattle", value) end,
+					default = getGlobalVisibilityFallback("hidePetBattle"),
+				},
+				{
+					name = L["Hide in client scenes"] or "Hide in client scenes",
+					kind = settingType.Checkbox,
+					parentId = "frame",
+					get = function() return getBarVisibilitySetting("hideClientScene") end,
+					set = function(_, value) setBarVisibilitySetting("hideClientScene", value) end,
+					default = getGlobalVisibilityFallback("hideClientScene"),
+				},
 			}
 			if barType == "MAELSTROM_WEAPON" then
 				settingsList[#settingsList + 1] = {
@@ -551,9 +802,9 @@ local function registerEditModeBars()
 						if not c then return end
 						c.useMaelstromTenStacks = value and true or false
 						if c.useMaelstromTenStacks then
-							c.visualSegments = 10
-						elseif c.visualSegments == 10 or c.visualSegments == nil then
-							c.visualSegments = 5
+							c.visualSegments = MAELSTROM_WEAPON_MAX_STACKS
+						elseif c.visualSegments == MAELSTROM_WEAPON_MAX_STACKS or c.visualSegments == nil then
+							c.visualSegments = MAELSTROM_WEAPON_SEGMENTS
 						end
 						queueRefresh()
 					end,
@@ -985,6 +1236,9 @@ local function registerEditModeBars()
 							cfg.smoothFill = nil
 						end
 					end
+					if swapped then
+						syncEditModeSizeValues(cfg.width or widthDefault or 200, cfg.height or heightDefault or 20)
+					end
 					queueRefresh()
 					if swapped then refreshSettingsUI() end
 				end
@@ -1066,6 +1320,38 @@ local function registerEditModeBars()
 					isEnabled = function()
 						local c = curSpecCfg()
 						return c and c.showSeparator == true
+					end,
+					parentId = "frame",
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Separated offset"] or "Separated offset",
+					kind = settingType.Slider,
+					allowInput = true,
+					field = "separatedOffset",
+					minValue = 0,
+					maxValue = 30,
+					valueStep = 1,
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.separatedOffset) or 0
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						local new = tonumber(value) or 0
+						if new < 0 then new = 0 end
+						new = math.floor(new + 0.5)
+						if c.separatedOffset == new then return end
+						c.separatedOffset = new
+						queueRefresh()
+					end,
+					default = (cfg and cfg.separatedOffset) or 0,
+					isShown = function() return true end,
+					isEnabled = function()
+						local c = curSpecCfg()
+						if not c then return false end
+						return c.showSeparator == true or c.useGradient == true
 					end,
 					parentId = "frame",
 				}
@@ -1552,33 +1838,44 @@ local function registerEditModeBars()
 					field = "fontFace",
 					parentId = "textsettings",
 					generator = function(_, root)
-						local function currentFontPath()
+						local function currentFontSetting()
 							local c = curSpecCfg()
-							return (c and c.fontFace) or cfg.fontFace or addon.variables.defaultFont
+							return (c and c.fontFace) or cfg.fontFace or globalFontConfigKey()
+						end
+						local function currentFontPath()
+							local configured = currentFontSetting()
+							if addon.functions and addon.functions.ResolveFontFace then return addon.functions.ResolveFontFace(configured, globalFontDefaultPath()) end
+							return configured or globalFontDefaultPath()
 						end
 						local currentPath = currentFontPath()
+						local globalFontValue = globalFontConfigKey()
+						local function isGlobalSelected() return currentFontSetting() == globalFontValue end
+						root:CreateCheckbox(globalFontConfigLabel(), function() return currentFontSetting() == globalFontValue end, function()
+							local c = curSpecCfg()
+							if not c then return end
+							c.fontFace = globalFontValue
+							queueRefresh()
+						end)
 						local seen = {}
-						if not LibStub then return end
-						local media = LibStub("LibSharedMedia-3.0", true)
-						if not media then return end
-						local hash = media:HashTable("font") or {}
-						for _, name in ipairs(media:List("font") or {}) do
+						local names, hash = getCachedLSMMedia("font")
+						for i = 1, #names do
+							local name = names[i]
 							local path = hash[name] or name
 							seen[path] = name
-							root:CreateCheckbox(name, function() return currentFontPath() == path end, function()
+							root:CreateCheckbox(name, function() return (not isGlobalSelected()) and currentFontPath() == path end, function()
 								local c = curSpecCfg()
 								if not c then return end
-								if currentFontPath() == path then return end
+								if (not isGlobalSelected()) and currentFontPath() == path then return end
 								c.fontFace = path
 								queueRefresh()
 							end)
 						end
 						if currentPath and not seen[currentPath] then
 							local label = tostring(currentPath)
-							root:CreateCheckbox(label, function() return currentFontPath() == currentPath end, function()
+							root:CreateCheckbox(label, function() return (not isGlobalSelected()) and currentFontPath() == currentPath end, function()
 								local c = curSpecCfg()
 								if not c then return end
-								if currentFontPath() == currentPath then return end
+								if (not isGlobalSelected()) and currentFontPath() == currentPath then return end
 								c.fontFace = currentPath
 								queueRefresh()
 							end)
@@ -1586,7 +1883,7 @@ local function registerEditModeBars()
 					end,
 					get = function()
 						local c = curSpecCfg()
-						return (c and c.fontFace) or cfg.fontFace or addon.variables.defaultFont
+						return (c and c.fontFace) or cfg.fontFace or globalFontConfigKey()
 					end,
 					set = function(_, value)
 						local c = curSpecCfg()
@@ -1608,7 +1905,7 @@ local function registerEditModeBars()
 						queueRefresh()
 					end,
 					hasOpacity = true,
-					default = addon.variables.defaultFont,
+					default = globalFontConfigKey(),
 				}
 
 				local outlineOptions = {
@@ -1663,12 +1960,13 @@ local function registerEditModeBars()
 					{ key = "PERCENT", label = STATUS_TEXT_PERCENT },
 					{ key = "CURMAX", label = L["Current/Max"] or "Current/Max" },
 					{ key = "CURRENT", label = L["Current"] or "Current" },
+					{ key = "CURPERCENT", label = L["Current - Percent"] or "Current - Percent" },
 					{ key = "NONE", label = NONE },
 				}
 				settingsList[#settingsList + 1] = {
 					name = L["Text"] or STATUS_TEXT,
 					kind = settingType.Dropdown,
-					height = 180,
+					height = 220,
 					field = "textStyle",
 					parentId = "textsettings",
 					get = function()
@@ -1752,6 +2050,24 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					name = L["Hide percent (%)"] or "Hide percent (%)",
+					kind = settingType.Checkbox,
+					field = "hidePercentSign",
+					parentId = "textsettings",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.hidePercentSign == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.hidePercentSign = value and true or false
+						queueRefresh()
+					end,
+					default = false,
+				}
+
+				settingsList[#settingsList + 1] = {
 					name = HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE,
 					kind = settingType.Slider,
 					allowInput = true,
@@ -1832,33 +2148,44 @@ local function registerEditModeBars()
 					field = "fontFace",
 					parentId = "textsettings",
 					generator = function(_, root)
-						local function currentFontPath()
+						local function currentFontSetting()
 							local c = curSpecCfg()
-							return (c and c.fontFace) or cfg.fontFace or addon.variables.defaultFont
+							return (c and c.fontFace) or cfg.fontFace or globalFontConfigKey()
+						end
+						local function currentFontPath()
+							local configured = currentFontSetting()
+							if addon.functions and addon.functions.ResolveFontFace then return addon.functions.ResolveFontFace(configured, globalFontDefaultPath()) end
+							return configured or globalFontDefaultPath()
 						end
 						local currentPath = currentFontPath()
+						local globalFontValue = globalFontConfigKey()
+						local function isGlobalSelected() return currentFontSetting() == globalFontValue end
+						root:CreateCheckbox(globalFontConfigLabel(), function() return currentFontSetting() == globalFontValue end, function()
+							local c = curSpecCfg()
+							if not c then return end
+							c.fontFace = globalFontValue
+							queueRefresh()
+						end)
 						local seen = {}
-						if not LibStub then return end
-						local media = LibStub("LibSharedMedia-3.0", true)
-						if not media then return end
-						local hash = media:HashTable("font") or {}
-						for _, name in ipairs(media:List("font") or {}) do
+						local names, hash = getCachedLSMMedia("font")
+						for i = 1, #names do
+							local name = names[i]
 							local path = hash[name] or name
 							seen[path] = name
-							root:CreateCheckbox(name, function() return currentFontPath() == path end, function()
+							root:CreateCheckbox(name, function() return (not isGlobalSelected()) and currentFontPath() == path end, function()
 								local c = curSpecCfg()
 								if not c then return end
-								if currentFontPath() == path then return end
+								if (not isGlobalSelected()) and currentFontPath() == path then return end
 								c.fontFace = path
 								queueRefresh()
 							end)
 						end
 						if currentPath and not seen[currentPath] then
 							local label = tostring(currentPath)
-							root:CreateCheckbox(label, function() return currentFontPath() == currentPath end, function()
+							root:CreateCheckbox(label, function() return (not isGlobalSelected()) and currentFontPath() == currentPath end, function()
 								local c = curSpecCfg()
 								if not c then return end
-								if currentFontPath() == currentPath then return end
+								if (not isGlobalSelected()) and currentFontPath() == currentPath then return end
 								c.fontFace = currentPath
 								queueRefresh()
 							end)
@@ -1866,7 +2193,7 @@ local function registerEditModeBars()
 					end,
 					get = function()
 						local c = curSpecCfg()
-						return (c and c.fontFace) or cfg.fontFace or addon.variables.defaultFont
+						return (c and c.fontFace) or cfg.fontFace or globalFontConfigKey()
 					end,
 					set = function(_, value)
 						local c = curSpecCfg()
@@ -1888,7 +2215,7 @@ local function registerEditModeBars()
 						queueRefresh()
 					end,
 					hasOpacity = true,
-					default = addon.variables.defaultFont,
+					default = globalFontConfigKey(),
 				}
 
 				local outlineOptions = {
@@ -2256,9 +2583,284 @@ local function registerEditModeBars()
 					}
 				end
 
+				if addon.variables.unitClass == "ROGUE" and barType == "COMBO_POINTS" then
+					local function chargedCfg()
+						local c = curSpecCfg()
+						if not c then return nil end
+						if ResourceBars and ResourceBars.EnsureRogueChargedComboDefaults then ResourceBars.EnsureRogueChargedComboDefaults(c, "COMBO_POINTS") end
+						return c
+					end
+
+					local function percentFromUnit(value, fallback)
+						local n = tonumber(value)
+						if n == nil then n = tonumber(fallback) or 0 end
+						if n < 0 then
+							n = 0
+						elseif n > 1 then
+							n = 1
+						end
+						return math.floor((n * 100) + 0.5)
+					end
+
+					local function unitFromPercent(value, fallback)
+						local n = tonumber(value)
+						if n == nil then n = tonumber(fallback) or 0 end
+						n = n / 100
+						if n < 0 then
+							n = 0
+						elseif n > 1 then
+							n = 1
+						end
+						return n
+					end
+
+					settingsList[#settingsList + 1] = {
+						name = L["Charged combo point styling"] or "Charged combo point styling",
+						kind = settingType.Checkbox,
+						field = "useChargedComboStyling",
+						default = ROGUE_CHARGED_COMBO_DEFAULTS.enabled ~= false,
+						get = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.useChargedComboStyling = value and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Affect charged fill"] or "Affect charged fill",
+						kind = settingType.Checkbox,
+						field = "chargedComboAffectFill",
+						default = ROGUE_CHARGED_COMBO_DEFAULTS.affectFill ~= false,
+						get = function()
+							local c = chargedCfg()
+							return c and c.chargedComboAffectFill ~= false
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboAffectFill = value and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Custom charged fill color"] or "Custom charged fill color",
+						kind = settingType.CheckboxColor,
+						field = "chargedComboUseCustomFillColor",
+						default = ROGUE_CHARGED_COMBO_DEFAULTS.fillUseCustomColor == true,
+						get = function()
+							local c = chargedCfg()
+							return c and c.chargedComboUseCustomFillColor == true
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboUseCustomFillColor = value and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						colorDefault = toUIColor(ROGUE_CHARGED_COMBO_DEFAULTS.fillColor, { 1.0, 0.95, 0.45, 1.0 }),
+						colorGet = function()
+							local c = chargedCfg()
+							local col = (c and c.chargedComboFillColor) or ROGUE_CHARGED_COMBO_DEFAULTS.fillColor or { 1.0, 0.95, 0.45, 1.0 }
+							local r, g, b, a = toColorComponents(col, { 1.0, 0.95, 0.45, 1.0 })
+							return { r = r, g = g, b = b, a = a }
+						end,
+						colorSet = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboFillColor = toColorArray(value, ROGUE_CHARGED_COMBO_DEFAULTS.fillColor or { 1.0, 0.95, 0.45, 1.0 })
+							queueRefresh()
+						end,
+						hasOpacity = true,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false and c.chargedComboAffectFill ~= false
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Auto charged fill highlight"] or "Auto charged fill highlight (%)",
+						kind = settingType.Slider,
+						allowInput = true,
+						field = "chargedComboFillLighten",
+						minValue = 0,
+						maxValue = 100,
+						valueStep = 1,
+						default = percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.fillLighten, 0.35),
+						get = function()
+							local c = chargedCfg()
+							return percentFromUnit(c and c.chargedComboFillLighten, ROGUE_CHARGED_COMBO_DEFAULTS.fillLighten or 0.35)
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboFillLighten = unitFromPercent(value, percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.fillLighten, 0.35))
+							queueRefresh()
+						end,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false and c.chargedComboAffectFill ~= false and c.chargedComboUseCustomFillColor ~= true
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Auto charged fill alpha"] or "Auto charged fill alpha boost (%)",
+						kind = settingType.Slider,
+						allowInput = true,
+						field = "chargedComboFillAlphaBoost",
+						minValue = 0,
+						maxValue = 100,
+						valueStep = 1,
+						default = percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.fillAlphaBoost, 0.10),
+						get = function()
+							local c = chargedCfg()
+							return percentFromUnit(c and c.chargedComboFillAlphaBoost, ROGUE_CHARGED_COMBO_DEFAULTS.fillAlphaBoost or 0.10)
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboFillAlphaBoost = unitFromPercent(value, percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.fillAlphaBoost, 0.10))
+							queueRefresh()
+						end,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false and c.chargedComboAffectFill ~= false and c.chargedComboUseCustomFillColor ~= true
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Affect charged background"] or "Affect charged background",
+						kind = settingType.Checkbox,
+						field = "chargedComboAffectBackground",
+						default = ROGUE_CHARGED_COMBO_DEFAULTS.affectBackground ~= false,
+						get = function()
+							local c = chargedCfg()
+							return c and c.chargedComboAffectBackground ~= false
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboAffectBackground = value and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Custom charged background color"] or "Custom charged background color",
+						kind = settingType.CheckboxColor,
+						field = "chargedComboUseCustomBackgroundColor",
+						default = ROGUE_CHARGED_COMBO_DEFAULTS.backgroundUseCustomColor == true,
+						get = function()
+							local c = chargedCfg()
+							return c and c.chargedComboUseCustomBackgroundColor == true
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboUseCustomBackgroundColor = value and true or false
+							queueRefresh()
+							refreshSettingsUI()
+						end,
+						colorDefault = toUIColor(ROGUE_CHARGED_COMBO_DEFAULTS.backgroundColor, { 0.75, 0.60, 0.25, 0.75 }),
+						colorGet = function()
+							local c = chargedCfg()
+							local col = (c and c.chargedComboBackgroundColor) or ROGUE_CHARGED_COMBO_DEFAULTS.backgroundColor or { 0.75, 0.60, 0.25, 0.75 }
+							local r, g, b, a = toColorComponents(col, { 0.75, 0.60, 0.25, 0.75 })
+							return { r = r, g = g, b = b, a = a }
+						end,
+						colorSet = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboBackgroundColor = toColorArray(value, ROGUE_CHARGED_COMBO_DEFAULTS.backgroundColor or { 0.75, 0.60, 0.25, 0.75 })
+							queueRefresh()
+						end,
+						hasOpacity = true,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false and c.chargedComboAffectBackground ~= false
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Auto charged background highlight"] or "Auto charged background highlight (%)",
+						kind = settingType.Slider,
+						allowInput = true,
+						field = "chargedComboBackgroundLighten",
+						minValue = 0,
+						maxValue = 100,
+						valueStep = 1,
+						default = percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.backgroundLighten, 0.30),
+						get = function()
+							local c = chargedCfg()
+							return percentFromUnit(c and c.chargedComboBackgroundLighten, ROGUE_CHARGED_COMBO_DEFAULTS.backgroundLighten or 0.30)
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboBackgroundLighten = unitFromPercent(value, percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.backgroundLighten, 0.30))
+							queueRefresh()
+						end,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false and c.chargedComboAffectBackground ~= false and c.chargedComboUseCustomBackgroundColor ~= true
+						end,
+						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = L["Auto charged background alpha"] or "Auto charged background alpha boost (%)",
+						kind = settingType.Slider,
+						allowInput = true,
+						field = "chargedComboBackgroundAlphaBoost",
+						minValue = 0,
+						maxValue = 100,
+						valueStep = 1,
+						default = percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.backgroundAlphaBoost, 0.10),
+						get = function()
+							local c = chargedCfg()
+							return percentFromUnit(c and c.chargedComboBackgroundAlphaBoost, ROGUE_CHARGED_COMBO_DEFAULTS.backgroundAlphaBoost or 0.10)
+						end,
+						set = function(_, value)
+							local c = chargedCfg()
+							if not c then return end
+							c.chargedComboBackgroundAlphaBoost = unitFromPercent(value, percentFromUnit(ROGUE_CHARGED_COMBO_DEFAULTS.backgroundAlphaBoost, 0.10))
+							queueRefresh()
+						end,
+						isEnabled = function()
+							local c = chargedCfg()
+							return c and c.useChargedComboStyling ~= false and c.chargedComboAffectBackground ~= false and c.chargedComboUseCustomBackgroundColor ~= true
+						end,
+						parentId = "colorsetting",
+					}
+				end
+
 				if barType == "MAELSTROM_WEAPON" then
 					settingsList[#settingsList + 1] = {
-						name = "Use 5-stack color",
+						name = "Use stack-threshold color",
 						kind = settingType.CheckboxColor,
 						field = "useMaelstromFiveColor",
 						default = true,
@@ -2287,6 +2889,63 @@ local function registerEditModeBars()
 						end,
 						hasOpacity = true,
 						parentId = "colorsetting",
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = "Stack threshold for color",
+						kind = settingType.Slider,
+						allowInput = true,
+						field = "maelstromMidStack",
+						minValue = 1,
+						maxValue = MAELSTROM_MID_STACK_MAX,
+						valueStep = 1,
+						default = MAELSTROM_MID_STACK_DEFAULT,
+						parentId = "colorsetting",
+						get = function()
+							local c = curSpecCfg()
+							local cur = tonumber(c and c.maelstromMidStack) or MAELSTROM_MID_STACK_DEFAULT
+							cur = math.floor(cur + 0.5)
+							if cur < 1 then cur = 1 end
+							if cur > MAELSTROM_MID_STACK_MAX then cur = MAELSTROM_MID_STACK_MAX end
+							return cur
+						end,
+						set = function(_, value)
+							local c = curSpecCfg()
+							if not c then return end
+							local new = tonumber(value) or MAELSTROM_MID_STACK_DEFAULT
+							new = math.floor(new + 0.5)
+							if new < 1 then new = 1 end
+							if new > MAELSTROM_MID_STACK_MAX then new = MAELSTROM_MID_STACK_MAX end
+							if c.maelstromMidStack == new then return end
+							c.maelstromMidStack = new
+							queueRefresh()
+						end,
+						isEnabled = function()
+							local c = curSpecCfg()
+							return c and c.useMaelstromFiveColor ~= false
+						end,
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = "Carry threshold color above trigger",
+						kind = settingType.Checkbox,
+						field = "useMaelstromCarryFill",
+						default = false,
+						parentId = "colorsetting",
+						get = function()
+							local c = curSpecCfg()
+							return c and c.useMaelstromCarryFill == true
+						end,
+						set = function(_, value)
+							local c = curSpecCfg()
+							if not c then return end
+							c.useMaelstromCarryFill = value and true or false
+							queueRefresh()
+						end,
+						isEnabled = function()
+							local c = curSpecCfg()
+							return c and c.useMaelstromFiveColor ~= false
+						end,
 					}
 				end
 
@@ -2444,6 +3103,222 @@ local function registerEditModeBars()
 						return c and c.staggerHighColors == true
 					end,
 				}
+			end
+
+			if barType ~= "HEALTH" and barType ~= "STAGGER" then
+				local function thresholdColorModeAndCap()
+					if barType == "VOID_METAMORPHOSIS" then return "ABSOLUTE", ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_VOID_METAMORPHOSIS, 1 end
+					if barType == "MANA" or barType == "ENERGY" or barType == "RAGE" or barType == "FURY" or barType == "FOCUS" or barType == "INSANITY" or barType == "LUNAR_POWER" then
+						return "PERCENT", ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_PERCENT, 0
+					end
+					if ResourceBars and ResourceBars.GetThresholdColorModeAndCap then
+						local mode, cap, minValue = ResourceBars.GetThresholdColorModeAndCap(barType)
+						return mode or "ABSOLUTE", tonumber(cap) or ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP, tonumber(minValue) or 1
+					end
+					if ResourceBars and ResourceBars.separatorEligible and ResourceBars.separatorEligible[barType] then return "ABSOLUTE", ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP, 1 end
+					return "ABSOLUTE", ABSOLUTE_THRESHOLD_COLOR_VALUE_CAP_CONTINUOUS, 1
+				end
+
+				local thresholdMode, thresholdValueCap, thresholdValueMin = thresholdColorModeAndCap()
+				local isPercentThresholdMode = thresholdMode == "PERCENT"
+
+				local function clampAbsoluteThresholdValue(value)
+					local n = tonumber(value)
+					if n == nil then return nil end
+					if isPercentThresholdMode then
+						n = math.floor((n * 10) + 0.5) / 10
+					else
+						n = math.floor(n + 0.5)
+					end
+					if n < thresholdValueMin then n = thresholdValueMin end
+					if n > thresholdValueCap then n = thresholdValueCap end
+					return n
+				end
+
+				local function getDefaultAbsoluteThresholdPoint(index)
+					if ResourceBars and ResourceBars.GetDefaultAbsoluteThresholdColorPoint then
+						local value, color = ResourceBars.GetDefaultAbsoluteThresholdColorPoint(index, barType)
+						local r, g, b, a = toColorComponents(color, { 1, 1, 1, 1 })
+						return clampAbsoluteThresholdValue(value) or clampAbsoluteThresholdValue(index) or thresholdValueMin, { r, g, b, a }
+					end
+					local fallback = ABSOLUTE_THRESHOLD_COLOR_DEFAULTS[index] or ABSOLUTE_THRESHOLD_COLOR_DEFAULTS[#ABSOLUTE_THRESHOLD_COLOR_DEFAULTS] or { value = index, color = { 1, 1, 1, 1 } }
+					local value = clampAbsoluteThresholdValue(fallback.value or fallback[1]) or clampAbsoluteThresholdValue(index) or 1
+					local color = fallback.color or fallback[2] or { 1, 1, 1, 1 }
+					local r, g, b, a = toColorComponents(color, { 1, 1, 1, 1 })
+					return value, { r, g, b, a }
+				end
+
+				local function isAbsoluteThresholdColorsEnabled()
+					local c = curSpecCfg()
+					return c and c.useAbsoluteThresholdColors == true
+				end
+
+				local function getAbsoluteThresholdPointCount()
+					local c = curSpecCfg()
+					local count = tonumber(c and c.absoluteThresholdColorPointCount) or tonumber(cfg and cfg.absoluteThresholdColorPointCount) or ABSOLUTE_THRESHOLD_COLOR_DEFAULT_COUNT
+					if count < 1 then count = 1 end
+					if count > ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS then count = ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS end
+					return math.floor(count + 0.5)
+				end
+
+				local function ensureAbsoluteThresholdPoint(index)
+					local c = curSpecCfg()
+					if not c then return nil end
+					if type(c.absoluteThresholdColorPoints) ~= "table" then c.absoluteThresholdColorPoints = {} end
+					local point = c.absoluteThresholdColorPoints[index]
+					if type(point) ~= "table" then
+						point = {}
+						c.absoluteThresholdColorPoints[index] = point
+					end
+					local defaultValue, defaultColor = getDefaultAbsoluteThresholdPoint(index)
+					local value = clampAbsoluteThresholdValue(point.value or point[1]) or defaultValue
+					point.value = value
+					local color = point.color or point[2]
+					local r, g, b, a = toColorComponents(color, defaultColor)
+					point.color = { r, g, b, a }
+					return point, defaultValue, defaultColor
+				end
+
+				local function getAbsoluteThresholdPointValue(index)
+					local c = curSpecCfg()
+					local points = (c and c.absoluteThresholdColorPoints)
+					if type(points) ~= "table" then points = cfg and cfg.absoluteThresholdColorPoints end
+					local point = type(points) == "table" and points[index] or nil
+					local defaultValue = select(1, getDefaultAbsoluteThresholdPoint(index))
+					return clampAbsoluteThresholdValue(point and (point.value or point[1])) or defaultValue
+				end
+
+				local function setAbsoluteThresholdPointValue(index, value)
+					local c = curSpecCfg()
+					if not c then return end
+					local point, defaultValue = ensureAbsoluteThresholdPoint(index)
+					if not point then return end
+					point.value = clampAbsoluteThresholdValue(value) or defaultValue
+					queueRefresh()
+				end
+
+				local function getAbsoluteThresholdPointUIColor(index)
+					local c = curSpecCfg()
+					local points = (c and c.absoluteThresholdColorPoints)
+					if type(points) ~= "table" then points = cfg and cfg.absoluteThresholdColorPoints end
+					local point = type(points) == "table" and points[index] or nil
+					local _, defaultColor = getDefaultAbsoluteThresholdPoint(index)
+					local color = point and (point.color or point[2]) or defaultColor
+					local r, g, b, a = toColorComponents(color, defaultColor)
+					return { r = r, g = g, b = b, a = a }
+				end
+
+				local function setAbsoluteThresholdPointColor(index, value)
+					local c = curSpecCfg()
+					if not c then return end
+					local point, _, defaultColor = ensureAbsoluteThresholdPoint(index)
+					if not point then return end
+					point.color = toColorArray(value, defaultColor)
+					queueRefresh()
+				end
+
+				settingsList[#settingsList + 1] = {
+					name = (isPercentThresholdMode and (L["Threshold colors"] or "Threshold colors")) or (L["Absolute threshold colors"] or "Absolute threshold colors"),
+					kind = settingType.Collapsible,
+					id = "absolutethresholdcolors",
+					defaultCollapsed = true,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = (isPercentThresholdMode and (L["Use threshold colors"] or "Use threshold colors")) or (L["Use absolute threshold colors"] or "Use absolute threshold colors"),
+					kind = settingType.Checkbox,
+					field = "useAbsoluteThresholdColors",
+					parentId = "absolutethresholdcolors",
+					default = false,
+					get = isAbsoluteThresholdColorsEnabled,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.useAbsoluteThresholdColors = value and true or false
+						if c.useAbsoluteThresholdColors then
+							if c.absoluteThresholdColorPointCount == nil then c.absoluteThresholdColorPointCount = ABSOLUTE_THRESHOLD_COLOR_DEFAULT_COUNT end
+							local count = getAbsoluteThresholdPointCount()
+							for i = 1, count do
+								ensureAbsoluteThresholdPoint(i)
+							end
+						end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+				}
+
+				settingsList[#settingsList + 1] = {
+					name = L["Threshold points"] or "Threshold points",
+					kind = settingType.Dropdown,
+					height = 180,
+					field = "absoluteThresholdColorPointCount",
+					parentId = "absolutethresholdcolors",
+					values = (function()
+						local values = {}
+						for i = 1, ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS do
+							values[#values + 1] = { value = i, label = tostring(i), text = tostring(i) }
+						end
+						return values
+					end)(),
+					get = function() return getAbsoluteThresholdPointCount() end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						local count = tonumber(value) or ABSOLUTE_THRESHOLD_COLOR_DEFAULT_COUNT
+						if count < 1 then count = 1 end
+						if count > ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS then count = ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS end
+						c.absoluteThresholdColorPointCount = math.floor(count + 0.5)
+						for i = 1, c.absoluteThresholdColorPointCount do
+							ensureAbsoluteThresholdPoint(i)
+						end
+						queueRefresh()
+						refreshSettingsUI()
+					end,
+					default = ABSOLUTE_THRESHOLD_COLOR_DEFAULT_COUNT,
+					isEnabled = isAbsoluteThresholdColorsEnabled,
+				}
+
+				for i = 1, ABSOLUTE_THRESHOLD_COLOR_MAX_POINTS do
+					local defaultValue, defaultColor = getDefaultAbsoluteThresholdPoint(i)
+
+					settingsList[#settingsList + 1] = {
+						name = string.format((isPercentThresholdMode and (L["Threshold point %d value (%%)"] or "Point %d value (%%)")) or (L["Threshold point %d value"] or "Point %d value"), i),
+						kind = settingType.Slider,
+						allowInput = true,
+						field = "absoluteThresholdPointValue" .. i,
+						parentId = "absolutethresholdcolors",
+						minValue = thresholdValueMin,
+						maxValue = thresholdValueCap,
+						valueStep = isPercentThresholdMode and 0.1 or 1,
+						get = function() return getAbsoluteThresholdPointValue(i) end,
+						set = function(_, value) setAbsoluteThresholdPointValue(i, value) end,
+						default = defaultValue,
+						formatter = function(value)
+							local n = tonumber(value) or 0
+							if isPercentThresholdMode then
+								n = math.floor((n * 10) + 0.5) / 10
+								return string.format("%.1f", n)
+							end
+							return tostring(math.floor(n + 0.5))
+						end,
+						isEnabled = isAbsoluteThresholdColorsEnabled,
+						isShown = function() return isAbsoluteThresholdColorsEnabled() and i <= getAbsoluteThresholdPointCount() end,
+					}
+
+					settingsList[#settingsList + 1] = {
+						name = string.format(L["Threshold point %d color"] or "Point %d color", i),
+						kind = settingType.Color,
+						parentId = "absolutethresholdcolors",
+						default = { r = defaultColor[1] or 1, g = defaultColor[2] or 1, b = defaultColor[3] or 1, a = defaultColor[4] or 1 },
+						get = function() return getAbsoluteThresholdPointUIColor(i) end,
+						set = function(_, value) setAbsoluteThresholdPointColor(i, value) end,
+						colorGet = function() return getAbsoluteThresholdPointUIColor(i) end,
+						colorSet = function(_, value) setAbsoluteThresholdPointColor(i, value) end,
+						hasOpacity = true,
+						isEnabled = isAbsoluteThresholdColorsEnabled,
+						isShown = function() return isAbsoluteThresholdColorsEnabled() and i <= getAbsoluteThresholdPointCount() end,
+					}
+				end
 			end
 
 			do -- Backdrop
@@ -2694,12 +3569,28 @@ local function registerEditModeBars()
 				height = cfg and cfg.height or heightDefault or frame:GetHeight() or 20,
 			},
 			onApply = function(_, _, data)
-				local spec = addon.variables.unitSpec
+				data = data or {}
+				local spec = registeredSpec or addon.variables.unitSpec
+				local activeSpec = getActiveSpecIndex()
+				if activeSpec and spec and spec ~= activeSpec then return end
 				local specCfg = ensureSpecCfg(spec)
 				if not specCfg then return end
 				specCfg[barType] = specCfg[barType] or {}
 				local bcfg = specCfg[barType]
 				bcfg.anchor = bcfg.anchor or {}
+				if not frame._eqolEditModeHydrated then
+					frame._eqolEditModeHydrated = true
+					local seedAnchor = bcfg.anchor or {}
+					local seedRelativeFrame = seedAnchor.relativeFrame or "UIParent"
+					if seedRelativeFrame == "UIParent" then
+						data.point = seedAnchor.point or data.point or anchor and anchor.point or "CENTER"
+						data.relativePoint = seedAnchor.relativePoint or data.relativePoint or anchor and anchor.relativePoint or data.point
+						data.x = seedAnchor.x ~= nil and seedAnchor.x or (data.x ~= nil and data.x or (anchor and anchor.x or 0))
+						data.y = seedAnchor.y ~= nil and seedAnchor.y or (data.y ~= nil and data.y or (anchor and anchor.y or 0))
+					end
+					data.width = bcfg.width or data.width or widthDefault or frame:GetWidth() or 200
+					data.height = bcfg.height or data.height or heightDefault or frame:GetHeight() or 20
+				end
 				if data.point then
 					local relFrame = bcfg.anchor.relativeFrame or "UIParent"
 					-- Nur UIParent-Anker von Edit Mode übernehmen; externe Anker behalten ihre Werte
@@ -2713,14 +3604,16 @@ local function registerEditModeBars()
 				end
 				bcfg.width = data.width or bcfg.width
 				bcfg.height = data.height or bcfg.height
-				if barType == "HEALTH" then
-					ResourceBars.SetHealthBarSize(bcfg.width, bcfg.height)
-				else
-					ResourceBars.SetPowerBarSize(bcfg.width, bcfg.height, barType)
+				if spec == addon.variables.unitSpec then
+					if barType == "HEALTH" then
+						ResourceBars.SetHealthBarSize(bcfg.width, bcfg.height)
+					else
+						ResourceBars.SetPowerBarSize(bcfg.width, bcfg.height, barType)
+					end
+					if ResourceBars.ReanchorAll then ResourceBars.ReanchorAll() end
+					if ResourceBars.Refresh then ResourceBars.Refresh() end
+					if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 				end
-				if ResourceBars.ReanchorAll then ResourceBars.ReanchorAll() end
-				if ResourceBars.Refresh then ResourceBars.Refresh() end
-				if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 			end,
 			isEnabled = function()
 				local c = curSpecCfg()
@@ -2737,7 +3630,8 @@ local function registerEditModeBars()
 	end
 
 	registerBar("HEALTH", "EQOLHealthBar", "HEALTH", ResourceBars.DEFAULT_HEALTH_WIDTH, ResourceBars.DEFAULT_HEALTH_HEIGHT)
-	for _, pType in ipairs(ResourceBars.classPowerTypes or {}) do
+	local classTypes = (ResourceBars.GetClassPowerTypes and ResourceBars.GetClassPowerTypes(addon.variables.unitClass)) or ResourceBars.classPowerTypes or {}
+	for _, pType in ipairs(classTypes) do
 		local frameName = "EQOL" .. pType .. "Bar"
 		registerBar(pType, frameName, pType, ResourceBars.DEFAULT_POWER_WIDTH, ResourceBars.DEFAULT_POWER_HEIGHT)
 	end
@@ -2851,77 +3745,8 @@ local function buildSettings()
 			default = false,
 			children = {
 				{
-					var = "resourceBarsHideOutOfCombat",
-					text = L["Hide out of combat"],
-					get = function() return addon.db["resourceBarsHideOutOfCombat"] end,
-					func = function(val)
-						addon.db["resourceBarsHideOutOfCombat"] = val and true or false
-						if ResourceBars.ApplyVisibilityPreference then ResourceBars.ApplyVisibilityPreference("settings") end
-					end,
-					parent = true,
-					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
-					sType = "checkbox",
-					parentSection = expandable,
-				},
-				{
-					var = "resourceBarsHideMounted",
-					text = L["Hide when mounted"],
-					get = function() return addon.db["resourceBarsHideMounted"] end,
-					func = function(val)
-						addon.db["resourceBarsHideMounted"] = val and true or false
-						if ResourceBars.ApplyVisibilityPreference then ResourceBars.ApplyVisibilityPreference("settings") end
-					end,
-					parent = true,
-					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
-					sType = "checkbox",
-					parentSection = expandable,
-				},
-				{
-					var = "resourceBarsHideVehicle",
-					text = L["Hide in vehicles"],
-					get = function() return addon.db["resourceBarsHideVehicle"] end,
-					func = function(val)
-						addon.db["resourceBarsHideVehicle"] = val and true or false
-						if ResourceBars.ApplyVisibilityPreference then ResourceBars.ApplyVisibilityPreference("settings") end
-					end,
-					parent = true,
-					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
-					sType = "checkbox",
-					parentSection = expandable,
-				},
-					{
-						var = "resourceBarsHidePetBattle",
-						text = L["Hide in pet battles"] or "Hide in pet battles",
-						get = function() return addon.db["resourceBarsHidePetBattle"] end,
-						func = function(val)
-							addon.db["resourceBarsHidePetBattle"] = val and true or false
-							applyResourceBarsVisibility("settings")
-						end,
-						parent = true,
-						parentCheck = function() return addon.db["enableResourceFrame"] == true end,
-						sType = "checkbox",
-						parentSection = expandable,
-					},
-					{
-						var = "resourceBarsHideClientScene",
-						text = L["Hide in client scenes"] or "Hide in client scenes",
-						get = function()
-							local value = addon.db["resourceBarsHideClientScene"]
-							if value == nil then return true end
-							return value == true
-						end,
-						func = function(val)
-							addon.db["resourceBarsHideClientScene"] = val and true or false
-							applyResourceBarsVisibility("settings")
-						end,
-						parent = true,
-						parentCheck = function() return addon.db["enableResourceFrame"] == true end,
-						sType = "checkbox",
-						parentSection = expandable,
-					},
-					{
-						var = "resourceBarsAutoEnable",
-						text = L["AutoEnableAllBars"] or "Auto-enable bars for new characters",
+					var = "resourceBarsAutoEnable",
+					text = L["AutoEnableAllBars"] or "Auto-enable bars for new characters",
 					sType = "multidropdown",
 					options = AUTO_ENABLE_OPTIONS,
 					order = AUTO_ENABLE_ORDER,

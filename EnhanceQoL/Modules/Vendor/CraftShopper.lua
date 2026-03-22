@@ -19,11 +19,11 @@ addon.Vendor.CraftShopper = addon.Vendor.CraftShopper or {}
 addon.Vendor.CraftShopper.items = addon.Vendor.CraftShopper.items or {}
 addon.Vendor.CraftShopper.multipliers = addon.Vendor.CraftShopper.multipliers or {}
 
-local RANK_TO_USE = 3 -- 1-3: gewünschter Qualitätsrang
 local isRecraftTbl = { false, true } -- erst normale, dann Recrafts
 
 local SCAN_DELAY = 0.3
 local pendingScan
+local pendingAHShowScan
 local scanRunning
 local pendingPurchase -- data for a running AH commodities purchase
 local lastPurchaseItemID -- itemID of the last confirmed commodities purchase
@@ -32,6 +32,37 @@ local purchasedItems = {} -- [itemID] = true for items already bought via quick 
 
 local ShowCraftShopperFrameIfNeeded -- forward declaration
 local BuildShoppingList -- forward declaration for early users
+local createCrafterMultiplyFrame -- forward declaration
+local EnsureCraftShopperProfessionsUI -- forward declaration
+local RefreshMultiplyUIState -- forward declaration
+local craftShopperCheckboxHooksInstalled = false
+local professionsFrameHooksInstalled = false
+local schematicFormHooksInstalled = false
+local schematicFormMixinHooksInstalled = false
+
+local CRAFT_SHOPPER_QUALITY_LOWEST = "lowest"
+local CRAFT_SHOPPER_QUALITY_HIGHEST = "highest"
+local craftShopperQualityOrder = {
+	CRAFT_SHOPPER_QUALITY_LOWEST,
+	CRAFT_SHOPPER_QUALITY_HIGHEST,
+}
+local craftShopperQualityList = {
+	[CRAFT_SHOPPER_QUALITY_LOWEST] = L["vendorCraftShopperReagentQualityLowest"],
+	[CRAFT_SHOPPER_QUALITY_HIGHEST] = L["vendorCraftShopperReagentQualityHighest"],
+}
+
+local function IsCraftShopperEnabled() return addon.db and addon.db["vendorCraftShopperEnable"] end
+
+local function GetCraftShopperReagentQualityMode()
+	if addon.db and addon.db["vendorCraftShopperReagentQuality"] == CRAFT_SHOPPER_QUALITY_LOWEST then return CRAFT_SHOPPER_QUALITY_LOWEST end
+	return CRAFT_SHOPPER_QUALITY_HIGHEST
+end
+
+local function GetTrackRecipeCheckbox()
+	if ProfessionsFrame and ProfessionsFrame.CraftingPage and ProfessionsFrame.CraftingPage.SchematicForm and ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox then
+		return ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox
+	end
+end
 
 local function HasTrackedRecipes()
 	for _, isRecraft in ipairs(isRecraftTbl) do
@@ -47,6 +78,8 @@ local heavyEvents = {
 	"AUCTION_HOUSE_SHOW",
 	"AUCTION_HOUSE_CLOSED",
 	"ADDON_LOADED",
+	"TRADE_SKILL_SHOW",
+	"TRADE_SKILL_CLOSE",
 }
 
 local heavyEventsRegistered = false
@@ -112,6 +145,23 @@ local function GetCurrentRecipeID()
 	return recipeID
 end
 
+local function ShouldShowMultiplyFrame()
+	if not IsCraftShopperEnabled() then return false end
+	local checkbox = GetTrackRecipeCheckbox()
+	if checkbox and checkbox:IsShown() then return true end
+	if not ProfessionsFrame or not ProfessionsFrame:IsShown() then return false end
+	if not ProfessionsFrame.CraftingPage or not ProfessionsFrame.CraftingPage:IsShown() then return false end
+
+	local form = ProfessionsFrame.CraftingPage.SchematicForm
+	if not form or not form:IsShown() then return false end
+	if not (form.currentRecipeInfo and form.currentRecipeInfo.recipeID ~= nil) then return false end
+
+	local transaction = form.GetTransaction and form:GetTransaction()
+	if transaction and transaction.HasReagentSlots and not transaction:HasReagentSlots() then return false end
+
+	return true
+end
+
 local function IsRecipeTrackedAny(recipeID)
 	if not recipeID or not C_TradeSkillUI or not C_TradeSkillUI.IsRecipeTracked then return false end
 	local ok, tracked = pcall(C_TradeSkillUI.IsRecipeTracked, recipeID, false)
@@ -134,6 +184,122 @@ local function UpdateMultiplyFrameState()
 		else
 			frame.ok:SetText(TRACK_ACHIEVEMENT)
 		end
+	end
+end
+
+local function EnsureMultiplyFrameExists()
+	if _G.EQOLCrafterMultiply then return _G.EQOLCrafterMultiply end
+	if not IsCraftShopperEnabled() then return nil end
+	local form = ProfessionsFrame and ProfessionsFrame.CraftingPage and ProfessionsFrame.CraftingPage.SchematicForm
+	if not form then return nil end
+	if createCrafterMultiplyFrame then return createCrafterMultiplyFrame() end
+end
+
+RefreshMultiplyUIState = function()
+	local checkbox = GetTrackRecipeCheckbox()
+	if checkbox and checkbox.SetAlpha then checkbox:SetAlpha(IsCraftShopperEnabled() and 0 or 1) end
+
+	local frame = _G.EQOLCrafterMultiply or EnsureMultiplyFrameExists()
+	if frame then
+		if ShouldShowMultiplyFrame() then
+			frame:Show()
+		else
+			frame:Hide()
+		end
+	end
+
+	if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
+end
+
+local function HookCraftShopperCheckboxIfNeeded()
+	if craftShopperCheckboxHooksInstalled or not IsCraftShopperEnabled() then return end
+	local checkbox = GetTrackRecipeCheckbox()
+	if not checkbox or not checkbox.HookScript then return end
+
+	checkbox:HookScript("OnShow", function()
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	end)
+
+	checkbox:HookScript("OnHide", function()
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	end)
+
+	craftShopperCheckboxHooksInstalled = true
+end
+
+local function HookSchematicFormStateIfNeeded()
+	if schematicFormHooksInstalled then return end
+	local form = ProfessionsFrame and ProfessionsFrame.CraftingPage and ProfessionsFrame.CraftingPage.SchematicForm
+	if not form then return end
+
+	if form.HookScript then
+		form:HookScript("OnShow", function()
+			if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+		end)
+		form:HookScript("OnHide", function()
+			if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+		end)
+	end
+
+	if hooksecurefunc then
+		hooksecurefunc(form, "Init", function()
+			if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+		end)
+		hooksecurefunc(form, "Refresh", function()
+			if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+		end)
+	end
+
+	schematicFormHooksInstalled = true
+end
+
+local function HookSchematicFormMixinIfNeeded()
+	if schematicFormMixinHooksInstalled then return end
+	if not hooksecurefunc or not ProfessionsRecipeSchematicFormMixin then return end
+
+	local function onSchematicUpdate(form)
+		if not IsCraftShopperEnabled() then return end
+		if not ProfessionsFrame or not ProfessionsFrame.CraftingPage or form ~= ProfessionsFrame.CraftingPage.SchematicForm then return end
+		if not _G.EQOLCrafterMultiply and createCrafterMultiplyFrame then createCrafterMultiplyFrame() end
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	end
+
+	hooksecurefunc(ProfessionsRecipeSchematicFormMixin, "Init", onSchematicUpdate)
+	hooksecurefunc(ProfessionsRecipeSchematicFormMixin, "Refresh", onSchematicUpdate)
+	hooksecurefunc(ProfessionsRecipeSchematicFormMixin, "OnShow", onSchematicUpdate)
+	hooksecurefunc(ProfessionsRecipeSchematicFormMixin, "OnHide", onSchematicUpdate)
+
+	schematicFormMixinHooksInstalled = true
+end
+
+local function HookProfessionsFrameVisibilityIfNeeded()
+	if professionsFrameHooksInstalled then return end
+	if not ProfessionsFrame or not ProfessionsFrame.HookScript then return end
+
+	ProfessionsFrame:HookScript("OnShow", function()
+		if not IsCraftShopperEnabled() then return end
+		EnsureCraftShopperProfessionsUI()
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	end)
+
+	ProfessionsFrame:HookScript("OnHide", function()
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	end)
+
+	professionsFrameHooksInstalled = true
+end
+
+EnsureCraftShopperProfessionsUI = function()
+	if not IsCraftShopperEnabled() then return end
+	if IsAddOnLoaded and IsAddOnLoaded("Blizzard_Professions") then
+		HookSchematicFormMixinIfNeeded()
+		HookProfessionsFrameVisibilityIfNeeded()
+		HookSchematicFormStateIfNeeded()
+		if not EQOLCrafterMultiply and createCrafterMultiplyFrame then createCrafterMultiplyFrame() end
+		HookCraftShopperCheckboxIfNeeded()
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	else
+		f:RegisterEvent("ADDON_LOADED")
 	end
 end
 
@@ -167,6 +333,37 @@ local function getSchematic(recipeID, isRecraft)
 	return s
 end
 
+local function GetTrackedReagentItemID(slot)
+	if not slot or not slot.reagents then return nil end
+	local preferHighest = GetCraftShopperReagentQualityMode() == CRAFT_SHOPPER_QUALITY_HIGHEST
+
+	-- Profession quality variants are ordered ascending. Pick the configured end
+	-- first, then fall back to the opposite direction if a slot is sparse.
+	if preferHighest then
+		for index = #slot.reagents, 1, -1 do
+			local reagent = slot.reagents[index]
+			if reagent and reagent.itemID and reagent.itemID ~= 0 then return reagent.itemID end
+		end
+	else
+		for _, reagent in ipairs(slot.reagents) do
+			if reagent and reagent.itemID and reagent.itemID ~= 0 then return reagent.itemID end
+		end
+	end
+
+	if preferHighest then
+		for _, reagent in ipairs(slot.reagents) do
+			if reagent and reagent.itemID and reagent.itemID ~= 0 then return reagent.itemID end
+		end
+	else
+		for index = #slot.reagents, 1, -1 do
+			local reagent = slot.reagents[index]
+			if reagent and reagent.itemID and reagent.itemID ~= 0 then return reagent.itemID end
+		end
+	end
+
+	return nil
+end
+
 function BuildShoppingList()
 	local need = {} -- [itemID] = fehlende Menge
 	local multipliers = addon.Vendor.CraftShopper.multipliers or {}
@@ -178,23 +375,15 @@ function BuildShoppingList()
 			local mult = multipliers[recipeID] or 1
 			if schem and schem.reagentSlotSchematics then
 				for _, slot in ipairs(schem.reagentSlotSchematics) do
-					-- Nur Pflicht-Reagenzien, optional/finishing überspringen:
-					if slot.reagentType == Enum.CraftingReagentType.Basic then
+					-- Nur Pflicht-Reagenzien mit echter ItemID erfassen.
+					if slot.reagentType == Enum.CraftingReagentType.Basic and slot.required then
 						local reqQty = slot.quantityRequired * mult
-						-- gewünschte Qualitäts-ID holen:
-						local reagent = slot.reagents[RANK_TO_USE]
-						local id
-						if reagent and reagent.itemID ~= 0 then
-							id = reagent.itemID
+						local id = GetTrackedReagentItemID(slot)
+						if id then
 							need[id] = need[id] or {}
 							need[id].qty = (need[id].qty or 0) + reqQty
-						else
-							-- Fallback: Basis-ItemID (Qualität egal)
-							id = slot.reagents[1].itemID
-							need[id] = need[id] or {}
-							need[id].qty = (need[id].qty or 0) + reqQty
+							need[id].canAHBuy = isAHBuyable(id)
 						end
-						need[id].canAHBuy = isAHBuyable(id)
 					end
 				end
 			end
@@ -220,11 +409,31 @@ function BuildShoppingList()
 	return items
 end
 
+local function CancelPendingAHShowScan()
+	if pendingAHShowScan then
+		pendingAHShowScan:Cancel()
+		pendingAHShowScan = nil
+	end
+end
+
+local function HideCraftShopperFrame()
+	if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
+	f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
+	f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
+	f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
+	f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
+end
+
+local function CanRescanShoppingList()
+	if AuctionHouseFrame and AuctionHouseFrame:IsShown() then return true end
+	return IsResting and IsResting() or false
+end
+
 local function Rescan()
 	if scanRunning then return end
 	scanRunning = true
 	pendingScan = nil
-	if not IsResting() then
+	if not CanRescanShoppingList() then
 		scanRunning = false
 		return
 	end
@@ -234,7 +443,46 @@ local function Rescan()
 	ShowCraftShopperFrameIfNeeded()
 end
 
+local function SyncCraftShopperQualityControls()
+	local mode = GetCraftShopperReagentQualityMode()
+	local frameDropdown = addon.Vendor.CraftShopper.frame and addon.Vendor.CraftShopper.frame.qualityPreference
+	if frameDropdown and frameDropdown.GetValue and frameDropdown:GetValue() ~= mode then frameDropdown:SetValue(mode) end
+
+	local settingsDropdown = addon.Vendor.CraftShopper.settingsQualityDropdown
+	if settingsDropdown and settingsDropdown.GetValue and settingsDropdown:GetValue() ~= mode then settingsDropdown:SetValue(mode) end
+end
+
+function addon.Vendor.CraftShopper.GetReagentQualityMode()
+	return GetCraftShopperReagentQualityMode()
+end
+
+function addon.Vendor.CraftShopper.RefreshShoppingList()
+	SyncCraftShopperQualityControls()
+	if not IsCraftShopperEnabled() then return end
+
+	if HasTrackedRecipes() then
+		RegisterHeavyEvents()
+		Rescan()
+	else
+		UnregisterHeavyEvents()
+		addon.Vendor.CraftShopper.items = {}
+		if addon.Vendor.CraftShopper.frame then
+			addon.Vendor.CraftShopper.frame:Refresh()
+			addon.Vendor.CraftShopper.frame.frame:Hide()
+		end
+	end
+
+	if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+end
+
+function addon.Vendor.CraftShopper.SetReagentQualityMode(mode)
+	if not addon.db then return end
+	addon.db["vendorCraftShopperReagentQuality"] = mode == CRAFT_SHOPPER_QUALITY_LOWEST and CRAFT_SHOPPER_QUALITY_LOWEST or CRAFT_SHOPPER_QUALITY_HIGHEST
+	addon.Vendor.CraftShopper.RefreshShoppingList()
+end
+
 local function ScheduleRescan()
+	if not CanRescanShoppingList() then return end
 	if pendingScan or scanRunning then return end
 	pendingScan = C_Timer.NewTimer(SCAN_DELAY, Rescan)
 end
@@ -413,6 +661,19 @@ local function CreateCraftShopperFrame()
 	frame.ahBuyable = ahCheck
 	filterGroup:AddChild(ahCheck)
 
+	local qualityPreference = AceGUI:Create("Dropdown")
+	qualityPreference:SetLabel(L["vendorCraftShopperReagentQuality"])
+	qualityPreference:SetList(craftShopperQualityList, craftShopperQualityOrder)
+	qualityPreference:SetValue(GetCraftShopperReagentQualityMode())
+	qualityPreference:SetFullWidth(true)
+	qualityPreference:SetCallback("OnValueChanged", function(_, _, value)
+		if addon.Vendor and addon.Vendor.CraftShopper and addon.Vendor.CraftShopper.SetReagentQualityMode then
+			addon.Vendor.CraftShopper.SetReagentQualityMode(value)
+		end
+	end)
+	frame.qualityPreference = qualityPreference
+	frame:AddChild(qualityPreference)
+
 	local scroll = AceGUI:Create("ScrollFrame")
 	scroll:SetFullWidth(true)
 	scroll:SetFullHeight(true)
@@ -573,6 +834,7 @@ function ShowCraftShopperFrameIfNeeded()
 
 	if hasItems then
 		local ui = CreateCraftShopperFrame()
+		SyncCraftShopperQualityControls()
 		ui.frame:ClearAllPoints()
 		ui.frame:SetPoint("TOPLEFT", AuctionHouseFrame, "TOPRIGHT", 5, 0)
 		ui.frame:SetPoint("BOTTOMLEFT", AuctionHouseFrame, "BOTTOMRIGHT", 5, 0)
@@ -582,54 +844,35 @@ function ShowCraftShopperFrameIfNeeded()
 		ui.frame:Show()
 		ui:Refresh()
 	else
-		if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
-		f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
-		f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
-		f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
-		f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
+		HideCraftShopperFrame()
 	end
 end
 
 function addon.Vendor.CraftShopper.EnableCraftShopper()
 	f:RegisterEvent("TRACKED_RECIPE_UPDATE")
+	EnsureCraftShopperProfessionsUI()
 	if HasTrackedRecipes() then
 		RegisterHeavyEvents()
 		Rescan()
 	else
 		UnregisterHeavyEvents()
 	end
-	if _G.EQOLCrafterMultiply and addon.db and addon.db["vendorCraftShopperEnable"] then
-		if ProfessionsFrame and ProfessionsFrame:IsShown() then _G.EQOLCrafterMultiply:Show() end
-	end
-	if
-		ProfessionsFrame
-		and ProfessionsFrame.CraftingPage
-		and ProfessionsFrame.CraftingPage.SchematicForm
-		and ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox
-		and ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox.SetAlpha
-	then
-		ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox:SetAlpha(0)
-	end
+	if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 end
 
 function addon.Vendor.CraftShopper.DisableCraftShopper()
 	f:UnregisterEvent("TRACKED_RECIPE_UPDATE")
+	f:UnregisterEvent("ADDON_LOADED")
 	UnregisterHeavyEvents()
+	CancelPendingAHShowScan()
 	if pendingScan then
 		pendingScan:Cancel()
 		pendingScan = nil
 	end
 	if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
 	if _G.EQOLCrafterMultiply then _G.EQOLCrafterMultiply:Hide() end
-	if
-		ProfessionsFrame
-		and ProfessionsFrame.CraftingPage
-		and ProfessionsFrame.CraftingPage.SchematicForm
-		and ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox
-		and ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox.SetAlpha
-	then
-		ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox:SetAlpha(1)
-	end
+	local checkbox = GetTrackRecipeCheckbox()
+	if checkbox and checkbox.SetAlpha then checkbox:SetAlpha(1) end
 end
 
 f:RegisterEvent("PLAYER_LOGIN")
@@ -676,14 +919,18 @@ local function addToCraftShopper(el)
 	ShowCraftShopperFrameIfNeeded()
 end
 
-local function createCrafterMultiplyFrame()
-	local fCMF = CreateFrame("frame", "EQOLCrafterMultiply", ProfessionsFrame.CraftingPage.SchematicForm, "BackdropTemplate")
+createCrafterMultiplyFrame = function()
+	local schematicForm = ProfessionsFrame and ProfessionsFrame.CraftingPage and ProfessionsFrame.CraftingPage.SchematicForm
+	if not schematicForm then return nil end
+	if _G.EQOLCrafterMultiply then return _G.EQOLCrafterMultiply end
+
+	local fCMF = CreateFrame("frame", "EQOLCrafterMultiply", schematicForm, "BackdropTemplate")
 	-- Compact, unobtrusive container in the top-right of the schematic form
 
 	-- local parent = ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox
 	local parent = fCMF
 	-- fCMF:SetPoint("RIGHT", ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox, "LEFT", -5)
-	fCMF:SetPoint("TOPRIGHT", ProfessionsFrame.CraftingPage.SchematicForm, "TOPRIGHT", -5)
+	fCMF:SetPoint("TOPRIGHT", schematicForm, "TOPRIGHT", -5)
 	fCMF:SetSize(260, 32)
 	fCMF:SetFrameStrata("HIGH")
 	fCMF:EnableMouse(true)
@@ -704,7 +951,7 @@ local function createCrafterMultiplyFrame()
 			eb:SetText("0")
 			addToCraftShopper(eb)
 			eb:ClearFocus()
-			if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
+			if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 			return
 		end
 		if eb and eb.GetText then
@@ -715,7 +962,7 @@ local function createCrafterMultiplyFrame()
 		end
 		addToCraftShopper(eb)
 		eb:ClearFocus()
-		if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 	end)
 
 	-- Label + edit box for quantity
@@ -737,12 +984,12 @@ local function createCrafterMultiplyFrame()
 		end
 		addToCraftShopper(self)
 		self:ClearFocus()
-		if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 	end)
 	eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 	eb:SetScript("OnTextChanged", function(self, userInput)
 		if userInput and self:GetParent() then self:GetParent().autoFilled = false end
-		if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 	end)
 
 	-- Ensure sub-widgets are visible (frame visibility controlled below)
@@ -773,39 +1020,25 @@ local function createCrafterMultiplyFrame()
 
 	-- Default hidden; only show when enabled and professions is visible
 	fCMF:Hide()
-	if addon.db and addon.db["vendorCraftShopperEnable"] and ProfessionsFrame:IsShown() then
-		fCMF:Show()
-		if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
-	end
+	if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 
-	ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox:HookScript("OnShow", function(self)
-		if addon.db and addon.db["vendorCraftShopperEnable"] and EQOLCrafterMultiply then
-			EQOLCrafterMultiply:Show()
-			self:SetAlpha(0)
-			if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
-		end
-	end)
-	ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox:HookScript("OnHide", function(self)
-		if EQOLCrafterMultiply then
-			EQOLCrafterMultiply:Hide()
-			self:SetAlpha(0)
-		end
-	end)
+	return fCMF
 end
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
 	if event == "PLAYER_LOGIN" then
 		if addon.db["vendorCraftShopperEnable"] then addon.Vendor.CraftShopper.EnableCraftShopper() end
-		-- Ensure we create the mini frame when the professions UI loads
-		if IsAddOnLoaded and IsAddOnLoaded("Blizzard_Professions") then
-			if not EQOLCrafterMultiply then createCrafterMultiplyFrame() end
-		else
-			f:RegisterEvent("ADDON_LOADED")
-		end
 	elseif event == "ADDON_LOADED" and arg1 == "Blizzard_Professions" then
-		if not EQOLCrafterMultiply then createCrafterMultiplyFrame() end
+		if IsCraftShopperEnabled() then EnsureCraftShopperProfessionsUI() end
 		-- No longer need to listen for further ADDON_LOADED
 		f:UnregisterEvent("ADDON_LOADED")
+	elseif event == "TRADE_SKILL_SHOW" then
+		if IsCraftShopperEnabled() then EnsureCraftShopperProfessionsUI() end
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
+	elseif event == "TRADE_SKILL_CLOSE" then
+		if _G.EQOLCrafterMultiply then _G.EQOLCrafterMultiply:Hide() end
+		local checkbox = GetTrackRecipeCheckbox()
+		if checkbox and checkbox.SetAlpha and IsCraftShopperEnabled() then checkbox:SetAlpha(1) end
 	elseif event == "TRACKED_RECIPE_UPDATE" then
 		CleanupUntrackedMultipliers()
 		if HasTrackedRecipes() then
@@ -819,22 +1052,22 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
 			end
 			if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
 		end
-		if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
+		if RefreshMultiplyUIState then RefreshMultiplyUIState() end
 	elseif event == "BAG_UPDATE_DELAYED" then
 		ScheduleRescan()
 	elseif event == "CRAFTINGORDERS_ORDER_PLACEMENT_RESPONSE" then
 		if arg1 == 0 and not scanRunning then Rescan() end
 	elseif event == "AUCTION_HOUSE_SHOW" then
 		Rescan()
-		ShowCraftShopperFrameIfNeeded()
+		CancelPendingAHShowScan()
+		-- AH open can race recipe tracking data settling; retry once shortly after show.
+		pendingAHShowScan = C_Timer.NewTimer(SCAN_DELAY, function()
+			pendingAHShowScan = nil
+			Rescan()
+		end)
 	elseif event == "AUCTION_HOUSE_CLOSED" then
-		if addon.Vendor.CraftShopper.frame then
-			addon.Vendor.CraftShopper.frame.frame:Hide()
-			f:UnregisterEvent("COMMODITY_PRICE_UPDATED")
-			f:UnregisterEvent("COMMODITY_PURCHASE_FAILED")
-			f:UnregisterEvent("COMMODITY_PURCHASE_SUCCEEDED")
-			f:UnregisterEvent("AUCTION_HOUSE_SHOW_ERROR")
-		end
+		CancelPendingAHShowScan()
+		HideCraftShopperFrame()
 	elseif event == "COMMODITY_PRICE_UPDATED" then
 		UpdatePurchasePopup(arg1, arg2)
 	elseif event == "COMMODITY_PURCHASE_FAILED" or (event == "AUCTION_HOUSE_SHOW_ERROR" and purchaseErrorCodes[arg1]) then

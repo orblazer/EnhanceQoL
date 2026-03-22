@@ -26,6 +26,20 @@ local function refreshHealthMacro()
 	if addon.Health and addon.Health.functions and addon.Health.functions.updateHealthMacro then addon.Health.functions.updateHealthMacro(false) end
 end
 
+local function refreshFlaskMacro()
+	if addon.Flasks and addon.Flasks.functions and addon.Flasks.functions.syncEventRegistration then addon.Flasks.functions.syncEventRegistration() end
+	if addon.Flasks and addon.Flasks.functions and addon.Flasks.functions.updateFlaskMacro then addon.Flasks.functions.updateFlaskMacro(false) end
+	if addon.ClassBuffReminder then
+		if addon.ClassBuffReminder.InvalidateFlaskCache then addon.ClassBuffReminder:InvalidateFlaskCache() end
+		if addon.ClassBuffReminder.RequestUpdate then addon.ClassBuffReminder:RequestUpdate(true) end
+	end
+end
+
+local function refreshBuffFoodMacro()
+	if addon.BuffFoods and addon.BuffFoods.functions and addon.BuffFoods.functions.syncEventRegistration then addon.BuffFoods.functions.syncEventRegistration() end
+	if addon.BuffFoods and addon.BuffFoods.functions and addon.BuffFoods.functions.updateBuffFoodMacro then addon.BuffFoods.functions.updateBuffFoodMacro(false) end
+end
+
 local function buildDrinkMacroSettings()
 	local cDrink = addon.SettingsLayout.rootGAMEPLAY
 	if not cDrink then return end
@@ -34,6 +48,7 @@ local function buildDrinkMacroSettings()
 	if not convenienceSection then
 		convenienceSection = addon.functions.SettingsCreateExpandableSection(cDrink, {
 			name = (LCore and LCore["MacrosAndConsumables"]) or "Macros & Consumables",
+			newTagID = "MacrosAndConsumables",
 			expanded = false,
 			colorizeTitle = false,
 		})
@@ -477,6 +492,334 @@ local function buildDrinkMacroSettings()
 
 	addon.functions.SettingsCreateText(cDrink, string.format(L["healthMacroPlaceOnBar"], "EnhanceQoLHealthMacro"), { parentSection = convenienceSection })
 	if addon.variables and addon.variables.unitClass == "WARLOCK" then addon.functions.SettingsCreateText(cDrink, L["healthMacroTipReset"], { parentSection = convenienceSection }) end
+
+	addon.functions.SettingsCreateHeadline(cDrink, L["Flask Macro"] or "Flask Macro", { parentSection = convenienceSection })
+	addon.functions.SettingsCreateText(cDrink, L["FlaskSharedWithClassReminder"] or "Flask preferences are shared with Class Buff Reminder flask tracking.", { parentSection = convenienceSection })
+
+	addon.functions.SettingsCreateCheckbox(cDrink, {
+		var = "flaskMacroEnabled",
+		text = L["Enable Flask Macro"] or "Enable Flask Macro",
+		desc = L["Enable Flask Macro Desc"] or "Creates/updates EnhanceQoLFlaskMacro and uses your role/spec selection with the highest usable rank from your bags.",
+		func = function(value)
+			addon.db.flaskMacroEnabled = value and true or false
+			refreshFlaskMacro()
+		end,
+		default = false,
+		parentSection = convenienceSection,
+	})
+
+	addon.functions.SettingsCreateCheckbox(cDrink, {
+		var = "flaskPreferCauldrons",
+		text = L["Prefer Cauldrons"] or "Prefer cauldrons",
+		desc = L["Prefer Cauldrons Desc"] or "Prioritizes fleeting (cauldron-style) flasks first; when disabled, only the normal flask path is used.",
+		func = function(value)
+			addon.db.flaskPreferCauldrons = value and true or false
+			refreshFlaskMacro()
+		end,
+		default = true,
+		type = Settings.VarType.Boolean,
+		parentSection = convenienceSection,
+	})
+
+	local flaskTypeOrder = { "haste", "criticalStrike", "mastery", "versatility", "alchemicalChaos", "none" }
+	local flaskSpecTypeOrder = { "useRole", "haste", "criticalStrike", "mastery", "versatility", "alchemicalChaos", "none" }
+	local flaskTypeFallback = {
+		haste = _G.STAT_HASTE,
+		criticalStrike = _G.STAT_CRITICAL_STRIKE,
+		mastery = _G.STAT_MASTERY,
+		versatility = _G.STAT_VERSATILITY,
+	}
+	local flaskRoleFallback = {
+		tank = _G.TANK,
+		healer = _G.HEALER,
+		ranged = (_G.RANGED and _G.ROLE_DAMAGER and (_G.RANGED .. " " .. _G.ROLE_DAMAGER)) or _G.RANGED,
+		melee = (_G.MELEE and _G.ROLE_DAMAGER and (_G.MELEE .. " " .. _G.ROLE_DAMAGER)) or _G.MELEE,
+	}
+
+	addon.Flasks.typeLabels = addon.Flasks.typeLabels or {}
+	addon.Flasks.typeLabels.haste = flaskTypeFallback.haste
+	addon.Flasks.typeLabels.criticalStrike = flaskTypeFallback.criticalStrike
+	addon.Flasks.typeLabels.mastery = flaskTypeFallback.mastery
+	addon.Flasks.typeLabels.versatility = flaskTypeFallback.versatility
+	addon.Flasks.typeLabels.alchemicalChaos = nil
+	addon.Flasks.roleLabels = addon.Flasks.roleLabels or {}
+	addon.Flasks.roleLabels.tank = flaskRoleFallback.tank
+	addon.Flasks.roleLabels.healer = flaskRoleFallback.healer
+	addon.Flasks.roleLabels.ranged = flaskRoleFallback.ranged
+	addon.Flasks.roleLabels.melee = flaskRoleFallback.melee
+
+	local function flaskTypeListFunc()
+		local list = {}
+		for _, typeKey in ipairs(addon.Flasks and addon.Flasks.typeOrder or {}) do
+			local display = nil
+			if addon.Flasks and addon.Flasks.functions and addon.Flasks.functions.getTypeDisplayName then display = addon.Flasks.functions.getTypeDisplayName(typeKey) end
+			list[typeKey] = (display and display ~= "" and display) or flaskTypeFallback[typeKey] or typeKey
+		end
+		list.none = NONE
+		return list
+	end
+
+	local function flaskSpecTypeListFunc()
+		local list = flaskTypeListFunc()
+		list.useRole = L["FlaskUseRoleSetting"] or "Use role setting"
+		return list
+	end
+
+	local roleOrder = (addon.Flasks and addon.Flasks.roleOrder) or { "tank", "healer", "ranged", "melee" }
+	for _, roleKey in ipairs(roleOrder) do
+		local roleLabel = flaskRoleFallback[roleKey] or roleKey
+		addon.functions.SettingsCreateDropdown(cDrink, {
+			var = string.format("flaskPreferredRole_%s", roleKey),
+			text = roleLabel,
+			listFunc = flaskTypeListFunc,
+			order = flaskTypeOrder,
+			default = "none",
+			get = function()
+				local map = addon.db.flaskPreferredByRole
+				if type(map) ~= "table" then return "none" end
+				local value = map[roleKey]
+				local values = flaskTypeListFunc()
+				if type(value) ~= "string" or not values[value] then return "none" end
+				return value
+			end,
+			set = function(value)
+				addon.db.flaskPreferredByRole = addon.db.flaskPreferredByRole or {}
+				addon.db.flaskPreferredByRole[roleKey] = value
+				refreshFlaskMacro()
+			end,
+			parentSection = convenienceSection,
+		})
+	end
+	addon.functions.SettingsCreateText(cDrink, "", {
+		parentSection = convenienceSection,
+	})
+
+	local specs = {}
+	if addon.Flasks and addon.Flasks.functions and addon.Flasks.functions.getAllSpecs then
+		specs = addon.Flasks.functions.getAllSpecs() or {}
+	elseif addon.Flasks and addon.Flasks.functions and addon.Flasks.functions.getPlayerSpecs then
+		specs = addon.Flasks.functions.getPlayerSpecs() or {}
+	end
+	local lastSpecClassKey = nil
+	for _, specData in ipairs(specs) do
+		local specID = specData.id
+		local specName = specData.label or specData.name
+		local specClassKey = tostring(specData.classID or specData.className or specData.classToken or "player")
+		if lastSpecClassKey ~= nil and specClassKey ~= lastSpecClassKey then addon.functions.SettingsCreateText(cDrink, "", {
+			parentSection = convenienceSection,
+		}) end
+		lastSpecClassKey = specClassKey
+		addon.functions.SettingsCreateDropdown(cDrink, {
+			var = string.format("flaskPreferredSpec_%d", specID),
+			text = specName,
+			listFunc = flaskSpecTypeListFunc,
+			order = flaskSpecTypeOrder,
+			default = "useRole",
+			get = function()
+				local map = addon.db.flaskPreferredBySpec
+				if type(map) ~= "table" then return "useRole" end
+				local value = map[specID]
+				if value == nil then return "useRole" end
+				local values = flaskSpecTypeListFunc()
+				if type(value) ~= "string" or not values[value] then return "useRole" end
+				return value
+			end,
+			set = function(value)
+				addon.db.flaskPreferredBySpec = addon.db.flaskPreferredBySpec or {}
+				if value == "useRole" then
+					addon.db.flaskPreferredBySpec[specID] = nil
+				else
+					addon.db.flaskPreferredBySpec[specID] = value
+				end
+				refreshFlaskMacro()
+			end,
+			parentSection = convenienceSection,
+		})
+	end
+
+	addon.functions.SettingsCreateText(
+		cDrink,
+		string.format(L["flaskMacroPlaceOnBar"] or "%s - place on your bar (updates outside combat)", "EnhanceQoLFlaskMacro"),
+		{ parentSection = convenienceSection }
+	)
+
+	addon.functions.SettingsCreateHeadline(cDrink, L["Buff Food Macro"] or "Buff Food Macro", { parentSection = convenienceSection })
+
+	addon.functions.SettingsCreateCheckbox(cDrink, {
+		var = "buffFoodMacroEnabled",
+		text = L["Enable Buff Food Macro"] or "Enable Buff Food Macro",
+		desc = L["Enable Buff Food Macro Desc"] or "Creates/updates EnhanceQoLBuffFoodMacro and uses your role/spec selection with the best matching current buff food from your bags.",
+		func = function(value)
+			addon.db.buffFoodMacroEnabled = value and true or false
+			refreshBuffFoodMacro()
+		end,
+		default = false,
+		parentSection = convenienceSection,
+	})
+
+	addon.functions.SettingsCreateCheckbox(cDrink, {
+		var = "buffFoodPreferHearty",
+		text = L["Prefer Hearty Food"] or "Prefer Hearty food",
+		desc = L["Prefer Hearty Food Desc"] or "Prioritizes Hearty buff food first; when unavailable, the macro falls back to the normal version.",
+		func = function(value)
+			addon.db.buffFoodPreferHearty = value and true or false
+			refreshBuffFoodMacro()
+		end,
+		default = true,
+		type = Settings.VarType.Boolean,
+		parentSection = convenienceSection,
+	})
+
+	local buffFoodTypeOrder = {
+		"highestSecondary",
+		"primary",
+		"haste",
+		"criticalStrike",
+		"mastery",
+		"versatility",
+		"criticalStrikeVersatility",
+		"masteryVersatility",
+		"criticalStrikeMastery",
+		"versatilityHaste",
+		"criticalStrikeHaste",
+		"masteryHaste",
+		"none",
+	}
+	local buffFoodSpecTypeOrder = {
+		"useRole",
+		"highestSecondary",
+		"primary",
+		"haste",
+		"criticalStrike",
+		"mastery",
+		"versatility",
+		"criticalStrikeVersatility",
+		"masteryVersatility",
+		"criticalStrikeMastery",
+		"versatilityHaste",
+		"criticalStrikeHaste",
+		"masteryHaste",
+		"none",
+	}
+	local buffFoodTypeFallback = {
+		highestSecondary = "Highest secondary stat",
+		primary = "Primary stat",
+		haste = _G.STAT_HASTE,
+		criticalStrike = _G.STAT_CRITICAL_STRIKE,
+		mastery = _G.STAT_MASTERY,
+		versatility = _G.STAT_VERSATILITY,
+		criticalStrikeVersatility = string.format("%s + %s", _G.STAT_CRITICAL_STRIKE, _G.STAT_VERSATILITY),
+		masteryVersatility = string.format("%s + %s", _G.STAT_MASTERY, _G.STAT_VERSATILITY),
+		criticalStrikeMastery = string.format("%s + %s", _G.STAT_CRITICAL_STRIKE, _G.STAT_MASTERY),
+		versatilityHaste = string.format("%s + %s", _G.STAT_VERSATILITY, _G.STAT_HASTE),
+		criticalStrikeHaste = string.format("%s + %s", _G.STAT_CRITICAL_STRIKE, _G.STAT_HASTE),
+		masteryHaste = string.format("%s + %s", _G.STAT_MASTERY, _G.STAT_HASTE),
+	}
+
+	addon.BuffFoods.typeLabels = addon.BuffFoods.typeLabels or {}
+	for key, value in pairs(buffFoodTypeFallback) do
+		addon.BuffFoods.typeLabels[key] = value
+	end
+	addon.BuffFoods.roleLabels = addon.BuffFoods.roleLabels or {}
+	addon.BuffFoods.roleLabels.tank = flaskRoleFallback.tank
+	addon.BuffFoods.roleLabels.healer = flaskRoleFallback.healer
+	addon.BuffFoods.roleLabels.ranged = flaskRoleFallback.ranged
+	addon.BuffFoods.roleLabels.melee = flaskRoleFallback.melee
+
+	local function buffFoodTypeListFunc()
+		local list = {}
+		for _, typeKey in ipairs(addon.BuffFoods and addon.BuffFoods.typeOrder or {}) do
+			local display = nil
+			if addon.BuffFoods and addon.BuffFoods.functions and addon.BuffFoods.functions.getTypeDisplayName then display = addon.BuffFoods.functions.getTypeDisplayName(typeKey) end
+			list[typeKey] = (display and display ~= "" and display) or buffFoodTypeFallback[typeKey] or typeKey
+		end
+		list.none = NONE
+		return list
+	end
+
+	local function buffFoodSpecTypeListFunc()
+		local list = buffFoodTypeListFunc()
+		list.useRole = L["FlaskUseRoleSetting"] or "Use role setting"
+		return list
+	end
+
+	local buffFoodRoleOrder = (addon.BuffFoods and addon.BuffFoods.roleOrder) or { "tank", "healer", "ranged", "melee" }
+	for _, roleKey in ipairs(buffFoodRoleOrder) do
+		local roleLabel = flaskRoleFallback[roleKey] or roleKey
+		addon.functions.SettingsCreateDropdown(cDrink, {
+			var = string.format("buffFoodPreferredRole_%s", roleKey),
+			text = roleLabel,
+			listFunc = buffFoodTypeListFunc,
+			order = buffFoodTypeOrder,
+			default = "none",
+			get = function()
+				local map = addon.db.buffFoodPreferredByRole
+				if type(map) ~= "table" then return "none" end
+				local value = map[roleKey]
+				local values = buffFoodTypeListFunc()
+				if type(value) ~= "string" or not values[value] then return "none" end
+				return value
+			end,
+			set = function(value)
+				addon.db.buffFoodPreferredByRole = addon.db.buffFoodPreferredByRole or {}
+				addon.db.buffFoodPreferredByRole[roleKey] = value
+				refreshBuffFoodMacro()
+			end,
+			parentSection = convenienceSection,
+		})
+	end
+	addon.functions.SettingsCreateText(cDrink, "", {
+		parentSection = convenienceSection,
+	})
+
+	local buffFoodSpecs = {}
+	if addon.BuffFoods and addon.BuffFoods.functions and addon.BuffFoods.functions.getAllSpecs then
+		buffFoodSpecs = addon.BuffFoods.functions.getAllSpecs() or {}
+	elseif addon.BuffFoods and addon.BuffFoods.functions and addon.BuffFoods.functions.getPlayerSpecs then
+		buffFoodSpecs = addon.BuffFoods.functions.getPlayerSpecs() or {}
+	end
+	local lastBuffFoodSpecClassKey = nil
+	for _, specData in ipairs(buffFoodSpecs) do
+		local specID = specData.id
+		local specName = specData.label or specData.name
+		local specClassKey = tostring(specData.classID or specData.className or specData.classToken or "player")
+		if lastBuffFoodSpecClassKey ~= nil and specClassKey ~= lastBuffFoodSpecClassKey then addon.functions.SettingsCreateText(cDrink, "", {
+			parentSection = convenienceSection,
+		}) end
+		lastBuffFoodSpecClassKey = specClassKey
+		addon.functions.SettingsCreateDropdown(cDrink, {
+			var = string.format("buffFoodPreferredSpec_%d", specID),
+			text = specName,
+			listFunc = buffFoodSpecTypeListFunc,
+			order = buffFoodSpecTypeOrder,
+			default = "useRole",
+			get = function()
+				local map = addon.db.buffFoodPreferredBySpec
+				if type(map) ~= "table" then return "useRole" end
+				local value = map[specID]
+				if value == nil then return "useRole" end
+				local values = buffFoodSpecTypeListFunc()
+				if type(value) ~= "string" or not values[value] then return "useRole" end
+				return value
+			end,
+			set = function(value)
+				addon.db.buffFoodPreferredBySpec = addon.db.buffFoodPreferredBySpec or {}
+				if value == "useRole" then
+					addon.db.buffFoodPreferredBySpec[specID] = nil
+				else
+					addon.db.buffFoodPreferredBySpec[specID] = value
+				end
+				refreshBuffFoodMacro()
+			end,
+			parentSection = convenienceSection,
+		})
+	end
+
+	addon.functions.SettingsCreateText(
+		cDrink,
+		string.format(L["buffFoodMacroPlaceOnBar"] or "%s - place on your bar (updates outside combat)", "EnhanceQoLBuffFoodMacro"),
+		{ parentSection = convenienceSection }
+	)
 end
 
 function addon.functions.initDrinkMacro()
@@ -485,4 +828,22 @@ function addon.functions.initDrinkMacro()
 	if not (addon.SettingsLayout and addon.SettingsLayout.rootGAMEPLAY) then return end
 	buildDrinkMacroSettings()
 	addon.SettingsLayout.drinkMacroSettingsReady = true
+end
+
+function addon.functions.OpenFlaskMacroSettings()
+	if not (Settings and Settings.OpenToCategory) then return end
+	if InCombatLockdown and InCombatLockdown() then
+		if UIErrorsFrame and ERR_NOT_IN_COMBAT then UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT, 1, 0, 0) end
+		return
+	end
+
+	if addon.functions and addon.functions.initDrinkMacro then addon.functions.initDrinkMacro() end
+
+	local gameplayCategory = addon.SettingsLayout and addon.SettingsLayout.rootGAMEPLAY
+	if not gameplayCategory then return end
+
+	local convenienceSection = addon.SettingsLayout and addon.SettingsLayout.gameplayConvenienceSection
+	if convenienceSection and convenienceSection.data then convenienceSection.data.expanded = true end
+
+	Settings.OpenToCategory(gameplayCategory:GetID(), L["Flask Macro"] or "Flask Macro")
 end

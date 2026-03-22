@@ -12,9 +12,47 @@ local expandable = addon.functions.SettingsCreateExpandableSection(cProfiles, {
 	name = L["AddOn"],
 	expanded = false,
 	colorizeTitle = false,
+	newTagID = "ProfilesAddOn",
 })
 
 local profileOrderActive, profileOrderGlobal, profileOrderCopy, profileOrderDelete = {}, {}, {}, {}
+local globalFontOrder = {}
+
+local function getCachedFontMedia()
+	local names = addon.functions and addon.functions.GetLSMMediaNames and addon.functions.GetLSMMediaNames("font")
+	local hash = addon.functions and addon.functions.GetLSMMediaHash and addon.functions.GetLSMMediaHash("font")
+	if type(names) == "table" and type(hash) == "table" then return names, hash end
+	return {}, {}
+end
+
+local function buildGlobalFontDropdown()
+	local map = {
+		[(addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT] = L["actionBarFontDefault"] or "Blizzard font",
+	}
+	local names, hash = getCachedFontMedia()
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
+	end
+	local list, order = addon.functions.prepareListForDropdown(map)
+	wipe(globalFontOrder)
+	for i, key in ipairs(order or {}) do
+		globalFontOrder[i] = key
+	end
+	return list
+end
+
+local function refreshGlobalFonts()
+	if addon.functions and addon.functions.RefreshGlobalFontConsumers then
+		addon.functions.RefreshGlobalFontConsumers()
+		return
+	end
+	local actionBarLabels = addon.ActionBarLabels
+	if actionBarLabels and actionBarLabels.RefreshAllMacroNameVisibility then actionBarLabels.RefreshAllMacroNameVisibility() end
+	if actionBarLabels and actionBarLabels.RefreshAllHotkeyStyles then actionBarLabels.RefreshAllHotkeyStyles() end
+	if actionBarLabels and actionBarLabels.RefreshAllCountStyles then actionBarLabels.RefreshAllCountStyles() end
+end
 
 -- Build a sorted dropdown list, optionally keeping an empty entry pinned to the top
 local function buildSortedProfileList(orderTarget, excludeFunc, includeEmpty)
@@ -60,47 +98,24 @@ local EXPORT_BLACKLIST = {
 	chatChannelFilters = true,
 	chatChannelFiltersEnable = true,
 	chatIMFrameData = true,
+	-- Legacy EditMode stores are migrated on import/copy and should not be propagated.
+	editModeLayouts = true,
+	containerActionLayouts = true,
 }
 
 local function sanitizeProfileData(source)
 	if type(source) ~= "table" then return {} end
 	local filtered = {}
 	for key, value in pairs(source) do
-		if not EXPORT_BLACKLIST[key] then filtered[key] = value end
+		if not EXPORT_BLACKLIST[key] and not (addon.functions and addon.functions.IsPrivateProfileKey and addon.functions.IsPrivateProfileKey(key)) then filtered[key] = value end
 	end
 	return filtered
 end
 
-local function reconcileEditModeLayouts(profileData, meta)
+local function normalizeProfileStorage(profileData)
 	if type(profileData) ~= "table" then return end
-	local layouts = profileData.editModeLayouts
-	if type(layouts) ~= "table" then return end
-	local editMode = addon and addon.EditMode
-	if not (editMode and editMode.GetActiveLayoutName) then return end
-	local active = editMode:GetActiveLayoutName() or "_Global"
-	if layouts[active] ~= nil then return end
-
-	local sourceName = meta and (meta.editModeLayout or meta.editModeLayoutName)
-	if sourceName and layouts[sourceName] ~= nil then
-		layouts[active] = CopyTable(layouts[sourceName])
-		return
-	end
-
-	local firstName, firstLayout
-	local count = 0
-	for name, layout in pairs(layouts) do
-		if type(layout) == "table" and next(layout) ~= nil then
-			count = count + 1
-			if not firstName then
-				firstName = name
-				firstLayout = layout
-			end
-		end
-	end
-	if count == 1 and firstName and firstLayout and firstName ~= active then
-		layouts[active] = firstLayout
-		layouts[firstName] = nil
-	end
+	if addon and addon.EditMode and addon.EditMode.MigrateProfileData then addon.EditMode:MigrateProfileData(profileData) end
+	if addon and addon.ContainerActions and addon.ContainerActions.MigrateProfileData then addon.ContainerActions:MigrateProfileData(profileData) end
 end
 
 local function resolveExportProfileName(profileName)
@@ -114,17 +129,15 @@ local function exportActiveProfile(profileName)
 	if not profileName then return nil, "NO_ACTIVE" end
 	local source = EnhanceQoLDB and EnhanceQoLDB.profiles and EnhanceQoLDB.profiles[profileName]
 	if type(source) ~= "table" or not next(source) then return nil, "NO_DATA" end
-
-	local activeLayout = addon.EditMode and addon.EditMode.GetActiveLayoutName and addon.EditMode:GetActiveLayoutName() or nil
+	normalizeProfileStorage(source)
 
 	local payload = {
 		meta = {
 			addon = addonName,
 			kind = PROFILE_EXPORT_KIND,
 			version = tostring(C_AddOns.GetAddOnMetadata(addonName, "Version") or ""),
-			profileVersion = 1,
+			profileVersion = 2,
 			profile = profileName,
-			editModeLayout = activeLayout,
 		},
 		data = sanitizeProfileData(source),
 	}
@@ -160,7 +173,7 @@ local function importActiveProfile(encoded)
 	if not EnhanceQoLDB or type(EnhanceQoLDB.profiles) ~= "table" then return false, "NO_DB" end
 
 	local sanitized = sanitizeProfileData(data)
-	reconcileEditModeLayouts(sanitized, meta)
+	normalizeProfileStorage(sanitized)
 	EnhanceQoLDB.profiles[target] = sanitized
 	addon.db = EnhanceQoLDB.profiles[target]
 
@@ -215,6 +228,25 @@ data = {
 addon.functions.SettingsCreateDropdown(cProfiles, data)
 addon.functions.SettingsCreateText(cProfiles, L["ProfileUseGlobalDesc"], { parentSection = expandable })
 
+addon.functions.SettingsCreateScrollDropdown(cProfiles, {
+	var = "globalFontFace",
+	text = L["globalFontConfigLabel"] or "Global font",
+	listFunc = buildGlobalFontDropdown,
+	order = globalFontOrder,
+	default = (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT,
+	get = function()
+		local current = addon.db and addon.db.globalFontFace or ((addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT)
+		local list = buildGlobalFontDropdown()
+		if not list[current] then current = (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT end
+		return current
+	end,
+	set = function(value)
+		addon.db.globalFontFace = value
+		refreshGlobalFonts()
+	end,
+	parentSection = expandable,
+})
+
 data = {
 	listFunc = function()
 		local currentProfile = EnhanceQoLDB.profileKeys[UnitGUID("player")]
@@ -239,7 +271,9 @@ data = {
 						if not source or source == "" then return end
 						local target = EnhanceQoLDB.profileKeys[UnitGUID("player")]
 						if not target then return end
-						EnhanceQoLDB.profiles[target] = CopyTable(EnhanceQoLDB.profiles[source])
+						local copied = sanitizeProfileData(CopyTable(EnhanceQoLDB.profiles[source]))
+						normalizeProfileStorage(copied)
+						EnhanceQoLDB.profiles[target] = copied
 						C_UI.Reload()
 					end,
 				}

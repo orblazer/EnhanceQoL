@@ -1,1023 +1,304 @@
 # Changelog
 
-## [7.12.0] - 2026-02-11
+## [9.9.0] - 2026-03-20
 
 ### ✨ Added
 
-- Unit Frames: Added configurable `Castbar strata` + `Castbar frame level offset` (Player/Target/Focus/Boss).
-- Unit Frames: Added configurable `Level text strata` + `Level text frame level offset`.
-- GCD Bar: Added `Match relative frame width` for anchored layouts, including live width sync with the selected relative frame.
-- GCD Bar: Anchor target list now focuses on supported EQoL anchors (legacy ActionBar/StanceBar entries removed).
-- Unit Frames: Added per-frame `Hide in vehicles` visibility option.
-- Cooldown Panels: Added per-panel `Hide in vehicles` display option.
-- Aura: Added per-module `Hide in pet battles` options for Unit Frames, Cooldown Panels, Resource Bars, and GCD Bar.
-- Aura: Added `Hide in client scenes` (e.g. minigames) for Unit Frames, Cooldown Panels, and Resource Bars (default enabled).
-- Resource Bars: Added per-bar `Click-through` option in Edit Mode
-- World Map Teleport: Added Ever-Shifting Mirror
-- Vendor: Added configurable auto-sell rules for `Poor` items (including `Ignore BoE`), hide crafting-expansion filtering for `Poor`, and disable global `Automatically sell all junk items` when `Poor` auto-sell is enabled.
-
-### ⚡ Performance
-
-- Unit Frames: `setBackdrop`/`applyBarBackdrop` now run with style-diff caching, so unchanged backdrop styles are skipped instead of being reapplied every refresh.
-- Unit Frames: Edit Mode registration now batches refresh requests and skips no-op anchor `onApply` refreshes, reducing load-time spikes during UF frame/settings registration.
-- Health/Power percent: Removed some pcalls
-- Drinks: Improved sorting
-- Unit Frames: Health updates now cache absorb/heal-absorb values and refresh them on absorb events instead of querying absorb APIs every health tick.
-- Unit Frames: `formatPercentMode` was moved out of `formatText` hot-path to avoid per-update closure allocations.
-- Resource Bars: `configureSpecialTexture` now caches special atlas state (`atlas` + normalize mode) and skips redundant texture/color reconfiguration.
+- Shared Media: 6 new border assets in midnight style
+- Unit Frames (Player / Target / Focus): Added incoming heal bars to the regular unit frames. The feature can now be adjusted there just like on the group frames.
+- Group Frames (Party / Raid): Added an optional `Aggro highlight` border in Edit Mode with `All` / `Only non-tanks` mode, sample preview, configurable texture/layer/size/offset, and adjustable color (default orange).
+- Cooldown Panels (Spells): Added an optional `Hide when no resource` setting, so spells can stay hidden until you have enough resource again. This can be set for a whole panel or adjusted per entry.
 
 ### 🐛 Fixed
 
-- Tooltip: Fixed a rare error when hovering unit tooltips.
-- Objective Tracker: Hiding of M+ timer fixed
-- Unit Frames: Main frame strata fallback is now stable `LOW` (instead of inheriting Blizzard `PlayerFrame` strata), preventing addon interaction from unexpectedly forcing Player/Target/ToT/Focus frames to `MEDIUM`.
-- LibButtonGlow Update - Secret error
-- World Map Teleport: Fixed restricted-content taint (`ScrollBar.lua` secret `scrollPercentage`) by suppressing the EQoL teleport display mode/interactions while restricted.
+- Square Minimap / Instance Difficulty: Delves now show `D<tier>` (for example `D8`) on the minimap difficulty indicator instead of falling back to the full `Delves` label.
+- Resource Bars (Warlock / Soul Shards): Fixed `Use custom color at maximum` getting stuck after entering dungeons because the Soul Shard max-value refresh could switch between raw and non-raw power ranges.
+- Group Frames (Raid / Dynamic Scaling): Fixed `Level` text and `Group <number>` indicators growing with `Preserve content size`. Those two labels now keep their normal size while the slider still compensates the rest of the raid-frame content.
 
 ---
 
-## [7.11.4] - 2026-02-09
-
-### 🐛 Fixed
-
-- Unit Frames: Power colors/textures now resolve by numeric power type first.
-- Item Inventory (Inspect): Improved `INSPECT_READY` handling and reliability.
-- Item Inventory (Inspect): Performance improvements for inspect updates.
-- Tooltip: Fixed an error when showing additional unit info in restricted situations.
-- Chat: `Chat window history: 2000 lines` now reapplies correctly after reload.
-- Unit Frames: Some borders used the wrong draw type
-
----
-
-## [7.11.3] - 2026-02-08
-
-### 🐛 Fixed
-
-- Missing locale
-
----
-
-## [7.11.2] - 2026-02-08
-
-### 🐛 Fixed
-
-- Group Frames (Party/Raid): `Name class color` now persists correctly after `/reload`.
-- Cooldown Panels: Edit Mode overlay strata now follows panel strata correctly.
-- Cooldown Panels: `Copy settings` now refreshes Edit Mode settings and correctly updates layout mode/radial options.
-
----
-
-## [7.11.1] - 2026-02-08
-
-### 🐛 Fixed
-
-- Cooldown Panels: Anchoring to other addons wasn't working
-
----
-
-## [7.11.0] - 2026-02-08
+## [9.8.0] - 2026-03-19
 
 ### ✨ Added
 
-- Data Panels: Panel-wide stream text scale option in Edit Mode.
-- Data Panels: Panel-wide class text color option for stream payload text.
-- Data Panels: Equipment Sets stream now has right-click options for text size and class/custom text color.
+- Private Auras (Standalone): Added a new standalone private aura anchor that can be enabled independently from unit and group frames.
+- Character Panel / Inventory (Upgrade Tracks): Added upgrade track text for equipped items and equippable bag items, including localized track abbreviations, `current/max` progress display, configurable placement, and bag-filter support for `Explorer`, `Adventurer`, `Veteran`, `Champion`, `Hero`, and `Myth`.
+- Group Frames (Raid / Dynamic Scaling): Added a `Preserve content size` slider for dynamically scaled raid frames. Raid frame scaling stays unchanged, while text, indicators, buffs/debuffs, and Private Auras can now compensate their size independently. Default is `Off`.
 
 ### 🔄 Changed
 
-- Data Panels: Stream options windows now show the active stream name in the header instead of only "Options".
-- Data Panels: Equipment Sets stream icon size now follows the configured text size.
-- Mounts: Added tooltip hints for class/race-specific mount options (Mage/Priest/Dracthyr) when shown globally in settings.
+- Character Panel (Enchant Display): Reworked the enchant display dropdown into combined applied/missing/icon modes. The old separate missing-enchant overlay checkbox was removed, and overlay behavior is now selected directly from the dropdown.
+- Character Panel / Inventory (Upgrade Tracks): Switched upgrade track detection from tooltip parsing to `C_Item.GetItemUpgradeInfo()`, so track IDs, labels, and upgrade progress now come directly from the API instead of tooltip scans.
 
 ### 🐛 Fixed
 
-- Action Tracker: Removed some DK, Evoker and Priest fake spells
-- Cooldown Panels: Improved reliability when changing spec and entering/leaving instances.
-- Cooldown Panels: Fixed cases where hidden panels or cursor overlays could remain visible.
-- Cooldown Panels: Improved static text behavior for multi-entry panels.
-- Cooldown Panels: Simplified Static Text options in Edit Mode to reduce confusion.
-- Unit Frames: Raid frame color change was wrong
+- Cooldown Panels (Racial spell variants): Fixed multi-ID racials like `Arcane Torrent`, `Blood Fury`, and `Gift of the Naaru` so dragged/imported entries now resolve to the correct known variant on the current character, duplicate variants are no longer added, and existing duplicate entries are cleaned up automatically on the next load/editor refresh.
 
 ---
 
-## [7.10.0] - 2026-02-07
-
-### ✨ Added
-
-- Unit Frames: Aura icons can use custom border textures (boss frames included)
-- Mount Keybinding: Random mount can shift into Ghost Wolf for shamans while moving (requires Ghost Wolf known).
-- MythicPlus: Added a keybind for random Hearthstone usage (picks from available Hearthstone items/toys).
-- Unit Frames: Option to round percent values for health/power text
-- Unit Frames: Castbar border options (texture/color/size/offset)
-- Unit Frames: Option to disable interrupt feedback on castbars
-- Unit Frames: Castbar can use class color instead of custom cast color
-- Unit Frames: Per-frame smooth fill option for health/power/absorb bars (default off)
-- Group Frames (Party/Raid): **BETA** (performance test) for feedback on missing features or breakage. Aura filters require 12.0.1; on 12.0.0 you will see more auras (e.g., Externals filtering won’t work yet).
-- Group Frames (Raid): Optional split blocks for Main Tank and Main Assist with separate anchors and full raid-style appearance settings.
-- Cooldown Panels: Optional radial layout with radius/rotation controls (layout fields auto-hide on switch)
-- Cooldown Panels: Cursor anchor mode with Edit Mode preview and live cursor follow
-- Cooldown Panels: Hide on CD option for cooldown icons
-- Cooldown Panels: Show on CD option for cooldown icons
-- Cooldown Panels: Per-entry static text with Edit Mode font/anchor/offset controls
-- System: Optional `/rl` slash command to reload the UI (skips if the command is already claimed)
-- Unit Frames: Combat feedback text with configurable font/anchor/events
-- Skinner: Character Frame flat skin (buttons, dropdowns, title pane hover/selection)
-- Data Panels: Background and border textures/colors are now configurable via SharedMedia.
-- Data Panels: Durability stream now has an option to hide the critical warning text (`Items < 50%`).
-- Data Panels: Gold stream now supports a custom text color and optional silver/copper display in addition to gold.
-- Data Panels: Durability stream now has customizable high/mid/low colors.
+## [9.7.0] - 2026-03-19
 
 ### 🔄 Changed
 
-- Data Panels: **Hide Border** now hides only the border. Migration sets background alpha to 0 if Hide Border was previously enabled, so you may need to re-adjust background alpha.
-- Unit Frames: Increased offset slider range in UF settings from ±400 to ±1000.
+- Private Auras: Increased the supported private aura icon size limit to `60`.
+- Private Auras: Improved large private aura rendering so the Blizzard border now scales with the configured icon size instead of staying visually too small on oversized icons.
 
-### ⚡ Performance
+### 🐛 Fixed
 
-- Unit Frames: Cache aura container height/visibility updates to reduce UI calls
-- Tooltips: Skip unit tooltip processing and health bar updates when all tooltip options are disabled
-- MythicPlus: World Map teleport panel events now register only when the feature is enabled
-- Food: Drink/health macro updates and Recuperate checks now run only when the macros are enabled
-- Unit Frames: Truncate-name hooks now register only when the feature is enabled
-- Action Bars: Visibility watcher now disables when no bar visibility rules are active
+- Castbars: Fixed a bug with ghost casts
+- Unit Frames (Boss): Fixed boss frames not always appearing correctly when boss units became targetable after the initial encounter engage event.
+- Private Auras (Tooltip / Hover): Fixed private aura tooltips interfering with mouse hover and click-through behavior on unit and group frames.
+
+---
+
+## [9.6.1] - 2026-03-18
+
+### 🐛 Fixed
+
+- Cooldown Panels (Static text): Wrongly showed static text when not on CD.
+- Cooldown Panels (Items/Slots): Item uses with delayed CD start (Healthstones) are not correctly shown.
+
+---
+
+## [9.6.0] - 2026-03-18
+
+### ✨ Added
+
+- Cooldown Panels (Tracked Auras): Added a new panel display option for tracked auras that keeps them visible even while inactive, with a dimmed look until they become active.
+
+### 🔄 Changed
+
+- Cooldown Panels (Panel Settings): Improved the panel-wide text styling for stacks and charges. Shared colors can now be adjusted more cleanly at panel level, which makes it easier to keep whole layouts visually consistent.
+- Cooldown Panels: Removed old legacy panel settings code that was no longer part of the active panel setup. This cleans up the feature and reduces duplicate behavior.
+
+### 🐛 Fixed
+
+- Unit Frames: Aura cooldown was missing when Cooldowntext was hidden
+
+---
+
+## [9.5.0] - 2026-03-18
+
+### 🔄 Changed
+
+- Action Tracker, World Map Teleport, Dungeon Teleport, CD Panels: Changed some API to newer API
+
+### 🐛 Fixed
+
+- Cooldown Panels (Edit Mode / Tooltips): Fixed panel selections becoming unclickable in Blizzard Edit Mode while `Show tooltips` was enabled. Panel selections now stay clickable even when the tooltip option is on.
+
+---
+
+## [9.4.0] - 2026-03-17
+
+### ✨ Added
+
+- Cooldown Panels (Editor): Added panel duplication from the panel-list right-click context menu. Duplicates keep their entries, layout, and group assignment.
+- Cooldown Panels (Editor): Added nested groups in the left panel list. Groups can now contain subgroups, and group context menus support creating subgroups and moving groups between parent groups.
+- Cooldown Panels (Glow): Added a `Hide glow out of combat` option, so glow can stay hidden outside combat while the icon remains visible between pulls.
+- Settings (Slash Commands): Added an optional Click Cast Bindings toggle that registers `/ccb` and `/clickcast` to open the Blizzard Click Cast Bindings UI when those aliases are not already claimed.
+
+### 🔄 Changed
+
+- Cooldown Panels (Charges): Added a panel-wide `Hide when 0` option for spell charge text. Charge numbers now fade out automatically when the current charge count reaches `0`.
+- Cooldown Panels (Spec Filter): Improved the panel spec selection menu with quick-select toggles for `All healers`, `All tanks`, `All melee`, and `All casters`.
+
+### 🐛 Fixed
+
+- Cooldown Panels (Items / Trinkets): Fixed GCD-only item cooldowns being treated as real cooldowns, so trinkets and other usable items no longer briefly react to the global cooldown.
+- Cooldown Panels (Stance): Fixed `Static text` being unavailable for stance entries in the editor and standalone entry settings.
+- Data Panels: Fixed panels breaking when one of their entries came from an addon that is no longer installed.
+- Food Macros (Drink / Health / Flask / Buff Food): Fixed hard Lua errors when the global macro limit (`120`) is already reached. EQoL now checks the limit before `CreateMacro()` and prints a one-time chat warning instead.
+- Minimap (Instance Difficulty Indicator): Fixed the difficulty label not using the configured Global Font.
+
+---
+
+## [9.3.0] - 2026-03-17
+
+### ✨ Added
+
+- Buff Food Macro: Added a new `EnhanceQoLBuffFoodMacro` for current Midnight buff food, including role/spec preference dropdowns, mixed-stat food categories, and a `Prefer Hearty food` toggle. The macro picks the best matching available buff food from your bags and prefers Hearty variants when configured.
+- Class Buff Reminder (Evoker / Augmentation): Added `Blistering Scales` to the reminder. It now also shows correctly while solo.
+- Group Frames (Healer Buff Placement / Spell Color): Added per-rule `Spell Color` overrides for `Border`, `Bar`, and `Tint` indicators. Preview and live rendering now follow the first active matching rule color, matching existing `Square` behavior.
+
+### 🐛 Fixed
+
+- Cooldown Panels (Items): Fixed item tracking so bank items are no longer counted, tracked `Healthstone` prefers `Demonic Healthstone` for Warlocks with `Pact of Gluttony`, and `No desaturation` no longer keeps empty items like potions fully colored.
+- Class Buff Reminder (Settings): Restored the missing Flask info text and `Open Flask settings` button in the Blizzard settings UI.
+- Unit Frames: Fixed `Always hide in party/raid` so it now only hides the frame while you are actually in a party or raid.
+
+---
+
+## [9.2.0] - 2026-03-17
+
+### ✨ Added
+
+- Shared Media: Added new Void texture (EQOL: Void)
+
+### 🐛 Fixed
+
+- Health Macro: Fixed `Potent Healing Potion` not being picked correctly in Midnight.
+- Cooldown Panels: Opening Edit Mode in Combat had stale panels showing
+- Cooldown Panels: Fixed `Show Tooltip` in Edit Mode so panel icons now show their tooltip correctly and are no longer click-through while the option is enabled.
+- Square Minimap Stats / SharedMedia: Fixed minimap stat texts (`Time`, `FPS`, `Latency`, `Location`, `Coordinates`) not using the configured Global Font on login/reload when SharedMedia fonts were registered after the stats initialized.
+- Minimap Buttons & Cluster: Fixed `Minimap elements to hide` not reflecting already hidden entries in the settings UI.
+- Economy (Craft Shopper): Fixed the Auction House helper not showing reliably for tracked recipes unless tracking was refreshed while the Auction House was already open.
+
+---
+
+## [9.1.2] - 2026-03-16
+
+### 🐛 Fixed
+
+- Cooldown Panels (Tracked Buffs / CDM): Fixed imported tracked auras disappearing after switching specialization. The same tracked spell now continues to work across specs.
+
+---
+
+## [9.1.1] - 2026-03-16
+
+### 🐛 Fixed
+
+- Cooldown Panels: glow had some secret errors
+
+---
+
+## [9.1.0] - 2026-03-16
+
+### 🔄 Changed
+
+- Group Frames (Custom Sort): Added a `Player first in role` option for Party/Raid custom sorting, so your own frame stays pinned to the front of its current role bucket instead of shifting positions when the group order refreshes.
+- Group Frames (Raid / Growth): Added `Center vertical` and `Center horizontal` growth modes for raid frames.
+- Character Panel (Gem Tracker): Reworked the socketed gem tracker for Midnight. It now tracks `Eversong Diamond`, `Amethyst`, `Peridot`, `Garnet`, and `Lapis` by item ID, replacing the old `Blasphemite` / `Amber` / `Onyx` / `Sapphire` / `Emerald` / `Ruby` setup.
+- Economy (Craft Shopper): Added a persistent `Reagent Quality` selector (`Lowest quality` / `Highest quality`) in the Craft Shopper window and settings so shopping lists and direct buy can target the desired reagent tier again.
+- Economy (Warband Gold Autosync): Added an `Ignored characters` multi-select to `Auto-sync character gold with Warband bank`, so checked characters are skipped entirely and will not deposit to or withdraw from the Warband bank.
+- Baganator (Icon Corners): Added an `Enhance QoL Upgrade arrow` corner-widget option for equippable bag items, using the localized Upgrade Arrow label in Baganator's picker.
+- Settings (Root Category): Added a slash-command overview to the main EnhanceQoL settings page.
+
+### 🐛 Fixed
+
+- Cooldown Panels (Charges): Fixed charge-based abilities being desaturated while charges were still available. Icons now stay colored until all charges are spent.
+- Minimap Buttons & Cluster (Tracking icon): Fixed `Minimap elements to hide` not hiding the Blizzard tracking icon unless the separate Square Minimap Stats tracking-button feature was enabled. The tracking icon hide option now works again on its own.
 
 ### ❌ Removed
 
-- Aura Tracker (BuffTracker module + settings/UI)
-- Legacy AceGUI options window (tree-based settings UI)
-- Mover: Individual bag frame entries (Bag 1–6)
-
-### 🐛 Fixed
-
-- Tooltips: Guard secret values when resolving unit names (prevents secret boolean test errors)
-- Group Frames: Guard missing Edit Mode registration IDs on disable
-- Unit Frames: Boss cast bar interrupt texture now resets on new casts
-- Unit Frames: Aura cooldown text size no longer defaults to ultra-small "Auto"; default now uses a readable size
-- Resource Bars: Smooth fill now uses status bar interpolation (fixes legacy smooth update behavior)
-- ChatIM: Disabling instant messenger restores whispers in normal chat
-- Vendor: Disable destroy-queue Add button when the feature is off
-- MythicPlus: ConsolePort left-click on World Map teleports now triggers the cast correctly
-- Visibility: Skyriding stance check no longer triggers for non-druids (e.g., paladin auras)
-- World Map Teleport: Mixed Alliance and Horde for Tol Barad Portal
-- World Map Teleport: Tab selector was hidden
-- Cooldown Panels: Specs were not correctly checked
-- Itemlevel in Bags and Characterpanel are now correct
-- Missing locales
+- Cooldown Panels (Ready Glow): Removed `Glow duration` from panel and per-entry settings. Ready glow now stays active until the next real cooldown instead of expiring on a timer.
 
 ---
 
-## [7.9.1] - 2026-02-02
+## [9.0.3] - 2026-03-16
 
 ### 🐛 Fixed
 
-- Wrong default font for zhTW
+- Group Frames (Health / Absorb): Fixed reverse absorb rendering on party/raid frames at full health.
 
 ---
 
-## [7.9.0] - 2026-02-02
+## [9.0.2] - 2026-03-15
+
+### 🐛 Fixed
+
+- Container Actions: Fixed `Automatically open Container items in bag` treating cosmetic appearance-learn items (`Use: Add this appearance to your Warband collection.`) like openable containers.
+- Group Frames (Healer Buff Placement / Bar): Fixed BAR indicators not behaving like proper tracked buff timers. BAR style now supports a real timed drain animation based on the first active timed aura, with an optional `Reverse` toggle on top of the existing `Horizontal` / `Vertical` orientation.
+- Group Frames (Portraits): Fixed `Extend border over portrait` creating a second portrait border on party/MT/MA frames. The portrait now sits inside the shared frame border like the regular Unit Frames, while non-portrait anchor positions stay unchanged.
+- Unit Frames (Edit Mode / Show when): Fixed missing `Show when` visibility settings on player-scoped single unit frames (`Player`, `Target`, `Target of Target`, `Focus`, `Pet`), including separate Party/Raid and Flying/Skyriding conditions.
+
+---
+
+## [9.0.1] - 2026-03-15
+
+### 🐛 Fixed
+
+- Unit Frames (Edit Mode): Fixed single-frame `Offset X` / `Offset Y` position changes not updating live while Edit Mode was open.
+
+---
+
+## [9.0.0] - 2026-03-15
 
 ### ✨ Added
 
-- Keybinding: Toggle friendly NPC nameplates (nameplateShowFriendlyNpcs)
-- UF Plus: Unit status group number format options (e.g., Group 1, (1), | 1 |, G1)
-- UF Plus: Target range fade via spell range events (configurable opacity)
+- Cooldown Panels (Cooldown text): Added panel-wide static `Cooldown text color` customization (`Edit Mode -> Cooldown text`) with opacity support.
+- Cooldown Panels (Items): Added automatic rank-group support for Health/Combat Potions and Flasks/Fleeting Flasks. Item entries now store the lowest-rank ID as canonical and can still resolve to higher ranks.
+- Cooldown Panels (Layout Edit): Added standalone panel settings access directly from Layout Edit, so advanced panel positioning/settings can be adjusted from the layout workflow without switching back to the right-side editor inspector.
+- Cooldown Panels (Editor): Added collapsible panel grouping with persistent groups, drag-and-drop assignment/removal, panel and group context-menu actions, alphabetical group sorting, and a `Hide empty groups` panel-filter toggle.
+- Cooldown Panels (Overlays): Added panel-wide `Ready glow color` customization (`Edit Mode -> Overlays`). Ready glows now use the configured panel color through the internal glow system.
+- Cooldown Panels (Overlays): Added panel-wide `No desaturation` (`Edit Mode -> Overlays`) to keep icons fully colored while still tracking cooldown state.
+- Cooldown Panels (Radial Layout): Added a configurable `Arc degrees` slider/input for radial panels, so icons can be distributed across custom arcs (for example semicircles) instead of always using a full `360°` circle.
+- Cooldown Panels (State Textures): Added per-entry custom state textures for spells and tracked auras with atlas/FileDataID validation, live Layout Edit preview, click-through rendering, transform controls (`Scale`, `Width`, `Height`, `Angle`), and optional doubled/mirrored texture rendering with configurable spacing.
+- Cooldown Panels (Tracked Buffs): Added support for tracking player buffs directly from Blizzard Cooldown Manager (`Buff Icon` / `Buff Bar`) via the new `Tracked Buff (CDM)` entry type.
+- Group Frames (Border): Added an option to change the Strata and level of the border.
+- Group Frames (Healer Buff Placement): Added per-indicator border controls for `Icon`/`Square` styles: `Indicator Border`, `Border Texture` (SharedMedia), `Border Size`, `Border Offset`, and `Border Color`.
+- Group Frames (Incoming Heals): Added an optional incoming-heal prediction bar for group frames with configurable texture, color, opacity, and sample preview.
+- Group Frames (Party / Growth): Added `Center vertical` and `Center horizontal` growth modes for center-outward party expansion from the anchor midpoint.
+- Group Frames (Portraits): Added portrait support for Party/MT/MA frames with configurable side, square background, separator (toggle/size/texture/custom color), and optional `Extend border over portrait`.
+- Group Frames (Range Fade): Added Edit Mode controls for `Range fade` (`Enable range fade`, `Out of range opacity`, `Offline opacity`) plus sample-frame preview states so in-range, out-of-range, and offline fading is directly visible in `Sample frames`.
+- Group Frames (Role Icons): Added new role icon style `FRAME` using legacy atlas icons (`UI-Frame-TankIcon`, `UI-Frame-HealerIcon`, `UI-Frame-DpsIcon`).
+- Unit Frames (Auras): Added `Cooldown text font` and `Cooldown text outline` options for buff/debuff duration text in all EQoL unit frames that currently expose aura settings (`Player`, `Target`, `Focus`, and `Boss`).
+- Unit Frames (Health / Absorb): Added `Don't overflow health bar` (available when `Reverse fill` is enabled). When active, overflow rendering is suppressed so only the missing-health portion is shown; at full health no reverse-overflow absorb segment is visible.
+- Unit Frames (Player / Target / Focus): Added a dedicated `Dispel indicator` overlay with its own expandable settings section (`Tint`, fill opacity/color, sample preview, and optional glow customization), based on the existing Group Frames dispel indicator behavior.
+- Unit Frames (Secondary Power / Stagger): Added a dedicated top-level `Stagger colors` section so Brewmaster stagger color settings are no longer nested under `Secondary Power Bar`.
+- Resource Bars (Hunter Survival): Added support for `Tip of the Spear` (`260286`) as an aura-based secondary resource bar.
+- Resource Bars (Runes / Essence): `Separated offset` now renders real standalone segmented bars with individual backgrounds/borders, matching other segmented resources such as Holy Power and Maelstrom Weapon.
+- Resource Bars (Text): Added a new `Current - Percent` text display option for supported bar types.
+- Resource Bars (Threshold Colors): Added per-resource threshold color overrides with up to `10` configurable points (value + color), including Secret-safe handling for power types that expose secret values.
+- Standalone Castbar: Added configurable `Reverse fill` in `Bar style`.
+- Visibility & Fading: Added the missing `Hide while flying` visibility rule to the remaining settings/editors that already supported `Skyriding`, including Cooldown Viewer, Spell Activation Overlay and Action Bars.
+- Square Minimap Stats: Added an optional `Tracking Button` element that reuses the Blizzard tracking dropdown on the minimap with configurable anchor, X/Y offset, and scale. While active, the default tracking slot stays hidden and the button can be positioned directly via Minimap Stats.
+- Square Minimap Stats (Location): Added `Show subzone below zone` so zone and subzone can optionally render as two lines with the subzone shown beneath the zone.
+- Square Minimap Stats (Time): Added a configurable `Left-click action` for the minimap time text so it can open the calendar directly instead of the stopwatch/time manager.
+- Instant Messenger (Minimap Menu): Added a `Instant Chats` submenu to the existing EnhanceQoL minimap button. It lists all open whisper tabs, sorts unread conversations first, and lets you jump straight into a chat with the input box focused.
+- Economy (Crafting Orders): Added a separate `Place Crafting Orders` section with an `Always set the filter for "Current expansion"` option, matching the existing Auction House behavior.
+- Mythic+ (Teleports): Added the Engineering wormhole to Quel'Thalas to the teleport list.
+- Mover: Added PvPMatchResults Frame
+- Mouse Ring: Added a separate `Show cast progress outside combat` toggle so cast progress can stay visible even when `Show ring only in combat` is enabled.
+- Sound: Added new mute toggles for `Abundance (Dundun talking head only)` and `Delves (Valeera in-combat comments)`.
 
-### 🔁 Changed
+### 🔄 Changed
 
-- Resource Bars: Bar width min value changed to 10
+- Cooldown Panels (Glow): Reworked panel glow handling to use the new internal glow system for Ready/Active/Pandemic visuals, including selectable glow styles, panel/entry glow-style overrides, and configurable glow insets.
+- Cooldown Panels (Glow): Separated `Proc glow` visuals from `Glow when ready`, so panel defaults and per-entry overrides for proc glows can now be configured independently from ready glows.
+- Cooldown Panels (Layout Edit): Moved the missing per-entry `Show stack count` and `Show charges` toggles into the existing `Stacks / Item Count` and `Charges` expandable sections instead of duplicating entry basics in a separate block.
+- Unit Frames / Group Frames: Reworked the Single UF settings layout to match the Group Frames structure more closely, including split `Buffs` / `Debuffs` sections and clearer top-level ordering.
+- Mythic+ (Random Hearthstones): Changed the preferred Hearthstone selector from single-choice to multi-select. Random Hearthstone can now pick from a custom 1:N subset of owned Hearthstones instead of either one fixed Hearthstone or the full pool.
 
 ### 🐛 Fixed
 
-- Secret error: LFG List sorting by mythic+ score is now ignored in restricted content
-- Questing: Guard UnitGUID secret values when checking ignored quest NPCs (prevents secret conversion errors)
-- Health Text: Text was shown when unit is dead
-- Nameplates: Class colors on nameplates now work in 12.0.1 (updated CVar)
-- Cooldown Panels: Guarding against a protection state produced by anchoring protected frames to CDPanels
-
----
-
-## [7.8.1] - 2026-01-31
-
-### 🐛 Fixed
-
-- Missing locale fixed
-
----
-
-## [7.8.0] - 2026-01-31
-
-### ✨ Added
-
-- Resource Bars: Evoker Essence bars now show filling animation
-- Resource Bars: Gradiant color works horizontal now too
-- Cooldown Panels: Option to enable charge duration show
-- UF Plus: Cast duration format option for Remaining/Total.
-- Cooldown Panels: Added anchor points for ElvUI, Unhalted Unit Frames, and more MSUF frames (ToT/Focus/Pet/Boss).
-- Cooldown Panels: Edit Mode panel filters (only show panels of your class) and Copy Settings dropdown to clone layout/anchor settings (keeps entries + enabled state untouched).
-- UF Plus: Focus frame aura icons are now supported and configurable.
-- UF Plus: Health and power bars can now reverse their fill direction (right-to-left).
-- Cooldown Panels: New `/cpe` slash command alias (opens the Cooldown Panel editor).
-- Tooltips: Optional target-of-target line on unit tooltips.
-- Tooltips: Optional mount display on player tooltips.
-- Character Frame: Optional missing-enchant overlay toggle (defaults on).
-- Mover: Covenant frames are now movable (Sanctum, Mission, Renown, Preview).
-
-### 🔁 Changed
-
-- Cooldown Panels: Switched button glow to LibButtonGlow
+- Action Bars (Range Indicator / Keybind Font): Fixed out-of-range action buttons no longer turning red when `Change keybind font` was enabled. EQoL now preserves Blizzard's red range-indicator state instead of immediately restoring the custom hotkey color.
+- Class Buff Reminder: Fixed reminders showing while your character is dead or a ghost.
+- Cooldown Panels (Items): Fixed `Item uses` not updating immediately after using an item. Panels with `Show item uses` now refresh their item-use counts on `BAG_UPDATE_COOLDOWN` instead of only reflecting the correct value after a later reload.
+- Cooldown Panels (Layout Edit): Fixed sliders and live style updates in the per-entry Layout Edit dialog so cooldown text size/color/offset and other previewed values no longer snap back to defaults while interacting with neighboring controls.
+- Cooldown Panels (Ready Glow): Fixed inconsistent/stuck ready-glow behavior for Items and Slot-based Trinkets. Ready glow now initializes correctly on reload, clears reliably when cooldown starts, and stays in sync when toggling `Glow` or changing `Glow duration` in Edit Mode.
+- Cooldown Panels (Spell States): Fixed `Check power` tinting and initial stack display for `SPELL` entries that rely on spell usability/action-display data instead of standard power-cost tables, so unusable spells and application-stack spells initialize correctly after reload.
+- Cooldown Panels (State Textures): Fixed custom state textures layering/preview cleanup issues, including stale textures remaining after deleting entries or changing settings, and ensured the cooldown number stays above custom textures while the ghost icon remains visible in preview for positioning.
+- Drink Macro: Rebuilt the drink list from current Wowhead tooltip data, removed dead `Well Fed` entries that were always ignored at runtime, corrected squished flat-mana values and current `%`-based drinks, kept `Managi Roll` health-only, and added missing Midnight drinks such as `Magister's Mead`, `Darkwell Draft`, `Dawnmosa`, `Sunwell Shot`, and `Dragonhawk Flight`.
+- Economy (Craft Shopper): Fixed an intermittent error while tracking recipe reagents where some profession reagent slots could resolve without a valid item ID and crash the shopping-list rebuild.
+- Economy (Craft Shopper): Fixed reagent-quality selection for tracked profession recipes after Blizzard's reagent-tier reduction. Craft Shopper now uses the highest available reagent quality instead of falling back to the lowest tier when only `min` / `max` qualities exist.
+- Experience Bar: Fixed rested text values being capped to the XP remaining in the current level. Text modes now show the real banked rested XP from `GetXPExhaustion()`, while the overlay remains limited to the current level segment.
+- Food Reminder: Fixed the mage-food leave button appearing in non-follower LFG dungeons. It now only shows inside follower dungeons.
+- GCD Bar / SharedMedia: Fixed a login/reload issue where the bar could appear empty because late SharedMedia statusbar/border registrations were not reapplied to the frame.
+- Group Frames (Arena / Skirmish): Fixed arena/skirmish matches using EQoL raid-style group frames instead of EQoL party frames when party frames should be shown.
+- Group Frames (Aura Tooltip Anchors): Fixed inconsistent party/healer-buff aura tooltip positioning so aura tooltips now follow the same Edit Mode tooltip anchor behavior as the unit tooltip instead of mixing HUD-anchor and icon-anchor placement.
+- Group Frames (Health): Fixed party/raid health values sometimes getting stuck on incorrect HP after zoning or other group-state changes.
+- Group Frames (Health / Absorb): Fixed stale absorb overlays on shield refreshes where a new absorb could be applied before the previous one fully expired, causing party/raid frames to stop updating the absorb bar until a later change.
+- Group Frames (Localization): Fixed multiple visible Group Frame settings labels and editor action buttons not using Aura locale keys, and added payload entries for all supported locales.
+- Group Frames (Party Auras / Tooltips): Fixed dungeon tooltip flicker caused by party-frame aura updates repeatedly toggling aura-button mouse state while hovered, which could also disrupt other visible tooltips that shared the global `GameTooltip`.
+- Ignore List: Fixed a Retail secret-value error while scanning party/raid members for ignored players.
+- Instant Messenger (Whisper Focus): Unified conversation focusing when opening whispers from the chat edit box or outgoing whisper events. Battle.net whispers now consistently focus the correct conversation tab.
+- Item Upgrades: Fixed upgrade indicators and upgrade-only checks suggesting off-armor-type gear (for example Cloth on Leather classes). Bag, merchant, and loot-toast upgrade checks now respect the current spec's actual armor proficiency.
+- Items / Inventory (Bag Indicators): Fixed bag upgrade arrows not showing unless `Item level` was also enabled. Upgrade arrows on Blizzard bag frames now refresh independently from the bag item-level text.
+- Minimap Button Bin: Fixed `GatherMatePin*` minimap pins being treated as minimap buttons, so they no longer appear in the Button Sink or its exclude list.
+- Minimap Button Bin: Fixed `PlumberLandingPageMinimapButton` being collected into the Button Sink. The Plumber landing-page minimap button is now permanently excluded.
+- Mythic+ (Party Keystone): Fixed an issue where opening the party keystone panel could trigger an error instead of showing the entries correctly.
+- Resource Bars: Newly auto-enabled bars for fresh characters/specs no longer spawn on top of each other on first initialization; default anchors now stack vertically from the start.
+- Resource Bars (Essence): Fixed Evoker Essence `Separated offset` behavior so the option no longer only inserts spacing into the legacy essence layout and instead uses the proper segmented renderer.
+- Resource Bars (Gradient / Edit Mode): Fixed a Retail Lua error when switching from specs without resource bars to specs with them, especially on fresh characters. Gradient refreshes now skip protected/invalid bar colors instead of crashing when opening, moving, or configuring the bar.
+- Resource Bars (Health / Absorb): Fixed vertical absorb rendering on health bars so the absorb segment now follows the bar orientation correctly instead of appearing as a horizontal strip across the bar.
+- Resource Bars (Threshold Colors / Max Color): Fixed percent-based secret/curve resource bars (for example Fury) so `Use max color` no longer suppresses `Threshold colors`. Threshold colors now evaluate through a step color curve for protected percentage values, while `Max color` still applies cleanly at full resource.
+- Resource Bars (Vertical Orientation): Fixed a bug where vertical bars could revert to horizontal sizing after being moved in Edit Mode because stale layout width/height values were written back into the bar config.
+- Square Minimap Stats (Time): Fixed the minimap time text ignoring `Use 24-hour format` when switching to 12-hour mode. The cached render config now preserves disabled/default-on boolean values correctly, so the time display updates to the selected format.
+- Sound: Fixed mute selections for direct sound groups so they are reapplied correctly after login or `/reload`.
+- Unit Frames (Absorb Glow): Fixed absorb glow placement and clipping for reverse/overflow layouts. The glow is now anchored to the health-frame edge while being clipped to the health fill region.
+- Unit Frames (Player / Target / Focus / Dispel Indicator): Fixed several follow-up issues in the new single-frame dispel indicator implementation, including wrong locale placement, a Blizzard overlay-orientation error on custom unit frames, stale clears on target/focus swaps, and target/focus indicators appearing on hostile units instead of friendly units only.
 
 ### ❌ Removed
 
-- Visibility: Removed "Player health below 100%" rule for Action Bars/Cooldown Viewer because secret alpha values can leak into other addons and trigger comparison errors/taint (e.g. ActionBarLabels).
-
-### 🐛 Fixed
-
-- Mover: MailFrame/SendMail and Open Mail are now movable.
-- Cooldown Panels: Spell usable checks are now evaluated correctly.
-- Cooldown Panels: Overlay glow now resolves override spell IDs (talent replacements) correctly.
-- UF Plus: Cast bar icons now fade with the interrupt animation for target/focus enemies.
-- World Map: Teleport panel tab no longer overlaps other map tabs when WorldQuestTab is enabled.
-- Combat Logging: Switched to advance api because of an issue
-
----
-
-## [7.7.2] - 2026-01-27
-
-### 🐛 Fixed
-
-- Cooldown Panels: Range checks now get enabled for newly added spells so range overlay updates reliably.
-- Cooldown Panels: "Show stack count" now uses ActionBar display counts (updates on SPELL_UPDATE_USES), supporting secret stacks.
-
----
-
-## [7.7.1] - 2026-01-27
-
-### 🐛 Fixed
-
-- Resource Bars: Class color was not working on some classes
-
----
-
-## [7.7.0] - 2026-01-25
-
-### ✨ Added
-
-- Mount Keybinding: Option to disable shifting into Travel/Cat Form while mounted for druids using random mount.
-- Cooldown Viewer: Separate fade amount slider for “Show when” visibility rules.
-- Cooldown Panels: Edit Mode sliders for in-combat and out-of-combat opacity.
-- Cooldown Panels: Panel-level keybind display settings in Edit Mode (enable, anchor, offsets, font).
-- Cooldown Panels: Growth point option to center icon rows/columns.
-- Cooldown Panels: Spell activation overlay glows now shown on matching entries.
-- Cooldown Panels: Optional range overlay with customizable color (spell range checks).
-- Cooldown Panels: Optional power check tint when a spell is unusable due to insufficient resources.
-- Cooldown Panels: Panel spec filter (show only for specific specs).
-- Cooldown Panels: Power tint color can be customized.
-- Cooldown Panels: Added /ecd slash command to open the editor (if the command is free).
-- GCD Bar: Styling options (background, border, progress mode, fill direction, border offset; reverse fill fix).
-- UF Plus: Absorb and heal absorb overlay height option capping at max health height
-- UF Plus: Highlight dispellable debuffs option for aura icons.
-- UF Plus: Aura cooldown text can be toggled separately for buffs and debuffs.
-- UF Plus: Aura cooldown text size can be set separately for buffs and debuffs.
-- UF Plus: Aura stack size can be set separately for buffs and debuffs.
-- Resource Bars: Gradient tint controls (start/end) for bar fills.
-- Resource Bars: Rune cooldown text font/size controls and customizable cooldown color.
-- Resource Bars: Percent rounding option for percent text (round to nearest/down).
-- Resource Bars: Optional extended Stagger colors with high/extreme thresholds.
-- Action Tracker: Optional “time since last action” text under icons.
-- Action Tracker: Masque skinning support for tracker icons.
-- Trade Log: Trade history line now shows colorized item names per side (You/Other).
-- Trade Log: Removed “Trade” from trade history preview.
-- Settings: Optional slash commands for Edit Mode (/em, /edit, /editmode) and Quick Keybind Mode (/kb).
-- Settings: Optional /pull slash command for the Blizzard pull countdown (skips if claimed).
-- Settings: Moved slash command toggles to General → UI Utilities.
-- Questing: Optional modifier requirement for quest automation (accept/complete).
-- Mouse Ring: Combat-only color/size override and optional extra combat ring overlay.
-- Sound: Personal crafting orders now have extra sound options for New/Removed orders (fires only on changes).
-- Shared Media: 2 new voices for crafting orders (Crafting Order - New, Crafting Order - Canceled).
-- Visibility: Added player casting/mounted/in-group rules plus skyriding show/hide and player health < 100% support for action bars/cooldown viewer.
-- Mover: Ready Check frame is now movable.
-
-### 🔁 Changed
-
-- Resource Bars: Druid Treant form no longer listed in form filters (mapped to Humanoid)
-- Minimap: Only re-show hidden elements if EnhanceQoL hid them (avoids overriding other addons)
-
-### 🐛 Fixed
-
-- Cooldown Panel glow wasn't working correctly in restricted environment
-- Cooldown Panels: Growth point alignment now uses left/center/right start points to keep the edit mode overlay aligned
-- Cooldown Panels: Track override spell IDs so talent-based replacements update correctly
-- Cooldown Panels: Item uses/charge count now tracked correctly (includeUses)
-- Hide Raid Tools: Only hook CompactRaidFrameManager when setting is enabled and avoid protected Hide in combat (alpha fallback)
-- Data Panels: Reflow inline texture widths on UI scale changes to prevent squished text
-- Resource Bars: Druid forms missed Tree of Life
-- Enchant checks: Keep legacy required slots until Midnight rules apply (level 81+)
-- Health Macro: Added Custom Spells dropdown hint to clarify selection removes entries and field stays blank
-- Unit Frames: Rightclicking a Unit Frame in restricted environment with NPC ID option enabled
-
----
-
-## [7.6.0] - 2026-01-24
-
-### ✨ Added
-
-- Quest Tracker: Minimized '+' anchor now supports bottom corners properly.
-- Cooldown Panels: Item entries can show charges using item uses.
-- DataPanels: Bag Space stream with icon toggle and Free/Max or Free display.
-- DataPanels: Hearthstone stream showing bind location with optional icon.
-- UF Plus: Detached power bar can use a custom strata.
-- UF Plus: Optional handling for empty power bars (max 0) when power is detached.
-- UF Plus: Added Heal Absorb Bar options (texture, color, sample, reverse fill) for anti-heal displays.
-- UF Plus: Absorb Bar to boss frames
-- Cooldown Viewer: Optional /cdm and /wa slash commands to open settings.
-- DataPanels: Combat time stream with optional boss timer (stacked or inline).
-- World Map: Coordinate updates can run faster (down to 0.01s) and cursor coords hide off-map.
-- Mount Keybinding: Druid random mount now chooses Travel Form outdoors and Cat Form indoors when moving.
-
-### 🐛 Fixed
-
-- Action Tracker: Ignore list updated for Spark of Madness and alchemy/cooking DNT casts.
-- Mythic+: Party keystone list now includes your own key during prepatch (uses player expansion max level).
-- Mythic+: Dungeon portal UI now ignores restriction type 4 (matching world map behavior).
-- Mythic+: World map teleport panel now opens correctly from the collapsed map state.
-- Cooldown Viewer: Druid Travel Form detection now supports dynamic form order (including Flight Form variants).
-- Resource Bars: Max height increased to support vertical layouts.
-- UF Plus: Debuff border colors now use the modern dispel color API (DebuffTypeColor removed).
-- World Marker Cycle: Sometimes not working for some users
-- Mount Keybinding: Only Druids should cancel their respective form now
-- Tooltips: Secret error on inspect in restricted environment
-- Money Stream: Missed to add the remove dropdown for characters
-- Resource Bars: Void Metamorphosis now respects Soul Glutton (max 35) and Collapsing Star (max 30)
-
----
-
-## [7.5.0] - 2026-01-23
-
-### ✨ Added
-
-- Cooldown Panels: Slot entries can be shown even without cooldowns (equipped items).
-
-### 🐛 Fixed
-
-- Mover: Inspect Frame wasn't movable
-- UF Plus: Dimensius P3 Boss frame wasn't reappearing
-- Cooldown Panels: Some spells where not shown
-- Cooldown Panels: Masque icons now size correctly when adding new entries (no reload needed).
-- XP/Rep Bar: Resizing no longer flips the bar or distorts textures (rested overlay/tick aligned).
-- Mount keybinds now auto-cancel Druid shapeshift forms before summoning auction/repair/random mounts.
-- Action Bars: Full out-of-range overlay no longer disappears on button mouseover.
-- Resource Bars: Maelstrom Weapon separator was missing
-- Resource Bars: Maelstrom Weapon bar was fixed to 5 and overcap now either 5 stack bar with overcap or 10 stack bar
-
----
-
-## [7.4.0] - 2026-01-22
-
-### ✨ Added
-
-- DataPanels: Stream gap slider per panel.
-- DataPanels: Time stream left-click opens the Time Manager (stopwatch/alarm).
-- Combat text: +Combat/-Combat indicator with Edit Mode settings (duration, font, size, color).
-- UF Plus: Aura cooldown text size slider.
-- UF Plus: Masque for Buff/Debuff
-- Resource Bars: Added "Use short numbers" toggle for text to control AbbreviateNumbers usage.
-- Cooldown Panels: New Cooldown Manager editor to build panels and add spells/items/slots with per-entry options (cooldown text, charges, stacks, glow, sound, item count).
-- Cooldown Panels: Anchor to Player/Target (auto-uses UF if enabled) and some external unit frames.
-- Cooldown Panels: Editor keybind and saved editor window position.
-
-### 🐛 Fixed
-
-- Action Tracker: Ignore list updated for recent profession/cooking casts and arachnophobia.
-- Buff Tracker: Avoid secret-value table indexing when resolving pending aura spell IDs.
-- UF Plus: Castbar icon no longer renders behind the castbar.
-
----
-
-## [7.3.1] - 2026-01-21
-
-### 🐛 Fixed
-
-- Tooltip: Guard against secret values when scanning unit tooltip lines (prevents combat mouseover errors).
-- Action Tracker: No longer misses the first cast when enabled after login.
-- Resource Bars: Max color changes now rebuild the Midnight curve immediately.
-
----
-
-## [7.3.0] - 2026-01-21
-
-### ⏰ Temporarily disabled
-
-- Money tracker in bags still has a tooltip error (secret related) in latest retail version
-- Close all Bags option in restricted Environment (m+ key running) when opening auction house - leads to lua error when opening mailbox afterwards...
-
-### ✨ Added
-
-- Option to hide the "Screen captured" text
-
-### 🐛 Fixed
-
-- Class Resources: Hide toggles now respect UF player frame activation when switching.
-
----
-
-## [7.2.0] - 2026-01-21
-
-### ✨ Added
-
-- Quest Tracker: Option to remember collapsed/expanded state across login/reload.
-- UF Plus: Option to use Edit Mode tooltip position for unit frames.
-- Resource Bars: Threshold lines can use absolute values.
-
-### 🐛 Fixed
-
-- UF Plus: Combined aura layout no longer errors on secret auras.
-
----
-
-## [7.1.3] - 2026-01-20
-
-### 🐛 Fixed
-
-- DataPanels: Background and border now respect in/out-of-combat opacity.
-- Resource Bars: Demon Hunter spec 3 now uses Void Metamorphosis as the main resource.
-- Resource Bars: Void Metamorphosis default color now matches Blizzard UI.
-
----
-
-## [7.1.2] - 2026-01-20
-
-### 🐛 Fixed
-
-- Single UF profile import wasn't changing x/y position of UF frames
-
----
-
-## [7.1.1] - 2026-01-20
-
-### 🐛 Fixed
-
-- Bug when entering Edit Mode while in combat
-- Fixed Action Tracker showing passive effects of spells
-- Profiles import doesn't apply UF locations
-
----
-
-## [7.1.0] - 2026-01-20
-
-### ✨ Added
-
-- DataPanels: Pet Tracker stream with customizable text color/size and optional blinking when a pet spec has no active pet. Checks for Frost Mage, Hunter, Warlock, Unholy DK and respects needed talents.
-- DataPanels: Edit Mode click-through toggle to make panels ignore mouse input.
-- DataPanels: Edit Mode font selection per panel + tooltip toggle.
-- DataPanels: Content alignment option (left/center/right) in Edit Mode.
-- DataPanels: Mail notification stream with minimap mail icon and tooltip senders.
-- Sound: Additional sounds mapping per event with a per-event dropdown (extra sounds toggle).
-- Combat & Dungeons: Auto combat logging in instances with per-instance + difficulty rules.
-- Inventory: Bag sort and loot order controls (left-to-right or right-to-left).
-- Inventory: Enhanced rarity glow for bags and the character frame.
-- Mounts: New keybind actions for Random, Repair, and Auction House mounts with an option to use all mounts for Random.
-- Action Bars: Custom action button border selection (including SharedMedia) with edge size + padding controls.
-- Action Bars: Charge/stack count font override (font, size, outline).
-- UF Plus: Custom class colors for unit frames.
-- UF Plus: Secondary/tertiary delimiter options for health/power texts.
-- UF Plus: Status line option to show elite/rare/rareelite icons on non-player frames.
-- UF Plus: Option to hide elite/rare text indicators when the classification icon is enabled.
-- UF Plus: Shaman Maelstrom Weapon class resource bar with animated swirl/proc visuals (respects UF Player + Class Resource settings).
-- Inventory: Midnight Season 1 catalyst charge display on the character frame.
-- Gear & Upgrades: Gem Helper tracker under the character frame (shows equipped gem types and missing highlights).
-- Gear & Upgrades: Character stat formatting option to show rating + percent for secondary stats.
-- Food: Added Midnight drinks and mana potions.
-
-### ⚠️ Warning
-
-- **Action Bars: "Button growth" (Modify Action Bar anchor) can cause protected action errors when switching specs or opening Edit Mode.**
-
-### 🔄 Changed
-
-- Minimap Button Bin: Buttons are now sorted alphabetically by default.
-- DataPanels: Talents stream defaults to a grey "Talents:" prefix.
-- Resource Bars: Bar/Absorb texture dropdowns now show previews.
-- Vendors: Auto-repair now prints a message when repairs are paid from the guild bank.
-- Mounts: Random mount keybind now picks a usable random mount based on swimming/flyable/ground conditions.
-- UF Plus: Role/PvP indicator options are now under Unit status.
-
-### 🐛 Fixed
-
-- Resource Bars: Font dropdown selection no longer resets on click (fonts are selectable again).
-- Resource Bars: Class color and max-color overrides now apply correctly to resource bars.
-- Resource Bars: max-color caused lua errors in secret environments
-- DataPanels: Volume stream right-click no longer requires the context menu modifier.
-- Talents: Filter out the internal TalentLoadoutManager placeholder loadout in selection lists.
-- UF Plus: Aura icon tooltips now show for private/secret auras via auraInstanceID fallback.
-- UF Plus: Boss frame name/level color options are available like other frames.
-- UF Plus: Channelled casts no longer show failed when re-pressing the spell mid-channel.
-
-### ❌ Removed
-
-- Removed the CombatMeter module and clean up its saved variables on load.
-- Removed Legion Remix event modules and vendor remnants.
-- Removed Aura: Cast Tracker and Cooldown Notify modules.
-- Removed the Combat & Dungeons/Combat Assist options tree nodes (Aura Tracker is now the root).
-
----
-
-## [7.0.2] - 2026-01-11
-
-### 🐛 Fixed
-
-- Combat meter was shown even if disabled
-
----
-
-## [7.0.1] - 2026-01-11
-
-### 🐛 Fixed
-
-- DataPanels: Edit Mode selection overlay no longer falls behind panels with higher frame strata.
-- Resource Bars: Absorb overfill now caps at max health and no longer errors with secret values.
-
----
-
-## [7.0.0] - 2026-01-10
-
-### ✨ Added
-
-- **UF Plus**
-  - Per-frame aura toggle for Player/Target/Boss frames
-  - Player unit status can show group number.
-  - Additional health/mana text modes (percent-first + level combos).
-  - Health/Power texts now support a center slot with independent offsets.
-  - Unit status text now has its own font size/font/outline controls + Edit Mode sample.
-  - PvP indicator icon for Player/Target/Focus.
-  - Role indicator icon for Player/Target/Focus.
-  - Optional reverse-fill absorb bar in UF.
-  - Cast bars now show interrupted/failed feedback on Target/Focus/Boss.
-  - Cast bars can show Remaining or Elapsed/Total duration text.
-  - Resource bars can show configurable threshold lines (count/color/thickness).
-  - Single opacity slider for UF Plus “Show when” visibility.
-  - Brewmaster: Stagger secondary resource bar with native Stagger colors.
-  - Detached power bar can use its own border (texture/size/offset).
-  - Cast bar icon offset slider for Target/Focus/Boss frames.
-  - Optional border highlight for mouseover/aggro.
-  - Edit Mode shows sample auras for frames with auras enabled.
-  - Tapped mob color indicator for unit frames.
-  - Player castbar can optionally show the cast target.
-  - Castbar change max name width cap
-- **Misc**
-  - Auto-accept summons.
-  - Auto-accept resurrection requests.
-  - Auto-release in PvP/BGs.
-  - Latency stream: configurable ping colors + display mode (FPS/Latency).
-  - Master volume stream: DataPanel popup slider for Sound_MasterVolume.
-  - DataPanels: new Location, Time, and Realm streams (subzone + zone color + time format + time color options).
-  - DataPanels: Item Level stream with per-slot tooltip breakdown.
-  - DataPanels: Mythic+ Rating stream (current season score + run list tooltip).
-  - DataPanels: Equipment Sets stream with left-click swap menu.
-  - DataPanels: Micro Bar stream with a quick-access menu.
-  - DataPanels: text outline/shadow toggles + in/out-of-combat opacity sliders.
-  - DataPanels: Latency + Realm streams now support a text color picker.
-  - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
-  - Added missing Dalaran teleport ring variants.
-- **Chat**
-  - Use arrow keys in the chat input without holding Alt.
-  - Move the chat editbox to the top of the chat window.
-  - Unclamp chat windows from the screen edges.
-  - Hide the combat log tab while docked.
-- **Questing**
-  - Objective Tracker can minimize to the (+) button only.
-- **Minimap**
-  - Hide addon minimap buttons until you mouse over the minimap.
-  - Unclamp the minimap cluster so it can sit closer to the screen edge.
-- **Interface**
-  - Train All button in the trainer window to learn all available skills at once.
-  - Login UI scale preset (applies on login; changing it reloads the UI).
-- **Action Tracker**
-  - Edit Mode-driven tracker for recent player spells with size/spacing/direction/fade and max icon count.
-- **Cooldown Viewer**
-  - Added a “When I have a target” visibility rule in the Cooldown Manager “Show when” options.
-- **GCD Bar (Midnight)**
-  - Edit Mode bar for the global cooldown with size, texture, and color controls.
-- **Mailbox**
-  - Option to remember the last recipient in the Send Mail field until the mailbox closes.
-- **Character Frame**
-  - Item level display can show equipped/average when enabled.
-
-### 🔄 Changed
-
-- **Settings UI**
-  - Root categories now use a consistent expandable section layout.
-  - UI root renamed to Display.
-  - Social now contains Chat settings under the Social root.
-  - System root removed; Sound + Shared Media moved to a dedicated Sound root.
-  - CVar toggles moved into General (Movement & Input + System), Display (Frames), Minimap & Map, Mouse, Action Bars, and Chat.
-  - Economy root reorganized into Repair Options, Vendor Options, Merchant UI, Auction House, Mailbox, and Gold & Tracking.
-  - Vendor module settings moved under Economy as Vendor Options, with Destroy as a subsection.
-  - Quest settings moved to Gameplay with a single Questing accordion.
-  - Frame visibility rules now have a global fade amount slider.
-  - Blizzard frame options now hide when EQoL frames are enabled (Health Text, Castbars, Visibility rules).
-  - Game Menu scaling option removed (Mover handles it instead).
-- **UF Plus / Resource Bars**
-  - Brewmaster no longer shows the unused Mana bar.
-  - Removed the "Gap between bars" unit frame setting (detached power bar replaces this use case).
-  - Export scope now lists only specs with saved settings; “All specs” exports only configured specs.
-  - Profile export/import now supports an “All classes” scope (exports all class specs + global Resource Bar settings; auto-detects All-Classes payloads on import and reloads).
-- **Gear & Upgrades**
-  - Character/Inspect display options now use a multi-select dropdown with per-option tooltips.
-- **Items & Inventory**
-  - Bag display options and item level targets now use multi-select dropdowns with tooltips.
-  - Dialog auto-confirm options are grouped into a single multi-select dropdown.
-- **Vendors & Services**
-  - Section renamed to “Repair Options”.
-  - Craft Shopper moved under Auction House.
-  - Auto-sell junk moved under Vendor Options.
-- **Minimap**
-  - Square minimap layout now anchors the mail icon to the top-left of the minimap.
-  - Button Sink labels and tooltips refreshed for clarity.
-  - Button Sink settings moved under Minimap & Map.
-- **Mythic+ Teleports**
-  - Teleports now collapse to owned items when multiple variants exist (ex. Kirin Tor Rings); tooltip shows `X other variants available`.
-- **Tooltip**
-  - Optional modifier override to show hidden tooltips while in combat/dungeons.
-
-### 🐛 Fixed
-
-- Resource bars hidden kept a wrong health/powervalue on show
-- Unit Frame Strata set at least "High" blocks options window
-- Unit Frames had a shadow color on the texts which made it darker
-- TomTom Minimap Icons are ignored in Button Sink
-- Mover: Dragging no longer overlays the PlayerSpells/Talents UI, so buttons remain clickable.
-- Mover: Disabled entries no longer get touched, and mousewheel scaling no longer blocks MerchantFrame scrolling.
-- Blizzard Boss Frame visibility rule now hides when EQoL Boss Frames are enabled.
-- UF Plus Edit Mode samples now show percent text for Boss frame power/health.
-- Resource Bars: Warlock Soul Shards now show partial values (e.g. 3.4).
-- Resource Bars: Spec toggles now initialize unused specs and profile scope no longer errors on missing data (invalid class IDs or scope table).
-- UF Plus: Level text now refreshes on level-up.
-- DataPanels: Micro Bar missions entry no longer errors when Covenant data is unavailable.
-- Show Leader/Assist Icon on Raidframes expanded the size in edit mode for the selection overlay
-- Bonus Roll frame no longer disappears when loot anchoring is disabled.
-- Edit Mode: imported layouts now reuse the last EQoL layout positions instead of resetting.
-
----
-
-## [6.6.2] – 2025-12-31
-
-### 🐛 Fixed
-
-- Empty currecy streams in datapanels set all others streams hidden
-
----
-
-## [6.6.1] – 2025-12-31
-
-### 🐛 Fixed
-
-- Frame level of absorb on UF Plus was behind the bar
-
----
-
-## [6.6.0] – 2025-12-30
-
-### ✨ Added
-
-- **UF Plus**
-  - New text modes (Max, Max/Percent) + optional percent symbol hiding.
-  - New unit frame text modes (Cur/Max + percent combos) + separator dropdown.
-  - Target aura anchor now supports LEFT/RIGHT + growth direction combinations.
-  - Separate debuff growth direction option for target auras.
-  - Power bar can be detached with custom width + offsets.
-  - Per-frame “Show when” visibility rules for custom unit frames in Edit Mode.
-  - Per-main-power color overrides for power bars (optional desaturation).
-  - Portrait options for unit frames (side + separator).
-  - Portrait separator settings (toggle/size/texture/color).
-  - Portrait option to force a square background.
-  - Border offset control for unit frame textures.
-  - Status line name max width.
-  - Option to hide level display at max level.
-  - Unit status (AFK/DND/offline) indicator with adjustable offsets.
-  - Click Casting Addon support (e.g. Clique).
-
-- **Mover**
-  - Position persistence mode (close / logout / reset).
-  - Reset scale + position to defaults with scale modifier + right-click on a handle.
-
-- **Data Panels**
-  - Difficulty stream now opens a difficulty selection menu on click.
-  - New Mythic+ Key stream with owned-key display.
-  - New Loot Spec stream with quick menu for loot spec + active spec.
-  - New Coordinates stream for persistent player coordinates.
-
-- **Action Bars**
-  - Option to show all action bars when hovering any mouseover bar.
-
-- **Chat / Social / History**
-  - Social: Community chat privacy toggle (Always / Session) + quick eye reveal + overlay hint.
-  - Chat History: optional restore of recent messages on login.
-  - Chat: toggle to bump the default chat window history to 2000 lines.
-  - Chat: optional item level (and equip slot) appended to item links.
-
-- **Bags**
-  - New filter toggle to show upgrades only.
-
-- **Misc**
-  - Black border for square minimap in housing.
-  - Upgrade arrow outline for better visibility on bright icons.
-  - Added 4 missing teleport items for Brawl'gar Arena.
-
-### 🔄 Changed
-
-- **UF Plus / Resource Bars**
-  - Resting indicator settings merged into the Unit status section.
-  - Sample cast previews now auto-show in Edit Mode.
-  - Name/Level font sizes are now configurable independently in the status line.
-  - UF/Resource Bars: texture/font/outline dropdowns now stay open on click (faster SharedMedia browsing).
-  - Castbar backdrop now uses the Blizzard default background when the default texture is selected.
-
-- **Mover**
-  - Merged Quest and Gossip Frame.
-
-- **Data Panels**
-  - Talent stream now offers a loadout switch menu.
-  - Durability stream tooltip expanded with per-item details and repair info.
-
-- **Chat**
-  - Item/currency icon option now applies to all item links.
-  - “DELETE” for the delete-item dialog now also removes focus of the editbox (for addons like DialogKey).
-
-- **Misc**
-  - Upgrade arrow color in inventory changed to green.
-  - Upgrade arrow size increased.
-  - Moved the “Hide Minimap Button” setting to Map Navigation.
-  - `/eqol` now opens the new settings menu; `/eqol combat` and `/eqol legacy` open the legacy options window.
-
-### 🐛 Fixed
-
-- **UF Plus / Resource Bars**
-  - Resource Bars: anchor changes made via dropdowns/sliders now sync to Edit Mode layouts (positions persist after reload).
-  - Focus frame health now updates on unit health events.
-  - Defaults are now properly used as fallback.
-  - Castbar backdrop was shown on reload when nothing was being cast.
-  - Some target auras were missing.
-  - Aura debuff color fixed in Midnight.
-  - Non-interruptible color wasn’t working in Midnight.
-  - Channeling animation for castbar was in the wrong direction.
-  - Font/outline bug fixed.
-  - Click Casting modifiers for Target/Menu weren’t working.
-  - Class resources (e.g., combo points) now stay above unit frame borders after form swaps.
-
-- **Mover**
-  - Fixed overlapping issues with some UI elements.
-
-- **Action Bars**
-  - Fade amount slider now applies instantly without animation (reduces lag).
-  - Mouseover performance: coalesced refreshes and reduced fade restarts.
-
-- **Tooltips / Misc**
-  - Macro-ID on tooltip was wrong.
-  - Aura tooltip was hidden in restricted combat (secret) on party/raid when _Hide friendly tooltip_ was active
-  - Auto container opening now skips while dead to avoid "You can't do that when you're dead" spam.
-  - Mouse ring/trail now share a single runner and lazily allocate trail elements to reduce hot-path work.
-  - Upgrade Arrow in inventory didn't check for "recommended for specialization"
-
----
-
-## [6.5.0] – 2025-12-22
-
-### ✨ Added
-
-- Enhancement Shaman: Maelstrom Weapon resource bar.
-- Devourer resource bar tracking added (disabled until the next WoW beta release; will be enabled then).
-- Combat tooltips now show spell/item/aura IDs with improved secret handling for Midnight.
-- UF Plus: toggle and adjust raid icon size/offset.
-- UF Plus: show Blizzard class resources and manage them.
-- UF Plus: optional cast bar for boss frames.
-- Mover: new module that lets you move and scale frames and keeps their positions saved
-
-### ❌ Removed
-
-- UF Plus: removed "Show sample cast" and "Show sample absorb" toggles (auto in Edit Mode).
-- Removed the option to show party frames in solo content
-- Removed the cloak upgrade button feature
-
-### 🐛 Fixed
-
-- Rune cooldown text now renders above the border to avoid clipping at small bar heights
-- Rune ready colors now refresh reliably after spec or color setting changes
-- Dungeon Journal loot spec icon scale no longer crashes when the saved value is 0
-- Unit Frame status line settings now correctly gate name/level options and combat indicator sub-options
-
----
-
-## [6.4.0] – 2025-12-17
-
-### ✨ Added
-
-- **Chat History**
-  - Saves chat per character and channel (up to 2000 lines per channel/char), with live filters (including Currency), loot-quality multidropdown.
-- Action Bars: optional toggle to hide the Extra Action/Zone Ability artwork and disable mouse input on the Extra Action bar.
-- Collections: optional auto-unwrap for new mounts, pets, and toys (clears fanfare/alerts).
-- UI & Input: toggle to hide the micro menu notification diamonds.
-- Mythic+: keybind to open the World Map Teleport panel directly.
-- Action Bars: out-of-range highlight now tints the action button icon directly (no separate overlay), using your chosen color/alpha.
-- Profiles: export/import the active profile (full overwrite) via copy/paste with reload after import.
-- Added Naaru's Enfold toy (ID 263489) support to teleport/hearthstone handling.
-
-### 🔄 Changed
-
-- Minimap Button Sink frame now uses `DIALOG` strata for its buttons inherit that strata with elevated frame levels so the bin stays above nearby UI elements.
-
-### 🐛 Fixed
-
-- Added missing visibility rule localization (and translations) to eliminate the AceLocale warning when Enhanced Unit Frames locks visibility.
-- Assisted Combat Button Rotation border hide had an error with updating the button
-- Cooldown Viewer visibility now only hooks mouseover/polling when a visibility rule is set, preventing unintended alpha changes.
-- Cooldown Viewer frames no longer lose click-through behavior when using EQOL.
-- UF Plus had an issue with some secret states
-
----
-
-## [6.3.0] – 2025-12-14
-
-### ✨ Added
-
-- World Map: Optional player/cursor coordinates near the title (updates only while the map is open).
-- Unit Frames (Target auras): stack text is now configurable (position, X/Y offsets, font size, and outline).
-- Character frame and bag item level dropdowns now offer explicit TOP/CENTER/BOTTOM and LEFT/RIGHT anchors.
-
-### 🔄 Changed
-
-- TOC Update for midnight 12.0.1
-
-### 🐛 Fixed
-
-- Changed some removed API-calls to the new once introduced in 12.0.1
-- `/way` parser now accepts two coordinate values followed by descriptive text (e.g., `/way 26.90 28.89 Melody 2nd`) without treating the note as extra arguments.
-- Castbar in midnight fixed for UF Plus
-- Tooltip: Item ID display now respects its toggle (no ID when disabled), and item icon size defaults are aligned to 16.
-
----
-
-## [6.2.0] – 2025-12-11
-
-### Important note
-
-Minimap button behavior has changed:
-
-- Left-click now opens the new options menu.
-- Right-click now offers a shortcut to open the old legacy settings (until Midnight launches; legacy settings will likely be removed in Midnight).
-
-### ✨ Added
-
-- Currency Stream: per-currency shortening option.
-- Button Sink: option to hide the border and/or background.
-- Reputation / XP bar: scaling, width, and height settings.
-- World Marker Cycle:
-  - New keybind to cycle through all world markers.
-  - New keybind to clear all world markers.
-- Action Bars: option to hide action button borders.
-- Action Bars: fade amount slider to control how transparent mouseover-hidden bars become (applies to pet and stance bars as well).
-- Square minimap: new “layout re-anchor” option (on by default) that repositions the minimap, zoom buttons, addon compartment, and difficulty indicator for the square shape.
-- Action Bars: option to hide the Assisted Combat Rotation overlay/glow on buttons.
-- Automatically open the preview window for player housing items.
-- Added _Cypher of Relocation_ and two missing Warlords teleports.
-- SharedMedia: 4 new borders and 4 new status bar textures.
-- Cooldown Manager: per-viewer **“Show when”** multi-select (in combat, while mounted / not mounted, on mouseover) for Essential / Utility / Buff Bar / Buff Icon viewers, with Edit-Mode-friendly fading.
-- Minimap Button Sink: configurable flyout direction (auto or specific edge/corner) with a screen-safe fallback.
-- Unit Frames (Player / Target / ToT / Pet / Focus / Boss):
-  - Custom frames with Edit Mode controls for size, strata/level, borders, health/power bars (colors, fonts, textures, text formats), cast bars, and status line options.
-  - Target auras: anchor/offset controls and an optional separate debuff anchor.
-  - Boss frames: container anchor, growth direction, and spacing controls.
-  - New **Settings** group with a copy dropdown + confirmation popup to duplicate another frame’s settings while keeping your current position and enable state.
-- Resource Bars: health bar absorb configuration (enable/disable, custom color, custom texture, sample preview).
-- Tooltip: item icon toggle with configurable size for item tooltips (icon inline before the item name).
-- Tooltip: optional guild name line (with configurable color) on unit tooltips.
-- Tooltip: scale slider to resize tooltips.
-- Tooltip: optional guild rank line (with configurable color) on unit tooltips.
-- Tooltip: optional hide-faction / PvP lines on unit tooltips.
-- Tooltip: spell tooltips can show the spell icon inline (new toggle; uses the tooltip icon size setting).
-- Housing décor items are now shown in **Container Action** to quickly open them.
-
-### 🔄 Changed
-
-- **Show leader icon on raid-style party frames** now also shows leader and assist icons in raids.
-- All features that will be part of Midnight have been moved into the Blizzard Options menu.
-
-### ❌ Removed
-
-- Old / unused libraries.
-
-### 🐛 Fixed
-
-- _Enhance Ignore List_ frame strata was set too high.
-- Range coloring on action bars now clears correctly when your bar switches (mounts / stance / override).
-
----
-
-## [6.1.0] – 2025-11-20
-
-### ✨ Added
-
-- Actionbar and Frame fading if you choose to hide it
-- PlayerFrame
-  - Show when I target something
-  - New visibility rule: “Always hide in party/raid” (overrides other rules while grouped; mouseover can still reveal)
-- Quest Tracker
-  - Optional quest counter beneath the tracker header, showing `current/max` with configurable offsets
-- Resource Bars
-  - Optional auto-hide while mounted or inside vehicles, reacting instantly to mounting/vehicle events
-- Sync the width of your resource bars with the relative frame
-- Missing Mythic Keystone id for Keystone helper
-
-### ⏰ Temporarily disabled
-
-- Show Party frame in solo content, this break in group content with secrets in midnight beta
-
-### ❌ Removed
-
-- Hide raid frame buffs (something changed as this now throws error in retail too)
-
-### 🐛 Fixed
-
-- Error: attempt to perform indexed assignment on field 'moneyTracker'
-- Guard against ChatIM and Ignore feature in restricted content (Raid/M+) for midnight because of secret values
-- Resource Bars: Druid form-specific visibility now uses a secure state driver (no more tug-of-war with the hide rules), and disabling all visibility rules no longer forces redundant bar rebuilds
-- Resource Bars: The module now fully unregisters its visibility drivers when turned off, and “Hide while mounted” also suppresses bars in Travel/Stag form for Druids
-- BR Tracker working in m+/raid now
-- World Map Dungeon Teleports fixed in m+/raid
-- Resource Bars: Health bar now has absorb configuration (enable/disable, custom color, custom texture, sample preview)
-- Loot Spec Quick Switcher: Prevents reselecting the already active spec on right-click (no more pointless progress bar)
-- Tooltip: Inline spell icon no longer requires the "Show Spell Icon ID" toggle
-
----
-
-## [6.0.0] – 2025-11-15
-
-## Midnight Beta – Addon Status
-
-Because of Blizzard’s new addon API restrictions in **Midnight**, some EQoL features have to behave differently in combat than before.  
-Here’s what currently works, what’s limited, and what’s turned off in the Midnight beta.
-
-### ✨ Added
-
-- Dungeon teleports and talent reminder for midnight dungeon
-- **Visibility Hub** (UI → Action Bar) lets you pick any Blizzard action bar or frame, then mix-and-match mouseover, combat, and the new “Player health below 100%” triggers with a single dropdown workflow. Action bars still expose their anchor/keybind extras when selected.
-- Action bars gained a dedicated “While skyriding” visibility rule so you can force a bar (e.g., Action Bar 1) to appear when using Skyriding/Dragonriding abilities.
-- Legion Remix achievements can now list their reward items directly in the missing-items tooltip, complete with item-quality coloring.
-- Resource Bars can now anchor to the Essential/Utility cooldown viewers, both buff trackers, and all default Blizzard action bars (Main + MultiBars) for tighter layouts without custom macros.
-- Health bars gained a “Use class color” toggle alongside the existing custom-color controls so you can instantly match your class tint without extra configuration.
-- Resource Bars now have an optional “Hide out of combat” toggle that drives the frame visibility via a secure state driver, so the bars stay hidden without tripping combat lockdown.
-- Adjust the columns per row in **Button Sink**
-
-### 🔄 Changed
-
-- **Aura Tracker**
-  - In **combat**, almost all auras are now “hidden” from addons by Blizzard.  
-    → Practically **no auras can be iterated in combat** anymore.  
-    → Aura checks and updates happen **after combat**, when the restrictions are lifted.
-  - **Out of combat**, new auras are scanned and displayed as usual.
-  - **Resource bars**
-    - Fully **Midnight-compatible**.
-- Unit frame visibility now uses the same scenario model as action bars, enabling multiple states per frame while keeping legacy “always hide” support.
-- Health-triggered frame fades only register the relevant unit events when a frame actually uses that rule, and updates are throttled to avoid `UNIT_HEALTH_FREQUENT` spam.
-
-### ⏰ Temporarily disabled
-
-These features are turned off **only for the Midnight beta** until there’s a safe way to re-implement them:
-
-- **Tooltip enhancements**
-  - Actually all stuff doing anything like adding data to the tooltip is disabled, as of a bug in midnight beta
-- **Buff hiding on raid frames** in Midnight beta (disabled until a working solution is found)
-- **Vendor module** tooltip information
-- Changing the **max color** for power/resource bars
-- The **“Smooth bars”** option is temporarily disabled. Blizzard is adding a built-in smoothing feature, which EQoL will use once it’s available.
-- Account money frame feature (due to tooltip-handling bugs)
-
-### ❌ Removed (Midnight beta)
-
-These features are currently removed in the Midnight beta because of API changes or bugs:
-
-- **Inventory**
-  - Cloak Upgrade button (Midnight beta only)
-- **Module:** `CombatMeter`
-- **Mythic+ features**
-  - Auto-marking tank and healer (now requires hardware events / secure input)
-  - Potion tracker
-- **Aura-based features**
-  - Cast tracker
-  - Cooldown notify
-
-### 💡 Side note
-
-- The **trinket cooldown tracking** inside **_Aura Tracker_** still works.
-
-### 🐛 Fixed
-
-- Nameplate **health percentage / absolute values** corrected for Midnight beta
-- Tooltip error when hovering items with the **ignore list** enabled
-- Player frame now correctly shown at **100% health** in Midnight beta
-- Boss frames are now **targetable** again when changing visibility behaviour
-- Error when hovering the **EQoL options menu** fixed
-- Removed `UNIT_HEALTH_FREQUENT` (API is deprecated)
-- Context menu checks for **NPC ID** hardened to avoid errors
-- Health macro combat checks moved into **protected** logic
-- **Healthbar colors** no longer sometimes display the wrong color
-- Keybind shortening leads to invisible text
+- UI (Frames): Removed the `Unclamp Blizzard damage meter` option and its custom unclamp handling to avoid taint issues; Blizzard damage meter windows now use the default screen clamping again.

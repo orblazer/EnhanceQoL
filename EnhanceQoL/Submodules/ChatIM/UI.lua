@@ -18,8 +18,6 @@ local ChatIM = addon.ChatIM
 ChatIM.maxHistoryLines = ChatIM.maxHistoryLines or (addon.db and addon.db["chatIMMaxHistory"]) or 250
 
 local MU = MenuUtil -- global ab 11.0+
--- TODO: Remove BNSendWhisper in 12.0.0
-local BNSendWhisper = BNSendWhisper or C_BattleNet.SendWhisper
 
 local regionTable = { "US", "KR", "EU", "TW", "CN" }
 local regionKey = regionTable[GetCurrentRegion()] or "EU" -- or EU for PTR because that is region 90+
@@ -167,14 +165,46 @@ end
 
 function ChatIM:HookInsertLink()
 	if self.insertLinkHooked then return end
-	hooksecurefunc("ChatEdit_InsertLink", function(link)
+
+	local function tryInsertLink(link)
+		if not link or not ChatIM.enabled then return end
 		local tab = ChatIM.activeTab and ChatIM.tabs[ChatIM.activeTab]
-		if link and tab and tab.edit and tab.edit:HasFocus() then
-			tab.edit:Insert(link)
-			return true
-		end
-	end)
+		if not (tab and tab.edit) then return end
+		if not (ChatIM.widget and ChatIM.widget.frame and ChatIM.widget.frame:IsShown()) then return end
+
+		local hasBlizzardChatFocus = ChatFrameUtil and ChatFrameUtil.GetActiveWindow and ChatFrameUtil.GetActiveWindow()
+		if not tab.edit:HasFocus() and hasBlizzardChatFocus then return end
+
+		tab.edit:Insert(link)
+		tab.edit:SetFocus()
+		return true
+	end
+
+	if ChatFrameUtil and type(ChatFrameUtil.InsertLink) == "function" then
+		hooksecurefunc(ChatFrameUtil, "InsertLink", tryInsertLink)
+	end
 	self.insertLinkHooked = true
+end
+
+local function ensureChatIMFrameData()
+	if not addon.db then addon.db = {} end
+	if type(addon.db.chatIMFrameData) ~= "table" then addon.db.chatIMFrameData = {} end
+	local status = addon.db.chatIMFrameData
+	if type(status.width) ~= "number" then status.width = 400 end
+	if type(status.height) ~= "number" then status.height = 300 end
+	return status
+end
+
+local function saveChatIMFrameData(widgetFrame)
+	local status = ensureChatIMFrameData()
+	if not widgetFrame or not widgetFrame.frame then return end
+	local frame = widgetFrame.frame
+	status.width = frame:GetWidth()
+	status.height = frame:GetHeight()
+	local top = frame:GetTop()
+	local left = frame:GetLeft()
+	if top then status.top = top end
+	if left then status.left = left end
 end
 
 function ChatIM:CreateUI()
@@ -186,15 +216,22 @@ function ChatIM:CreateUI()
 	frame:SetHeight(300)
 	frame:SetLayout("Fill")
 	frame:SetCallback("OnClose", function() ChatIM:HideWindow() end)
-	frame:SetStatusTable(addon.db.chatIMFrameData)
+	frame:SetStatusTable(ensureChatIMFrameData())
 	frame.frame:SetClampedToScreen(true)
 	frame.frame:SetAlpha(0.4)
+	frame.frame:HookScript("OnMouseUp", function() saveChatIMFrameData(frame) end)
+	frame.frame:HookScript("OnSizeChanged", function() saveChatIMFrameData(frame) end)
+	if frame.title then frame.title:HookScript("OnMouseUp", function() saveChatIMFrameData(frame) end) end
+	if frame.sizer_se then frame.sizer_se:HookScript("OnMouseUp", function() saveChatIMFrameData(frame) end) end
+	if frame.sizer_s then frame.sizer_s:HookScript("OnMouseUp", function() saveChatIMFrameData(frame) end) end
+	if frame.sizer_e then frame.sizer_e:HookScript("OnMouseUp", function() saveChatIMFrameData(frame) end) end
 	frame.frame:HookScript("OnEnter", function() ChatIM:UpdateAlpha() end)
 	frame.frame:HookScript("OnLeave", function()
 		C_Timer.After(5, function() ChatIM:UpdateAlpha() end)
 	end)
 	frame.frame:SetFrameStrata("MEDIUM")
 	frame.frame:Hide()
+	saveChatIMFrameData(frame)
 
 	local tabGroup = AceGUI:Create("TabGroup")
 	tabGroup:SetLayout("Fill")
@@ -434,7 +471,7 @@ function ChatIM:CreateTab(sender, isBN, bnetID, battleTag)
 		if txt ~= "" and tgt then
 			local tab = ChatIM.tabs[tgt]
 			if tab and tab.isBN and tab.bnetID then
-				BNSendWhisper(tab.bnetID, txt)
+				C_BattleNet.SendWhisper(tab.bnetID, txt)
 			else
 				C_ChatInfo.SendChatMessage(txt, "WHISPER", nil, tgt)
 			end
@@ -513,15 +550,15 @@ function ChatIM:AddMessage(partner, text, outbound, isBN, bnetID)
 
 	if outbound then
 		if isBN then
-			ChatEdit_SetLastToldTarget(partner, "BN_WHISPER")
+			ChatFrameUtil.SetLastToldTarget(partner, "BN_WHISPER")
 		else
-			ChatEdit_SetLastToldTarget(partner, "WHISPER")
+			ChatFrameUtil.SetLastToldTarget(partner, "WHISPER")
 		end
 	else
 		if isBN then
-			ChatEdit_SetLastTellTarget(partner, "BN_WHISPER")
+			ChatFrameUtil.SetLastTellTarget(partner, "BN_WHISPER")
 		else
-			ChatEdit_SetLastTellTarget(partner, "WHISPER")
+			ChatFrameUtil.SetLastTellTarget(partner, "WHISPER")
 		end
 	end
 
@@ -628,6 +665,49 @@ function ChatIM:UpdateTabLabel(sender)
 	self:RefreshTabCallbacks()
 end
 
+function ChatIM:GetOpenTabs()
+	local entries = {}
+	if not self.tabList then return entries end
+
+	for _, item in ipairs(self.tabList) do
+		local tab = self.tabs and self.tabs[item.value]
+		local baseName = (tab and tab.displayName) or Ambiguate(item.value, "short")
+		table.insert(entries, {
+			value = item.value,
+			label = (tab and tab.label) or item.text or baseName,
+			baseName = baseName,
+			unread = tab and tab.unread or false,
+		})
+	end
+
+	table.sort(entries, function(a, b)
+		if a.unread ~= b.unread then return a.unread end
+		return string.lower(a.baseName or a.label or "") < string.lower(b.baseName or b.label or "")
+	end)
+
+	return entries
+end
+
+function ChatIM:FocusConversation(sender, focusEdit)
+	if not sender then return end
+	self:CreateUI()
+	if not self.tabs or not self.tabs[sender] then return end
+
+	if self.widget and self.widget.frame then
+		UIFrameFlashStop(self.widget.frame)
+		if not self.widget.frame:IsShown() then self:ShowWindow() end
+	end
+
+	if self.tabGroup then self.tabGroup:SelectTab(sender) end
+
+	if focusEdit then
+		C_Timer.After(0, function()
+			local tab = ChatIM.tabs and ChatIM.tabs[sender]
+			if tab and tab.edit and tab.edit:IsShown() then tab.edit:SetFocus() end
+		end)
+	end
+end
+
 function ChatIM:ClearEditFocus()
 	local tab = ChatIM.activeTab and ChatIM.tabs[ChatIM.activeTab]
 	if tab and tab.edit then tab.edit:ClearFocus() end
@@ -717,9 +797,5 @@ function ChatIM:StartWhisper(target, bnetID, accountTag)
 	else
 		self:CreateTab(target)
 	end
-	if self.widget and self.widget.frame and not self.widget.frame:IsShown() then self:ShowWindow() end
-	if not self.tabGroup then return end
-	self.tabGroup:SelectTab(target)
-	local tab = self.tabs[target]
-	-- if tab and tab.edit then tab.edit:SetFocus() end
+	self:FocusConversation(target)
 end

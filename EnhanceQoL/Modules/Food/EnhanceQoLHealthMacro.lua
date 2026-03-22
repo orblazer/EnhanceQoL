@@ -11,11 +11,10 @@ local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_DrinkMacro")
 
 local UnitAffectingCombat = UnitAffectingCombat
 local InCombatLockdown = InCombatLockdown
-local GetItemCooldown = GetItemCooldown
+local GetItemCooldownFn = C_Item.GetItemCooldown
 local GetTime = GetTime
 local GetMacroInfo = GetMacroInfo
 local EditMacro = EditMacro
-local CreateMacro = CreateMacro
 
 local healthMacroName = "EnhanceQoLHealthMacro"
 
@@ -70,26 +69,28 @@ local function GetSpellCooldownSafe(spellId)
 end
 
 local function createMacroIfMissing()
-	if not addon.db.healthMacroEnabled then return end
+	if not addon.db.healthMacroEnabled then return false end
+	if GetMacroInfo(healthMacroName) ~= nil then return true end
 	-- Avoid protected calls during combat lockdown
-	if InCombatLockdown and InCombatLockdown() then return end
-	if GetMacroInfo(healthMacroName) == nil then
-		local macroId = CreateMacro(healthMacroName, "INV_Misc_QuestionMark")
-		if not macroId then
-			print(L["healthMacroLimitReached"] or "Health Macro: Macro limit reached. Please free a slot.")
-			return
-		end
-		-- Prefill with a sensible default
-		local demonicCount = C_Item.GetItemCount(224464, false, false) or 0
-		local normalCount = C_Item.GetItemCount(5512, false, false) or 0
-		local body = "#showtooltip"
-		if demonicCount > 0 then
-			body = "#showtooltip\n/use item:224464"
-		elseif normalCount > 0 then
-			body = "#showtooltip\n/use item:5512"
-		end
-		if not (InCombatLockdown and InCombatLockdown()) then EditMacro(healthMacroName, healthMacroName, nil, body) end
+	if InCombatLockdown and InCombatLockdown() then return false end
+
+	-- Prefill with a sensible default
+	local demonicCount = C_Item.GetItemCount(224464, false, false) or 0
+	local normalCount = C_Item.GetItemCount(5512, false, false) or 0
+	local body = "#showtooltip"
+	if demonicCount > 0 then
+		body = "#showtooltip\n/use item:224464"
+	elseif normalCount > 0 then
+		body = "#showtooltip\n/use item:5512"
 	end
+
+	return addon.functions.EnsureGlobalMacro(
+		healthMacroName,
+		"INV_Misc_QuestionMark",
+		body,
+		"healthMacroLimitReached",
+		L["healthMacroLimitReached"] or "Health Macro: Macro limit reached. Please free a slot."
+	)
 end
 
 local function buildMacroString(item)
@@ -162,7 +163,7 @@ local function cooldownRemaining(entry)
 	if cached then
 		start, duration = cached.start, cached.duration
 	else
-		start, duration = GetItemCooldown(itemID)
+		start, duration = GetItemCooldownFn(itemID)
 		itemCooldownCache[itemID] = { start = start or 0, duration = duration or 0 }
 	end
 	if not start or start == 0 or not duration or duration == 0 then return 0 end
@@ -375,7 +376,7 @@ local function cooldownCheck(force, suppressRebuild)
 		local endsAt
 
 		if entry.kind == "item" then
-			local start, duration, enable = GetItemCooldown(entry.id)
+			local start, duration, enable = GetItemCooldownFn(entry.id)
 			if enable ~= 1 then
 				start, duration = 0, 0
 			end
@@ -596,7 +597,7 @@ local function buildMacro()
 	if key ~= lastMacroKey then
 		-- Final safety check to avoid protected EditMacro during combat lockdown
 		if InCombatLockdown and InCombatLockdown() then return end
-		if not GetMacroInfo(healthMacroName) then createMacroIfMissing() end
+		if not GetMacroInfo(healthMacroName) and not createMacroIfMissing() then return end
 		if GetMacroInfo(healthMacroName) then EditMacro(healthMacroName, healthMacroName, nil, macroBody) end
 		lastMacroKey = key
 	end
@@ -615,7 +616,7 @@ function addon.Health.functions.updateHealthMacro(ignoreCombat, skipAllowedRefre
 		return
 	end
 	if UnitAffectingCombat("player") and ignoreCombat == false then return end
-	createMacroIfMissing()
+	if not createMacroIfMissing() then return end
 	if not skipAllowedRefresh then addon.Health.functions.updateAllowedHealth() end
 	buildMacro()
 end

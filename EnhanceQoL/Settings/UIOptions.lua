@@ -34,6 +34,8 @@ local COOLDOWN_VIEWER_VISIBILITY_MODES = constants.COOLDOWN_VIEWER_VISIBILITY_MO
 		WHILE_NOT_MOUNTED = "WHILE_NOT_MOUNTED",
 		SKYRIDING_ACTIVE = "SKYRIDING_ACTIVE",
 		SKYRIDING_INACTIVE = "SKYRIDING_INACTIVE",
+		FLYING_ACTIVE = "FLYING_ACTIVE",
+		FLYING_INACTIVE = "FLYING_INACTIVE",
 		MOUSEOVER = "MOUSEOVER",
 		PLAYER_HAS_TARGET = "PLAYER_HAS_TARGET",
 		PLAYER_CASTING = "PLAYER_CASTING",
@@ -45,6 +47,23 @@ local wipe = wipe
 local fontOrder = {}
 local borderOrder = {}
 local QUICK_SLOT_BORDER = "Interface\\Buttons\\UI-Quickslot2"
+
+local function getCachedLSMMedia(mediaType)
+	local names = addon.functions and addon.functions.GetLSMMediaNames and addon.functions.GetLSMMediaNames(mediaType)
+	local hash = addon.functions and addon.functions.GetLSMMediaHash and addon.functions.GetLSMMediaHash(mediaType)
+	if type(names) == "table" and type(hash) == "table" then return names, hash end
+	return {}, {}
+end
+
+local function getGlobalFontConfigKey()
+	if addon.functions and addon.functions.GetGlobalFontConfigKey then return addon.functions.GetGlobalFontConfigKey() end
+	return "__EQOL_GLOBAL_FONT__"
+end
+
+local function getGlobalFontConfigLabel()
+	if addon.functions and addon.functions.GetGlobalFontConfigLabel then return addon.functions.GetGlobalFontConfigLabel() end
+	return "Use global font config"
+end
 
 addon.db = addon.db or {}
 addon.db.actionBarHiddenHotkeys = type(addon.db.actionBarHiddenHotkeys) == "table" and addon.db.actionBarHiddenHotkeys or {}
@@ -100,23 +119,28 @@ local function notifyFrameRuleLocked(label)
 	print("|cff00ff98Enhance QoL|r: " .. base)
 end
 
-local function buildFontDropdown()
+local function buildFontDropdown(targetOrder, includeGlobalOption)
 	local map = {
 		[addon.variables.defaultFont] = L["actionBarFontDefault"] or "Blizzard Font",
 	}
-	local LSM = LibStub("LibSharedMedia-3.0", true)
-	if LSM and LSM.HashTable then
-		for name, path in pairs(LSM:HashTable("font") or {}) do
-			if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-		end
+	local globalKey = getGlobalFontConfigKey()
+	if includeGlobalOption ~= false then map[globalKey] = getGlobalFontConfigLabel() end
+	local names, hash = getCachedLSMMedia("font")
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
 	end
 	local list, order = addon.functions.prepareListForDropdown(map)
-	wipe(fontOrder)
-	for i, key in ipairs(order) do
-		fontOrder[i] = key
+	wipe(targetOrder)
+	if includeGlobalOption ~= false and list[globalKey] then targetOrder[#targetOrder + 1] = globalKey end
+	for _, key in ipairs(order) do
+		if key ~= globalKey then targetOrder[#targetOrder + 1] = key end
 	end
 	return list
 end
+
+local function buildOverrideFontDropdown() return buildFontDropdown(fontOrder, true) end
 
 local function buildBorderDropdown()
 	local map = {}
@@ -130,16 +154,11 @@ local function buildBorderDropdown()
 	add("DEFAULT", L["actionBarBorderDefault"] or "Default (Blizzard)")
 	add(QUICK_SLOT_BORDER, L["actionBarBorderQuickslot"] or "Quickslot (Bartender-style)")
 
-	local LSM = LibStub("LibSharedMedia-3.0", true)
-	if LSM and LSM.HashTable then
-		local entries = {}
-		for name, path in pairs(LSM:HashTable("border") or {}) do
-			if type(path) == "string" and path ~= "" then entries[#entries + 1] = { name = tostring(name), path = path } end
-		end
-		table.sort(entries, function(a, b) return a.name < b.name end)
-		for _, entry in ipairs(entries) do
-			add(entry.path, entry.name)
-		end
+	local names, hash = getCachedLSMMedia("border")
+	for i = 1, #names do
+		local name = names[i]
+		local path = hash[name]
+		if type(path) == "string" and path ~= "" then add(path, tostring(name)) end
 	end
 
 	wipe(borderOrder)
@@ -461,6 +480,7 @@ end
 
 local function createLabelControls(category, expandable)
 	addon.functions.SettingsCreateHeadline(category, L["actionBarLabelGroupTitle"] or "Button text", { parentSection = expandable })
+	local globalFontKey = getGlobalFontConfigKey()
 
 	local outlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE" }
 	local outlineOptions = {
@@ -506,13 +526,13 @@ local function createLabelControls(category, expandable)
 	addon.functions.SettingsCreateScrollDropdown(category, {
 		var = "actionBarMacroFontFace",
 		text = L["actionBarMacroFontLabel"] or "Macro name font",
-		listFunc = buildFontDropdown,
+		listFunc = buildOverrideFontDropdown,
 		order = fontOrder,
-		default = addon.variables.defaultFont,
+		default = globalFontKey,
 		get = function()
-			local current = addon.db.actionBarMacroFontFace or addon.variables.defaultFont
-			local list = buildFontDropdown()
-			if not list[current] then current = addon.variables.defaultFont end
+			local current = addon.db.actionBarMacroFontFace or globalFontKey
+			local list = buildOverrideFontDropdown()
+			if not list[current] then current = globalFontKey end
 			return current
 		end,
 		set = function(key)
@@ -571,6 +591,19 @@ local function createLabelControls(category, expandable)
 		parentSection = expandable,
 	})
 
+	addon.functions.SettingsCreateColorPicker(category, {
+		var = "actionBarMacroFontColor",
+		text = L["actionBarMacroFontColor"] or "Macro text color",
+		callback = function()
+			if ActionBarLabels and ActionBarLabels.RefreshAllMacroNameVisibility then ActionBarLabels.RefreshAllMacroNameVisibility() end
+		end,
+		parent = true,
+		element = macroOverride.element,
+		parentCheck = macroParentCheck,
+		colorizeLabel = false,
+		parentSection = expandable,
+	})
+
 	local hotkeyOverride = addon.functions.SettingsCreateCheckbox(category, {
 		var = "actionBarHotkeyFontOverride",
 		text = L["actionBarHotkeyFontOverride"] or "Change keybind font",
@@ -587,13 +620,13 @@ local function createLabelControls(category, expandable)
 	addon.functions.SettingsCreateScrollDropdown(category, {
 		var = "actionBarHotkeyFontFace",
 		text = L["actionBarHotkeyFontLabel"] or "Keybind font",
-		listFunc = buildFontDropdown,
+		listFunc = buildOverrideFontDropdown,
 		order = fontOrder,
-		default = addon.variables.defaultFont,
+		default = globalFontKey,
 		get = function()
-			local current = addon.db.actionBarHotkeyFontFace or addon.variables.defaultFont
-			local list = buildFontDropdown()
-			if not list[current] then current = addon.variables.defaultFont end
+			local current = addon.db.actionBarHotkeyFontFace or globalFontKey
+			local list = buildOverrideFontDropdown()
+			if not list[current] then current = globalFontKey end
 			return current
 		end,
 		set = function(key)
@@ -652,6 +685,19 @@ local function createLabelControls(category, expandable)
 		parentSection = expandable,
 	})
 
+	addon.functions.SettingsCreateColorPicker(category, {
+		var = "actionBarHotkeyFontColor",
+		text = L["actionBarHotkeyFontColor"] or "Keybind text color",
+		callback = function()
+			if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+		end,
+		parent = true,
+		element = hotkeyOverride.element,
+		parentCheck = hotkeyParentCheck,
+		colorizeLabel = false,
+		parentSection = expandable,
+	})
+
 	local countOverride = addon.functions.SettingsCreateCheckbox(category, {
 		var = "actionBarCountFontOverride",
 		text = L["actionBarCountFontOverride"] or "Change charge/stack font",
@@ -667,13 +713,13 @@ local function createLabelControls(category, expandable)
 	addon.functions.SettingsCreateScrollDropdown(category, {
 		var = "actionBarCountFontFace",
 		text = L["actionBarCountFontLabel"] or "Charge/stack font",
-		listFunc = buildFontDropdown,
+		listFunc = buildOverrideFontDropdown,
 		order = fontOrder,
-		default = addon.variables.defaultFont,
+		default = globalFontKey,
 		get = function()
-			local current = addon.db.actionBarCountFontFace or addon.variables.defaultFont
-			local list = buildFontDropdown()
-			if not list[current] then current = addon.variables.defaultFont end
+			local current = addon.db.actionBarCountFontFace or globalFontKey
+			local list = buildOverrideFontDropdown()
+			if not list[current] then current = globalFontKey end
 			return current
 		end,
 		set = function(key)
@@ -726,6 +772,19 @@ local function createLabelControls(category, expandable)
 		parent = true,
 		element = countOverride.element,
 		parentCheck = countParentCheck,
+		parentSection = expandable,
+	})
+
+	addon.functions.SettingsCreateColorPicker(category, {
+		var = "actionBarCountFontColor",
+		text = L["actionBarCountFontColor"] or "Charge/stack text color",
+		callback = function()
+			if ActionBarLabels and ActionBarLabels.RefreshAllCountStyles then ActionBarLabels.RefreshAllCountStyles() end
+		end,
+		parent = true,
+		element = countOverride.element,
+		parentCheck = countParentCheck,
+		colorizeLabel = false,
 		parentSection = expandable,
 	})
 
@@ -841,10 +900,21 @@ local function setFrameRule(info, key, shouldSelect)
 end
 
 local function getFrameRuleOptions(info)
+	local allowedRuleSet
+	if info and type(info.visibilityRules) == "table" then
+		for _, ruleKey in ipairs(info.visibilityRules) do
+			if type(ruleKey) == "string" and ruleKey ~= "" then
+				allowedRuleSet = allowedRuleSet or {}
+				allowedRuleSet[ruleKey] = true
+			end
+		end
+	end
+
 	local options = {}
 	for key, data in pairs(GetVisibilityRuleMetadata() or {}) do
 		local allowed = data.appliesTo and data.appliesTo.frame
 		if allowed and data.unitRequirement and data.unitRequirement ~= info.unitToken then allowed = false end
+		if allowed and allowedRuleSet and not allowedRuleSet[key] then allowed = false end
 		if allowed then table.insert(options, { value = key, text = data.label or key, order = data.order or 999 }) end
 	end
 	table.sort(options, function(a, b)
@@ -871,12 +941,24 @@ local function createCooldownViewerDropdowns(category, expandable)
 			value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE,
 			text = L["cooldownManagerHideSkyriding"] or (L["visibilityRule_hideSkyriding"] or "Hide while skyriding"),
 		},
+		{
+			value = COOLDOWN_VIEWER_VISIBILITY_MODES.FLYING_ACTIVE,
+			text = L["visibilityRule_flying"] or "While flying",
+		},
+		{
+			value = COOLDOWN_VIEWER_VISIBILITY_MODES.FLYING_INACTIVE,
+			text = L["visibilityRule_hideFlying"] or "Hide while flying",
+		},
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING, text = L["cooldownManagerShowCasting"] or "Player is casting" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_IN_GROUP, text = L["cooldownManagerShowGrouped"] or "In party/raid" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.MOUSEOVER, text = L["cooldownManagerShowMouseover"] or "On mouseover" },
 		{
 			value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET,
 			text = L["cooldownManagerShowTarget"] or L["visibilityRule_playerHasTarget"] or "When I have a target",
+		},
+		{
+			value = COOLDOWN_VIEWER_VISIBILITY_MODES.ALWAYS_HIDDEN,
+			text = L["visibilityRule_alwaysHidden"] or "Always hidden",
 		},
 	}
 	local labels = {
@@ -964,6 +1046,8 @@ local function createSpellActivationOverlayDropdown(category, expandable)
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.WHILE_NOT_MOUNTED, text = L["cooldownManagerShowNotMounted"] or "Not mounted" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_ACTIVE, text = L["cooldownManagerShowSkyriding"] or "While skyriding" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.SKYRIDING_INACTIVE, text = L["VisibilityCondNotSkyriding"] or "Not skyriding" },
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.FLYING_ACTIVE, text = L["visibilityRule_flying"] or "While flying" },
+		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.FLYING_INACTIVE, text = L["VisibilityCondNotFlying"] or "Not flying" },
 		{ value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_CASTING, text = L["cooldownManagerShowCasting"] or "Player is casting" },
 		{
 			value = COOLDOWN_VIEWER_VISIBILITY_MODES.PLAYER_HAS_TARGET,
@@ -1127,10 +1211,12 @@ local function createFrameCategory()
 		end,
 		parentSection = expandable,
 	})
+
 end
 
 function addon.functions.initUIOptions()
 	local defaults = (addon.GCDBar and addon.GCDBar.defaults) or {}
+	local xpDefaults = (addon.Aura and addon.Aura.ExperienceBar and addon.Aura.ExperienceBar.defaults) or {}
 	addon.functions.InitDBValue("gcdBarEnabled", false)
 	addon.functions.InitDBValue("gcdBarWidth", defaults.width or 200)
 	addon.functions.InitDBValue("gcdBarHeight", defaults.height or 18)
@@ -1156,13 +1242,71 @@ function addon.functions.initUIOptions()
 
 	if addon.GCDBar and addon.GCDBar.OnSettingChanged then addon.GCDBar:OnSettingChanged(addon.db["gcdBarEnabled"]) end
 
+	addon.functions.InitDBValue("xpBarEnabled", false)
+	addon.functions.InitDBValue("xpBarWidth", xpDefaults.width or 260)
+	addon.functions.InitDBValue("xpBarHeight", xpDefaults.height or 16)
+	addon.functions.InitDBValue("xpBarTexture", xpDefaults.texture or "DEFAULT")
+	addon.functions.InitDBValue("xpBarColor", xpDefaults.color or { r = 0.20, g = 0.65, b = 0.95, a = 1 })
+	addon.functions.InitDBValue("xpBarRestedColor", xpDefaults.restedColor or { r = 0.20, g = 0.85, b = 1.00, a = 1 })
+	addon.functions.InitDBValue("xpBarRestedOverlay", xpDefaults.restedOverlayEnabled ~= false)
+	addon.functions.InitDBValue("xpBarBackgroundEnabled", xpDefaults.bgEnabled == true)
+	addon.functions.InitDBValue("xpBarBackgroundTexture", xpDefaults.bgTexture or "SOLID")
+	addon.functions.InitDBValue("xpBarBackgroundColor", xpDefaults.bgColor or { r = 0, g = 0, b = 0, a = 0.45 })
+	addon.functions.InitDBValue("xpBarBorderEnabled", xpDefaults.borderEnabled == true)
+	addon.functions.InitDBValue("xpBarBorderTexture", xpDefaults.borderTexture or "DEFAULT")
+	addon.functions.InitDBValue("xpBarBorderColor", xpDefaults.borderColor or { r = 0, g = 0, b = 0, a = 0.85 })
+	addon.functions.InitDBValue("xpBarBorderSize", xpDefaults.borderSize or 1)
+	addon.functions.InitDBValue("xpBarBorderOffset", xpDefaults.borderOffset or 0)
+	addon.functions.InitDBValue("xpBarFillDirection", xpDefaults.fillDirection or "LEFT")
+	addon.functions.InitDBValue("xpBarAnchorTarget", xpDefaults.anchorRelativeFrame or xpDefaults.anchorTarget or "UIParent")
+	addon.functions.InitDBValue("xpBarAnchorPoint", xpDefaults.anchorPoint or "CENTER")
+	addon.functions.InitDBValue("xpBarAnchorRelativePoint", xpDefaults.anchorRelativePoint or xpDefaults.anchorPoint or "CENTER")
+	addon.functions.InitDBValue("xpBarAnchorOffsetX", xpDefaults.anchorOffsetX or 0)
+	addon.functions.InitDBValue("xpBarAnchorOffsetY", xpDefaults.anchorOffsetY or -170)
+	addon.functions.InitDBValue("xpBarAnchorMatchWidth", xpDefaults.anchorMatchRelativeWidth == true)
+	addon.functions.InitDBValue("xpBarShowText", xpDefaults.textEnabled ~= false)
+	addon.functions.InitDBValue("xpBarTextMode", xpDefaults.textMode or xpDefaults.textCenterMode or "CURMAXPERCENT")
+	addon.functions.InitDBValue("xpBarTextLeftMode", xpDefaults.textLeftMode or "LEVEL")
+	addon.functions.InitDBValue("xpBarTextCenterMode", xpDefaults.textCenterMode or xpDefaults.textMode or "CURMAXPERCENT")
+	addon.functions.InitDBValue("xpBarTextRightMode", xpDefaults.textRightMode or "PERCENT_RESTED")
+	addon.functions.InitDBValue("xpBarTextSize", xpDefaults.textSize or 11)
+	addon.functions.InitDBValue("xpBarTextFont", xpDefaults.textFont or (addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__"))
+	addon.functions.InitDBValue("xpBarTextOutline", xpDefaults.textOutline or "OUTLINE")
+	addon.functions.InitDBValue("xpBarTextColor", xpDefaults.textColor or { r = 1, g = 1, b = 1, a = 1 })
+	addon.functions.InitDBValue("xpBarTextAbbreviateNumbers", xpDefaults.abbreviateNumbers == true)
+	addon.functions.InitDBValue("xpBarHideInPetBattle", xpDefaults.hideInPetBattle == true)
+	addon.functions.InitDBValue("xpBarHideBlizzardTracking", xpDefaults.hideBlizzardTracking ~= false)
+	if addon.db then addon.db["xpBarDebug"] = nil end
+	if addon.db then addon.db["xpBarDebugLast"] = nil end
+
+	if addon.Aura and addon.Aura.ExperienceBar and addon.Aura.ExperienceBar.OnSettingChanged then addon.Aura.ExperienceBar:OnSettingChanged(addon.db["xpBarEnabled"]) end
+
 	local combatDefaults = (addon.CombatText and addon.CombatText.defaults) or {}
-	local combatFont = combatDefaults.fontFace or (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT
+	local combatAlwaysModeCombatOnly = addon.CombatText and addon.CombatText.ALWAYS_VISIBLE_MODE_COMBAT_ONLY or "COMBAT_ONLY"
+	local combatAlwaysModeStatus = addon.CombatText and addon.CombatText.ALWAYS_VISIBLE_MODE_STATUS or "STATUS"
+	local combatFont = combatDefaults.fontFace or (addon.functions.GetGlobalFontConfigKey and addon.functions.GetGlobalFontConfigKey() or "__EQOL_GLOBAL_FONT__")
+	local function cloneColor(value, fallback)
+		local source = type(value) == "table" and value or fallback
+		source = type(source) == "table" and source or { r = 1, g = 1, b = 1, a = 1 }
+		return {
+			r = source.r or source[1] or 1,
+			g = source.g or source[2] or 1,
+			b = source.b or source[3] or 1,
+			a = source.a or source[4],
+		}
+	end
 	addon.functions.InitDBValue("combatTextEnabled", false)
 	addon.functions.InitDBValue("combatTextDuration", combatDefaults.duration or 3)
+	addon.functions.InitDBValue("combatTextAlwaysVisible", combatDefaults.alwaysVisible == true)
+	local alwaysVisibleMode = combatDefaults.alwaysVisibleMode
+	if alwaysVisibleMode ~= combatAlwaysModeCombatOnly and alwaysVisibleMode ~= combatAlwaysModeStatus then alwaysVisibleMode = combatAlwaysModeStatus end
+	addon.functions.InitDBValue("combatTextAlwaysVisibleMode", alwaysVisibleMode)
 	addon.functions.InitDBValue("combatTextFont", combatFont)
 	addon.functions.InitDBValue("combatTextFontSize", combatDefaults.fontSize or 32)
-	addon.functions.InitDBValue("combatTextColor", combatDefaults.color or { r = 1, g = 1, b = 1, a = 1 })
+	local defaultCombatColor = cloneColor(addon.db["combatTextColor"], combatDefaults.enterColor or combatDefaults.color or { r = 1, g = 1, b = 1, a = 1 })
+	addon.functions.InitDBValue("combatTextColor", cloneColor(defaultCombatColor, defaultCombatColor))
+	addon.functions.InitDBValue("combatTextEnterColor", cloneColor(defaultCombatColor, defaultCombatColor))
+	addon.functions.InitDBValue("combatTextLeaveColor", cloneColor(defaultCombatColor, combatDefaults.leaveColor or defaultCombatColor))
 
 	if addon.CombatText and addon.CombatText.OnSettingChanged then addon.CombatText:OnSettingChanged(addon.db["combatTextEnabled"]) end
 end
@@ -1222,6 +1366,7 @@ local function createCastbarCategory()
 		name = label,
 		expanded = false,
 		colorizeTitle = false,
+		newTagID = "CastbarsAndCooldowns",
 	})
 	addon.SettingsLayout.uiCastbarsExpandable = expandable
 
@@ -1243,6 +1388,24 @@ local function createCastbarCategory()
 		parentSection = expandable,
 	})
 
+	addon.functions.SettingsCreateHeadline(category, L["ExperienceBar"] or "Experience Bar", {
+		parentSection = expandable,
+	})
+	local xpBarEnabled = addon.functions.SettingsCreateCheckbox(category, {
+		var = "xpBarEnabled",
+		text = L["xpBarEnabled"] or "Enable Experience bar",
+		desc = L["xpBarDesc"] or "Shows your experience as a customizable bar.",
+		func = function(value)
+			addon.db["xpBarEnabled"] = value and true or false
+			if addon.Aura and addon.Aura.ExperienceBar and addon.Aura.ExperienceBar.OnSettingChanged then addon.Aura.ExperienceBar:OnSettingChanged(addon.db["xpBarEnabled"]) end
+		end,
+		parentSection = expandable,
+	})
+
+	addon.functions.SettingsCreateText(category, "|cffffd700" .. (L["xpBarEditModeHint"] or "Configure anchor, style, and text in Edit Mode.") .. "|r", {
+		parentSection = expandable,
+	})
+
 	addon.functions.SettingsCreateHeadline(category, L["CombatText"] or "Combat text", {
 		parentSection = expandable,
 	})
@@ -1254,6 +1417,50 @@ local function createCastbarCategory()
 			addon.db["combatTextEnabled"] = value and true or false
 			if addon.CombatText and addon.CombatText.OnSettingChanged then addon.CombatText:OnSettingChanged(addon.db["combatTextEnabled"]) end
 		end,
+		parentSection = expandable,
+	})
+	local combatAlwaysVisible = addon.functions.SettingsCreateCheckbox(category, {
+		var = "combatTextAlwaysVisible",
+		text = L["combatTextAlwaysVisible"] or "Always show combat text",
+		desc = L["combatTextAlwaysVisibleDesc"] or "Keeps the combat text visible until the next combat state change.",
+		func = function(value)
+			addon.db["combatTextAlwaysVisible"] = value and true or false
+			if addon.CombatText then
+				if addon.CombatText.RefreshDisplayMode then
+					addon.CombatText:RefreshDisplayMode()
+				elseif addon.CombatText.RefreshHideTimer then
+					addon.CombatText:RefreshHideTimer()
+				end
+			end
+		end,
+		parentSection = expandable,
+	})
+	local combatAlwaysModeCombatOnly = addon.CombatText and addon.CombatText.ALWAYS_VISIBLE_MODE_COMBAT_ONLY or "COMBAT_ONLY"
+	local combatAlwaysModeStatus = addon.CombatText and addon.CombatText.ALWAYS_VISIBLE_MODE_STATUS or "STATUS"
+	local combatAlwaysModeOptions = {
+		[combatAlwaysModeCombatOnly] = L["combatTextAlwaysVisibleModeCombatOnly"] or "Only while in combat (+Combat)",
+		[combatAlwaysModeStatus] = L["combatTextAlwaysVisibleModeStatus"] or "Always show status (+/-Combat)",
+	}
+	addon.functions.SettingsCreateDropdown(category, {
+		var = "combatTextAlwaysVisibleMode",
+		text = L["combatTextAlwaysVisibleMode"] or "Always-show mode",
+		desc = L["combatTextAlwaysVisibleModeDesc"] or "Choose whether always-show mode is only active in combat, or shows + and - permanently.",
+		list = combatAlwaysModeOptions,
+		order = { combatAlwaysModeCombatOnly, combatAlwaysModeStatus },
+		default = combatAlwaysModeStatus,
+		get = function()
+			local mode = addon.db["combatTextAlwaysVisibleMode"]
+			if mode ~= combatAlwaysModeCombatOnly and mode ~= combatAlwaysModeStatus then mode = combatAlwaysModeStatus end
+			return mode
+		end,
+		set = function(mode)
+			if mode ~= combatAlwaysModeCombatOnly and mode ~= combatAlwaysModeStatus then mode = combatAlwaysModeStatus end
+			addon.db["combatTextAlwaysVisibleMode"] = mode
+			if addon.CombatText and addon.CombatText.RefreshDisplayMode then addon.CombatText:RefreshDisplayMode() end
+		end,
+		parent = true,
+		element = combatAlwaysVisible and combatAlwaysVisible.element,
+		parentCheck = function() return combatAlwaysVisible and combatAlwaysVisible.setting and combatAlwaysVisible.setting:GetValue() == true end,
 		parentSection = expandable,
 	})
 	addon.functions.SettingsCreateText(category, "|cffffd700" .. (L["combatTextEditModeHint"] or "Configure text size, font, color, and position in Edit Mode.") .. "|r", {
@@ -1305,7 +1512,6 @@ local function createCastbarCategory()
 	addon.functions.SettingsCreateHeadline(category, L["CastBars2"], {
 		parentSection = expandable,
 	})
-	--@debug@
 	addon.functions.SettingsCreateCheckbox(category, {
 		var = "useCustomPlayerCastbar",
 		text = L["useCustomPlayerCastbar"] or "Enable castbar",
@@ -1319,7 +1525,6 @@ local function createCastbarCategory()
 		default = false,
 		parentSection = expandable,
 	})
-	--@end-debug@
 	addon.functions.SettingsCreateCheckbox(category, {
 		var = "ShowTargetCastbar",
 		text = L["ShowTargetCastbar"],

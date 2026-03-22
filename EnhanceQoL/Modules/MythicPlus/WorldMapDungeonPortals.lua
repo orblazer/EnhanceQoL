@@ -33,11 +33,11 @@ end
 -- Cache some frequently used API
 local FirstOwnedItemID
 do
-	local GetItemCount = C_Item.GetItemCount
+	local GetItemCountFn = C_Item.GetItemCount
 	function FirstOwnedItemID(itemID)
 		if type(itemID) == "table" then
 			for _, id in ipairs(itemID) do
-				if GetItemCount(id) > 0 then return id end
+				if GetItemCountFn(id) > 0 then return id end
 			end
 			return itemID[1]
 		end
@@ -160,6 +160,125 @@ local function AddVariantTooltipLine(entry)
 	GameTooltip:AddLine(string.format(fmt, entry.variantOtherCount), 0.7, 0.7, 0.7, true)
 end
 
+-- Re-equip support for teleport items that temporarily replace worn gear.
+local pendingReequipSlots = {}
+local pendingReequipSpellIDs = {}
+local pendingReequipExpireAt = 0
+local REEQUIP_TIMEOUT_SECONDS = 60
+
+local function clearTable(tbl)
+	for k in pairs(tbl) do
+		tbl[k] = nil
+	end
+end
+
+local function clearPendingReequipState()
+	clearTable(pendingReequipSlots)
+	clearTable(pendingReequipSpellIDs)
+	pendingReequipExpireAt = 0
+end
+
+local function hasPendingReequip() return next(pendingReequipSlots) ~= nil end
+
+local function queueReequipRestore(slot, equippedItemID, teleportItemID, spellID)
+	if not slot or not teleportItemID then return end
+	if equippedItemID == teleportItemID then return end
+
+	pendingReequipSlots[slot] = {
+		restoreItemID = equippedItemID or 0,
+		teleportItemID = teleportItemID,
+	}
+	if spellID then pendingReequipSpellIDs[spellID] = true end
+	pendingReequipExpireAt = (GetTime and GetTime() or 0) + REEQUIP_TIMEOUT_SECONDS
+end
+
+local function isPendingReequipSpell(spellID) return spellID and pendingReequipSpellIDs[spellID] == true end
+
+local function moveItemFromSlotToBag(slot)
+	if not slot then return end
+	if not (PickupInventoryItem and PutItemInBackpack) then return end
+	PickupInventoryItem(slot)
+	PutItemInBackpack()
+	if ClearCursor then ClearCursor() end
+end
+
+local function tryRestorePendingReequip()
+	if not hasPendingReequip() then return end
+	if InCombatLockdown and InCombatLockdown() then return end
+
+	local now = GetTime and GetTime() or 0
+	if pendingReequipExpireAt > 0 and now > pendingReequipExpireAt then
+		clearPendingReequipState()
+		return
+	end
+
+	for slot, state in pairs(pendingReequipSlots) do
+		local restoreItemID = state and state.restoreItemID or 0
+		local currentID = GetInventoryItemID("player", slot)
+		if restoreItemID > 0 then
+			if currentID ~= restoreItemID then C_Item.EquipItemByName(restoreItemID, slot) end
+		else
+			if currentID and currentID ~= 0 then moveItemFromSlotToBag(slot) end
+		end
+	end
+
+	for slot, state in pairs(pendingReequipSlots) do
+		local restoreItemID = state and state.restoreItemID or 0
+		local currentID = GetInventoryItemID("player", slot)
+		local restored = false
+		if restoreItemID > 0 then
+			restored = (currentID == restoreItemID)
+		else
+			restored = (not currentID or currentID == 0)
+		end
+		if restored then pendingReequipSlots[slot] = nil end
+	end
+
+	if not hasPendingReequip() then clearPendingReequipState() end
+end
+
+local function ConfigureButtonTeleportAction(button, entry)
+	button.itemID = nil
+	button.equipSlot = nil
+	button:SetScript("PreClick", nil)
+
+	if entry.isToy then
+		if entry.isKnown then
+			button:SetAttribute("type1", "macro")
+			button:SetAttribute("macrotext1", "/use item:" .. entry.toyID)
+		end
+	elseif entry.isItem then
+		if entry.isKnown then
+			button.itemID = entry.itemID
+			button.equipSlot = entry.equipSlot
+			button:SetAttribute("type1", "macro")
+			button:SetAttribute("macrotext1", "/use item:" .. entry.itemID)
+			if entry.equipSlot then
+				button:SetScript("PreClick", function(self, mouseButton)
+					if mouseButton and mouseButton ~= "LeftButton" then return end
+					local slot = self.equipSlot
+					local itemID = self.itemID
+					if not slot or not itemID then return end
+					local equippedID = GetInventoryItemID("player", slot)
+					if equippedID ~= itemID then
+						queueReequipRestore(slot, equippedID, itemID, self.entry and self.entry.spellID)
+						self:SetAttribute("type1", "macro")
+						self:SetAttribute("macrotext1", "/equip item:" .. itemID)
+					else
+						self:SetAttribute("type1", "macro")
+						self:SetAttribute("macrotext1", "/use item:" .. itemID)
+					end
+				end)
+			end
+		end
+	else
+		button:SetAttribute("type1", "spell")
+		button:SetAttribute("spell1", entry.spellID)
+		button:SetAttribute("unit", "player")
+		button:SetAttribute("checkselfcast", true)
+	end
+end
+
 -- Open World Map to a mapID and create a user waypoint pin at x,y (0..1)
 local function OpenMapAndCreatePin(mapID, x, y)
 	if not mapID or not x or not y then return end
@@ -186,7 +305,7 @@ end
 local function ApplyCooldownToButton(b)
 	if not b or not b.cooldownFrame or not b.entry then return end
 	local entry = b.entry
-	local startTime, duration, modRate, enabled
+	local startTime, duration, modRate, enabled, durationObj
 	if entry.isToy and entry.toyID then
 		local st, dur, en = C_Item.GetItemCooldown(entry.toyID)
 		startTime, duration, modRate, enabled = st, dur, 1, en
@@ -194,13 +313,12 @@ local function ApplyCooldownToButton(b)
 		local st, dur, en = C_Item.GetItemCooldown(entry.itemID)
 		startTime, duration, modRate, enabled = st, dur, 1, en
 	else
-		local cd = C_Spell.GetSpellCooldown(entry.spellID)
-		if cd then
-			startTime, duration, modRate, enabled = cd.startTime, cd.duration, cd.modRate, cd.isEnabled
-		end
+		durationObj = C_Spell.GetSpellCooldownDuration(entry.spellID)
 	end
 
-	if issecretvalue and issecretvalue(enabled) then
+	if nil ~= durationObj then
+		b.cooldownFrame:SetCooldownFromDurationObject(durationObj)
+	elseif issecretvalue and issecretvalue(enabled) then
 		b.cooldownFrame:SetCooldown(startTime or 0, duration or 0, modRate or 1)
 	elseif enabled and duration and duration > 0 then
 		b.cooldownFrame:SetCooldown(startTime or 0, duration or 0, modRate or 1)
@@ -288,17 +406,16 @@ local function SetBlockerEnabled(enabled)
 	end
 end
 
-local function IsPanelSuppressed()
-	return isRestrictedContent()
-end
+local function IsPanelSuppressed() return isRestrictedContent() end
 
 local function LeaveDisplayModeIfNeeded()
 	if not QuestMapFrame or not QuestMapFrame.GetDisplayMode then return end
 	if QuestMapFrame:GetDisplayMode() ~= DISPLAY_MODE then return end
 	if InCombatLockdown and InCombatLockdown() then return end
 
-	if QuestMapFrame.SetDisplayMode and QuestLogDisplayMode and QuestLogDisplayMode.MapLegend then
-		QuestMapFrame:SetDisplayMode(QuestLogDisplayMode.MapLegend)
+	local questLogDisplayMode = _G.QuestLogDisplayMode
+	if QuestMapFrame.SetDisplayMode and questLogDisplayMode and questLogDisplayMode.MapLegend then
+		QuestMapFrame:SetDisplayMode(questLogDisplayMode.MapLegend)
 		return
 	end
 	if QuestMapFrame.MapLegendTab and QuestMapFrame.MapLegendTab.Click then
@@ -509,38 +626,7 @@ local function CreateSecureSpellButton(parent, entry)
 	b.cooldownFrame = cd
 
 	-- Casting setup (Left click) — mirror compendium logic
-	if entry.isToy then
-		if entry.isKnown then
-			b:SetAttribute("type1", "macro")
-			b:SetAttribute("macrotext1", "/use item:" .. entry.toyID)
-		end
-	elseif entry.isItem then
-		if entry.isKnown then
-			b.itemID = entry.itemID
-			b.equipSlot = entry.equipSlot
-			b:SetAttribute("type1", "macro")
-			b:SetAttribute("macrotext1", "/use item:" .. entry.itemID)
-			if entry.equipSlot then
-				b:SetScript("PreClick", function(self)
-					local slot = self.equipSlot
-					if not slot or not self.itemID then return end
-					local equippedID = GetInventoryItemID("player", slot)
-					if equippedID ~= self.itemID then
-						self:SetAttribute("type1", "macro")
-						self:SetAttribute("macrotext1", "/equip item:" .. self.itemID)
-					else
-						self:SetAttribute("type1", "macro")
-						self:SetAttribute("macrotext1", "/use item:" .. self.itemID)
-					end
-				end)
-			end
-		end
-	else
-		b:SetAttribute("type1", "spell")
-		b:SetAttribute("spell1", entry.spellID)
-		b:SetAttribute("unit", "player")
-		b:SetAttribute("checkselfcast", true)
-	end
+	ConfigureButtonTeleportAction(b, entry)
 
 	-- Favorite toggle after secure click resolves
 	b:RegisterForClicks("AnyDown", "AnyUp")
@@ -645,38 +731,7 @@ local function CreateLegendRowButton(parent, entry, width, height)
 	b:SetHighlightTexture(hl)
 
 	-- Casting setup (Left click) — mirror compendium logic
-	if entry.isToy then
-		if entry.isKnown then
-			b:SetAttribute("type1", "macro")
-			b:SetAttribute("macrotext1", "/use item:" .. entry.toyID)
-		end
-	elseif entry.isItem then
-		if entry.isKnown then
-			b.itemID = entry.itemID
-			b.equipSlot = entry.equipSlot
-			b:SetAttribute("type1", "macro")
-			b:SetAttribute("macrotext1", "/use item:" .. entry.itemID)
-			if entry.equipSlot then
-				b:SetScript("PreClick", function(self)
-					local slot = self.equipSlot
-					if not slot or not self.itemID then return end
-					local equippedID = GetInventoryItemID("player", slot)
-					if equippedID ~= self.itemID then
-						self:SetAttribute("type1", "macro")
-						self:SetAttribute("macrotext1", "/equip item:" .. self.itemID)
-					else
-						self:SetAttribute("type1", "macro")
-						self:SetAttribute("macrotext1", "/use item:" .. self.itemID)
-					end
-				end)
-			end
-		end
-	else
-		b:SetAttribute("type1", "spell")
-		b:SetAttribute("spell1", entry.spellID)
-		b:SetAttribute("unit", "player")
-		b:SetAttribute("checkselfcast", true)
-	end
+	ConfigureButtonTeleportAction(b, entry)
 
 	-- Right click: toggle favorite after secure click resolves
 	b:RegisterForClicks("AnyDown", "AnyUp")
@@ -1153,8 +1208,13 @@ local function setWorldMapTeleportEventsEnabled(enabled)
 	if enabled then
 		if f._eqolEventsRegistered then return end
 		f:RegisterEvent("ADDON_LOADED")
+		f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 		f:RegisterEvent("PLAYER_REGEN_DISABLED")
 		f:RegisterEvent("PLAYER_REGEN_ENABLED")
+		f:RegisterEvent("ZONE_CHANGED")
+		f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+		f:RegisterEvent("ZONE_CHANGED_INDOORS")
+		f:RegisterEvent("LOADING_SCREEN_DISABLED")
 		f:RegisterEvent("SPELLS_CHANGED")
 		f:RegisterEvent("BAG_UPDATE_DELAYED")
 		f:RegisterEvent("TOYS_UPDATED")
@@ -1164,11 +1224,12 @@ local function setWorldMapTeleportEventsEnabled(enabled)
 	else
 		if not f._eqolEventsRegistered then return end
 		f:UnregisterAllEvents()
+		clearPendingReequipState()
 		f._eqolEventsRegistered = false
 	end
 end
 
-local function worldMapEventHandler(self, event, arg1)
+local function worldMapEventHandler(self, event, arg1, arg2, arg3)
 	if not addon.db or not addon.db["teleportsWorldMapEnabled"] then return end
 	if event == "PLAYER_REGEN_DISABLED" then
 		SetCombatScrolling(false)
@@ -1177,7 +1238,8 @@ local function worldMapEventHandler(self, event, arg1)
 		-- Avoid Show/Hide while in combat
 		return
 	elseif event == "PLAYER_REGEN_ENABLED" then
-		if IsPanelSuppressed() then
+		local suppressed = IsPanelSuppressed()
+		if suppressed then
 			ApplySuppressedPanelState()
 		else
 			ApplyNormalPanelState()
@@ -1191,12 +1253,23 @@ local function worldMapEventHandler(self, event, arg1)
 			SafeSetVisible(tabButton, tabButton._eqolPendingVisible)
 			tabButton._eqolPendingVisible = nil
 		end
+		if not suppressed then
+			local modeActive = QuestMapFrame and QuestMapFrame.GetDisplayMode and QuestMapFrame:GetDisplayMode() == DISPLAY_MODE
+			if tabButton then SafeSetVisible(tabButton, true) end
+			if tabButton and tabButton.SetChecked then tabButton:SetChecked(modeActive and true or false) end
+			if panel then SafeSetVisible(panel, modeActive and true or false) end
+		end
 		if f._pendingOpen and not IsPanelSuppressed() then
 			f._pendingOpen = nil
 			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.OpenWorldMapTeleportPanel then addon.MythicPlus.functions.OpenWorldMapTeleportPanel(true) end
 		end
+		if hasPendingReequip() then C_Timer.After(0, tryRestorePendingReequip) end
 		if WorldMapFrame and WorldMapFrame:IsShown() and addon.db and addon.db["teleportsWorldMapEnabled"] then QueuePanelRefresh({ delay = 0, invalidate = true }) end
 		-- fall through to allow refresh if map is visible
+	elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+		if arg1 == "player" and hasPendingReequip() and isPendingReequipSpell(arg3) then C_Timer.After(0, tryRestorePendingReequip) end
+	elseif event == "LOADING_SCREEN_DISABLED" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED_INDOORS" then
+		if hasPendingReequip() then C_Timer.After(0.1, tryRestorePendingReequip) end
 	end
 	if event == "ADDON_LOADED" and arg1 == "Blizzard_WorldMap" then
 		-- Late-load: attach our OnShow hook once the World Map exists

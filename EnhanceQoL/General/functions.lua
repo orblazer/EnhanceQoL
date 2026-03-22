@@ -1,22 +1,362 @@
 local addonName, addon = ...
 
 local AceGUI = LibStub("AceGUI-3.0")
+local SharedMedia = LibStub("LibSharedMedia-3.0", true)
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL")
 
 local GetContainerItemInfo = C_Container.GetContainerItemInfo
-local GetItemInfoInstant = C_Item.GetItemInfoInstant
-local GetItemInfo = C_Item.GetItemInfo
+local GetItemInfoInstantFn = C_Item.GetItemInfoInstant
+local GetItemInfoFn = C_Item.GetItemInfo
 local GetBagItem = C_TooltipInfo.GetBagItem
-local IsEquippableItem = C_Item.IsEquippableItem
-local UnitInParty = UnitInParty
-local UnitInRaid = UnitInRaid
+local IsEquippableItemFn = C_Item.IsEquippableItem
 addon.functions = addon.functions or {}
 
 local UnitHealth, UnitHealthMax = UnitHealth, UnitHealthMax
 local UnitPower, UnitPowerMax = UnitPower, UnitPowerMax
 local UnitHealthPercent = UnitHealthPercent
 local UnitPowerPercent = UnitPowerPercent
+local GLOBAL_FONT_CONFIG_KEY = "__EQOL_GLOBAL_FONT__"
+local GLOBAL_FONT_CONFIG_LABEL = "Use global font config"
+local EMPTY_TABLE = {}
+local LSM_CACHE = {}
+local LSM_DROPDOWN_CACHE = {}
+local upgradeTrackMeta = {
+	explorer = { label = "Explorer", quality = Enum.ItemQuality.Poor, aliases = { "explorer" } },
+	adventurer = { label = "Adventurer", quality = Enum.ItemQuality.Common, aliases = { "adventurer" } },
+	veteran = { labelKey = "upgradeLevelVeteran", quality = Enum.ItemQuality.Uncommon, ids = { 972 }, aliases = { "veteran" } },
+	champion = { labelKey = "upgradeLevelChampion", quality = Enum.ItemQuality.Rare, ids = { 973 }, aliases = { "champion" } },
+	hero = { labelKey = "upgradeLevelHero", quality = Enum.ItemQuality.Epic, ids = { 974 }, aliases = { "hero" } },
+	myth = { labelKey = "upgradeLevelMythic", quality = Enum.ItemQuality.Legendary, ids = { 975 }, aliases = { "myth", "mythic" } },
+}
+local upgradeTrackAliasMap = nil
+local upgradeTrackIDMap = nil
+
+local function trimUpgradeTrackText(text)
+	if type(text) ~= "string" then return nil end
+	text = text:gsub("^%s+", ""):gsub("%s+$", "")
+	if text == "" then return nil end
+	return text
+end
+
+local function getFirstUtf8Char(text)
+	if type(text) ~= "string" or text == "" then return nil end
+	return text:match("[%z\1-\127\194-\244][\128-\191]*")
+end
+
+local function getUpgradeTrackLabelText(info)
+	if not info then return nil end
+	if info.labelKey then return trimUpgradeTrackText(L[info.labelKey]) end
+	return trimUpgradeTrackText(info.label)
+end
+
+local function getUpgradeTrackAliasMap()
+	if upgradeTrackAliasMap then return upgradeTrackAliasMap end
+	upgradeTrackAliasMap = {}
+	for key, info in pairs(upgradeTrackMeta) do
+		upgradeTrackAliasMap[key] = key
+		local localized = getUpgradeTrackLabelText(info)
+		if localized then upgradeTrackAliasMap[string.lower(localized)] = key end
+		if info.aliases then
+			for i = 1, #info.aliases do
+				local alias = trimUpgradeTrackText(info.aliases[i])
+				if alias then upgradeTrackAliasMap[string.lower(alias)] = key end
+			end
+		end
+	end
+	return upgradeTrackAliasMap
+end
+
+local function getUpgradeTrackIDMap()
+	if upgradeTrackIDMap then return upgradeTrackIDMap end
+	upgradeTrackIDMap = {}
+	for key, info in pairs(upgradeTrackMeta) do
+		if info.ids then
+			for i = 1, #info.ids do
+				upgradeTrackIDMap[info.ids[i]] = key
+			end
+		end
+	end
+	return upgradeTrackIDMap
+end
+
+local function getUpgradeTrackCanonicalKey(trackID, trackKey)
+	if type(trackID) == "number" then
+		local canonicalByID = getUpgradeTrackIDMap()[trackID]
+		if canonicalByID then return canonicalByID end
+	end
+	trackKey = trimUpgradeTrackText(trackKey)
+	if trackKey then
+		local canonicalByString = getUpgradeTrackAliasMap()[string.lower(trackKey)]
+		if canonicalByString then return canonicalByString end
+	end
+	return nil
+end
+
+local function normalizeMediaType(mediaType)
+	if type(mediaType) ~= "string" or mediaType == "" then return nil end
+	return string.lower(mediaType)
+end
+
+local function getSharedMedia()
+	if SharedMedia and SharedMedia.HashTable then return SharedMedia end
+	SharedMedia = LibStub("LibSharedMedia-3.0", true)
+	return SharedMedia
+end
+
+local function ensureLSMCache(mediaType)
+	local key = normalizeMediaType(mediaType)
+	if not key then return nil end
+	local cache = LSM_CACHE[key]
+	if not cache then
+		cache = {
+			dirty = true,
+			version = 0,
+			hash = EMPTY_TABLE,
+			names = EMPTY_TABLE,
+			options = EMPTY_TABLE,
+		}
+		LSM_CACHE[key] = cache
+	end
+	return cache, key
+end
+
+local function sortMediaNames(names)
+	table.sort(names, function(a, b)
+		local al = string.lower(a)
+		local bl = string.lower(b)
+		if al == bl then return a < b end
+		return al < bl
+	end)
+end
+
+local function rebuildLSMCache(mediaType)
+	local cache, key = ensureLSMCache(mediaType)
+	if not cache or not key then return nil end
+
+	local lsm = getSharedMedia()
+	local hash = (lsm and lsm.HashTable and lsm:HashTable(key)) or EMPTY_TABLE
+
+	local names = {}
+	for name in pairs(hash or EMPTY_TABLE) do
+		if type(name) == "string" and name ~= "" then names[#names + 1] = name end
+	end
+	sortMediaNames(names)
+
+	local options = {}
+	for i = 1, #names do
+		local name = names[i]
+		options[i] = {
+			value = name,
+			label = name,
+		}
+	end
+
+	cache.hash = hash
+	cache.names = names
+	cache.options = options
+	cache.dirty = false
+	return cache
+end
+
+local function getLSMCache(mediaType)
+	local cache = ensureLSMCache(mediaType)
+	if not cache then return nil end
+	if cache.dirty then cache = rebuildLSMCache(mediaType) end
+	return cache
+end
+
+function addon.functions.InvalidateLSMMediaCache(mediaType)
+	if mediaType == nil then
+		for _, cache in pairs(LSM_CACHE) do
+			cache.dirty = true
+			cache.version = (cache.version or 0) + 1
+		end
+		LSM_DROPDOWN_CACHE = {}
+		return
+	end
+
+	local cache, key = ensureLSMCache(mediaType)
+	if not cache or not key then return end
+	cache.dirty = true
+	cache.version = (cache.version or 0) + 1
+	for cacheKey in pairs(LSM_DROPDOWN_CACHE) do
+		if type(cacheKey) == "string" and cacheKey:find(key .. "|", 1, true) == 1 then LSM_DROPDOWN_CACHE[cacheKey] = nil end
+	end
+end
+
+function addon.functions.GetLSMMediaVersion(mediaType)
+	local cache = ensureLSMCache(mediaType)
+	if not cache then return 0 end
+	return cache.version or 0
+end
+
+function addon.functions.GetLSMMediaHash(mediaType)
+	local cache = getLSMCache(mediaType)
+	return (cache and cache.hash) or EMPTY_TABLE
+end
+
+function addon.functions.GetLSMMediaNames(mediaType)
+	local cache = getLSMCache(mediaType)
+	return (cache and cache.names) or EMPTY_TABLE
+end
+
+function addon.functions.GetLSMMediaOptions(mediaType)
+	local cache = getLSMCache(mediaType)
+	return (cache and cache.options) or EMPTY_TABLE
+end
+
+function addon.functions.GetLSMMediaDropdown(mediaType, includeEmptyOption, emptyLabel)
+	local key = normalizeMediaType(mediaType)
+	if not key then return EMPTY_TABLE, EMPTY_TABLE end
+
+	local version = addon.functions.GetLSMMediaVersion(key)
+	local noneLabel = (type(emptyLabel) == "string" and emptyLabel) or ""
+	local includeEmpty = includeEmptyOption == true
+	local cacheKey = key .. "|" .. (includeEmpty and "1" or "0") .. "|" .. noneLabel
+	local cached = LSM_DROPDOWN_CACHE[cacheKey]
+	if cached and cached.version == version then return cached.list, cached.order end
+
+	local names = addon.functions.GetLSMMediaNames(key)
+	local list = {}
+	local order = {}
+	if includeEmpty then
+		list[""] = noneLabel
+		order[#order + 1] = ""
+	end
+	for i = 1, #names do
+		local name = names[i]
+		list[name] = name
+		order[#order + 1] = name
+	end
+
+	LSM_DROPDOWN_CACHE[cacheKey] = {
+		version = version,
+		list = list,
+		order = order,
+	}
+	return list, order
+end
+
+local function normalizeMediaValue(value)
+	if type(value) ~= "string" or value == "" then return nil end
+	return value
+end
+
+local function isGlobalFontConfigValue(value) return normalizeMediaValue(value) == GLOBAL_FONT_CONFIG_KEY end
+
+function addon.functions.GetGlobalFontConfigKey() return GLOBAL_FONT_CONFIG_KEY end
+
+function addon.functions.GetGlobalFontConfigLabel()
+	if L and L["useGlobalFontConfig"] then return L["useGlobalFontConfig"] end
+	return GLOBAL_FONT_CONFIG_LABEL
+end
+
+function addon.functions.IsGlobalFontConfigValue(value) return isGlobalFontConfigValue(value) end
+
+function addon.functions.GetLocaleDefaultFontFace() return (addon.variables and addon.variables.defaultFont) or STANDARD_TEXT_FONT end
+
+function addon.functions.GetGlobalDefaultFontFace()
+	local localeDefault = addon.functions.GetLocaleDefaultFontFace()
+	local configured = addon.db and addon.db.globalFontFace
+	return addon.functions.ResolveLSMMedia("font", configured, localeDefault, false) or localeDefault
+end
+
+local function defaultFontFace() return addon.functions.GetGlobalDefaultFontFace() end
+
+function addon.functions.ResolveLSMMedia(mediaType, configured, fallback, allowPath)
+	local mediaKind = normalizeMediaValue(mediaType)
+	local fallbackValue = normalizeMediaValue(fallback)
+	local configuredValue = normalizeMediaValue(configured)
+	if isGlobalFontConfigValue(configuredValue) then return fallbackValue end
+	if not configuredValue then return fallbackValue end
+	if configuredValue == fallbackValue then return configuredValue end
+	if not mediaKind then
+		if allowPath ~= false and (configuredValue:find("\\", 1, true) or configuredValue:find("/", 1, true)) then return configuredValue end
+		return fallbackValue
+	end
+	local lsm = getSharedMedia()
+	if lsm then
+		if lsm.IsValid and lsm:IsValid(mediaKind, configuredValue) then
+			local fetched = lsm.Fetch and lsm:Fetch(mediaKind, configuredValue, true)
+			if type(fetched) == "string" and fetched ~= "" then return fetched end
+			return configuredValue
+		end
+		if lsm.HashTable then
+			local hash = lsm:HashTable(mediaKind) or {}
+			local byName = hash[configuredValue]
+			if type(byName) == "string" and byName ~= "" then return byName end
+			for _, path in pairs(hash) do
+				if path == configuredValue then return configuredValue end
+			end
+		end
+	end
+	if allowPath ~= false and (configuredValue:find("\\", 1, true) or configuredValue:find("/", 1, true)) then return configuredValue end
+	return fallbackValue
+end
+
+function addon.functions.ResolveFontFace(configured, fallback)
+	local fallbackFace = normalizeMediaValue(fallback) or defaultFontFace()
+	if isGlobalFontConfigValue(configured) then return fallbackFace end
+	return addon.functions.ResolveLSMMedia("font", configured, fallbackFace, true) or fallbackFace
+end
+
+local PRIVATE_PROFILE_KEYS = {
+	autoWarbandGold = true,
+	autoWarbandGoldTargetGold = true,
+	autoWarbandGoldPerCharacter = true,
+	autoWarbandGoldTargetCharacter = true,
+	autoWarbandGoldIgnoredCharacters = true,
+	autoWarbandGoldWithdraw = true,
+	enableMoneyTracker = true,
+	showOnlyGoldOnMoney = true,
+	moneyTracker = true,
+	warbandGold = true,
+}
+
+function addon.functions.GetPrivateDB()
+	local privateDB = _G.EnhanceQoLDBPrivate
+	if type(privateDB) ~= "table" then
+		privateDB = {}
+		_G.EnhanceQoLDBPrivate = privateDB
+	end
+	addon.privateDB = privateDB
+	return privateDB
+end
+
+function addon.functions.InitPrivateDBValue(key, defaultValue)
+	local privateDB = addon.functions.GetPrivateDB()
+	if privateDB[key] == nil then privateDB[key] = defaultValue end
+end
+
+function addon.functions.IsPrivateProfileKey(key) return PRIVATE_PROFILE_KEYS[key] == true end
+
+function addon.functions.MigratePrivateProfileData(sourceProfile)
+	if type(sourceProfile) ~= "table" then return end
+	local privateDB = addon.functions.GetPrivateDB()
+	for key in pairs(PRIVATE_PROFILE_KEYS) do
+		if privateDB[key] == nil and sourceProfile[key] ~= nil then privateDB[key] = sourceProfile[key] end
+		sourceProfile[key] = nil
+	end
+end
+
+function addon.functions.CleanupPrivateProfileData()
+	local profileDB = _G.EnhanceQoLDB
+	if type(profileDB) ~= "table" then return end
+
+	for key in pairs(PRIVATE_PROFILE_KEYS) do
+		profileDB[key] = nil
+	end
+
+	if type(profileDB.profiles) ~= "table" then return end
+	for _, profile in pairs(profileDB.profiles) do
+		if type(profile) == "table" then
+			for key in pairs(PRIVATE_PROFILE_KEYS) do
+				profile[key] = nil
+			end
+		end
+	end
+end
 
 function addon.functions.InitDBValue(key, defaultValue)
 	if addon.db[key] == nil then addon.db[key] = defaultValue end
@@ -38,66 +378,54 @@ function addon.functions.IsTimerunner()
 	return false
 end
 
-local function canChangeProtectedVisibility(frame)
-	if not frame then return false end
-	if InCombatLockdown and InCombatLockdown() then
-		if frame.IsProtected and frame:IsProtected() then return false end
+local hiddenParent
+
+local function getHiddenParent()
+	if hiddenParent then return hiddenParent end
+	hiddenParent = CreateFrame("Frame")
+	hiddenParent:Hide()
+	return hiddenParent
+end
+
+local function hideFrameLocked(frame)
+	if not frame or frame._eqolHidden then return end
+
+	local function enforceHidden(target)
+		if not target then return end
+		local canHide = true
+		if InCombatLockdown and InCombatLockdown() then
+			if target.IsProtected and target:IsProtected() then canHide = false end
+		end
+		if canHide then
+			if target.Hide then pcall(target.Hide, target) end
+		elseif target.SetAlpha then
+			target:SetAlpha(0)
+			target._eqolAlphaHidden = true
+		end
 	end
-	return true
+
+	if frame.UnregisterAllEvents then frame:UnregisterAllEvents() end
+	enforceHidden(frame)
+	frame._eqolHidden = true
+	if frame.SetParent then pcall(frame.SetParent, frame, getHiddenParent()) end
+	if not frame._eqolHiddenHooks then
+		frame._eqolHiddenHooks = true
+		if frame.Show then hooksecurefunc(frame, "Show", function(f) enforceHidden(f) end) end
+		if frame.SetShown then hooksecurefunc(frame, "SetShown", function(f, shown)
+			if shown then enforceHidden(f) end
+		end) end
+	end
 end
 
 function addon.functions.toggleRaidTools(value, self)
-	if not self then return end
-	local inParty = UnitInParty("player")
-	local inRaid = UnitInRaid("player")
-	local inGroup = inParty or inRaid
-	local hideInParty = value == true and inParty and not inRaid
-
-	if not inGroup then
-		if self._eqolRaidToolsAlphaHidden and self.SetAlpha then
-			self._eqolRaidToolsAlphaHidden = nil
-			self:SetAlpha(1)
-		end
-		return
-	end
-
-	if hideInParty then
-		if canChangeProtectedVisibility(self) then
-			if self.Hide then self:Hide() end
-		elseif self.SetAlpha then
-			self._eqolRaidToolsAlphaHidden = true
-			self:SetAlpha(0)
-		end
-	else
-		if self._eqolRaidToolsAlphaHidden and self.SetAlpha then
-			self._eqolRaidToolsAlphaHidden = nil
-			self:SetAlpha(1)
-		end
-		if canChangeProtectedVisibility(self) then
-			if self.Show then self:Show() end
-		elseif self.SetAlpha then
-			self:SetAlpha(1)
-		end
-	end
+	if value ~= true then return end
+	local manager = self or _G.CompactRaidFrameManager
+	hideFrameLocked(manager)
+	if CompactRaidFrameManager_SetSetting then pcall(CompactRaidFrameManager_SetSetting, "IsShown", "0") end
 end
 
 function addon.functions.updateRaidToolsHook()
-	local manager = _G.CompactRaidFrameManager
-	if not manager or not manager.SetScript then return end
-	if addon.db and addon.db["hideRaidTools"] then
-		if not manager._eqolRaidToolsOnShowHooked then
-			manager:SetScript("OnShow", function(self) addon.functions.toggleRaidTools(addon.db["hideRaidTools"], self) end)
-			manager._eqolRaidToolsOnShowHooked = true
-		end
-		addon.functions.toggleRaidTools(addon.db["hideRaidTools"], manager)
-	elseif manager._eqolRaidToolsOnShowHooked then
-		manager:SetScript("OnShow", nil)
-		manager._eqolRaidToolsOnShowHooked = nil
-		if manager._eqolRaidToolsAlphaHidden and manager.SetAlpha then
-			manager._eqolRaidToolsAlphaHidden = nil
-			manager:SetAlpha(1)
-		end
-	end
+	if addon.db and addon.db["hideRaidTools"] then addon.functions.toggleRaidTools(true, _G.CompactRaidFrameManager) end
 end
 
 function addon.functions.GetHealthPercent(unit, cur, max, usePredicted, curve)
@@ -121,6 +449,7 @@ local COPPER_ICON = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
 function addon.functions.formatMoney(copper, type)
 	local COPPER_PER_SILVER = 100
 	local COPPER_PER_GOLD = 10000
+	local privateDB = addon.functions.GetPrivateDB and addon.functions.GetPrivateDB() or addon.privateDB or {}
 
 	local gold = math.floor(copper / COPPER_PER_GOLD)
 	local silver = math.floor((copper % COPPER_PER_GOLD) / COPPER_PER_SILVER)
@@ -129,7 +458,7 @@ function addon.functions.formatMoney(copper, type)
 	local parts = {}
 
 	if gold > 0 then table.insert(parts, string.format("%s%s", BreakUpLargeNumbers(gold), GOLD_ICON)) end
-	if nil == type or (type and type == "tracker" and addon.db["showOnlyGoldOnMoney"] == false) then
+	if nil == type or (type and type == "tracker" and privateDB["showOnlyGoldOnMoney"] ~= true) then
 		if gold > 0 or silver > 0 then table.insert(parts, string.format("%02d%s", silver, SILVER_ICON)) end
 		table.insert(parts, string.format("%02d%s", bronze, COPPER_ICON))
 	end
@@ -399,6 +728,96 @@ end
 
 local tooltipCache = {}
 function addon.functions.clearTooltipCache() wipe(tooltipCache) end
+
+local function getUpgradeTrackKeyFromUpgradeInfo(itemUpgradeInfo)
+	if type(itemUpgradeInfo) ~= "table" then return nil end
+	return getUpgradeTrackCanonicalKey(itemUpgradeInfo.trackStringID, itemUpgradeInfo.trackString)
+end
+
+local function buildItemUpgradeDisplayText(itemUpgradeInfo, trackKey)
+	if type(itemUpgradeInfo) ~= "table" or not trackKey then return nil end
+	local shortLabel = addon.functions.GetUpgradeTrackAbbreviation(trackKey)
+	if not shortLabel then
+		local trackString = trimUpgradeTrackText(itemUpgradeInfo.trackString)
+		shortLabel = trackString and getFirstUtf8Char(trackString) or nil
+	end
+	if not shortLabel then return nil end
+	local currentLevel = tonumber(itemUpgradeInfo.currentLevel)
+	local maxLevel = tonumber(itemUpgradeInfo.maxLevel)
+	if currentLevel and maxLevel and currentLevel >= 0 and maxLevel > 0 then return string.format("%s(%d/%d)", shortLabel, currentLevel, maxLevel) end
+	return shortLabel
+end
+
+local function getItemUpgradeInfo(itemInfo)
+	if not itemInfo or not (C_Item and C_Item.GetItemUpgradeInfo) then return nil end
+	return C_Item.GetItemUpgradeInfo(itemInfo)
+end
+
+function addon.functions.ExtractUpgradeTrackKeyFromTooltipData(data)
+	if type(data) == "table" and (data.trackStringID ~= nil or data.trackString ~= nil) then return getUpgradeTrackKeyFromUpgradeInfo(data) end
+	return nil
+end
+
+function addon.functions.GetUpgradeTrackKeyFromBagSlot(bag, slot)
+	if bag == nil or slot == nil then return nil end
+	local itemLink = C_Container.GetContainerItemLink(bag, slot)
+	if not itemLink then return nil end
+	return getUpgradeTrackKeyFromUpgradeInfo(getItemUpgradeInfo(itemLink))
+end
+
+function addon.functions.GetUpgradeTrackKeyFromItemLink(itemLink)
+	if not itemLink then return nil end
+	return getUpgradeTrackKeyFromUpgradeInfo(getItemUpgradeInfo(itemLink))
+end
+
+function addon.functions.GetItemUpgradeInfoForLink(itemLink)
+	if not itemLink then return nil end
+	local itemUpgradeInfo = getItemUpgradeInfo(itemLink)
+	local trackKey = getUpgradeTrackKeyFromUpgradeInfo(itemUpgradeInfo)
+	if not trackKey then return nil end
+	return {
+		key = trackKey,
+		currentLevel = itemUpgradeInfo.currentLevel,
+		maxLevel = itemUpgradeInfo.maxLevel,
+		maxItemLevel = itemUpgradeInfo.maxItemLevel,
+		trackString = trimUpgradeTrackText(itemUpgradeInfo.trackString),
+		trackStringID = itemUpgradeInfo.trackStringID,
+		label = addon.functions.GetUpgradeTrackLabel(trackKey),
+		abbreviation = addon.functions.GetUpgradeTrackAbbreviation(trackKey),
+		displayText = buildItemUpgradeDisplayText(itemUpgradeInfo, trackKey),
+	}
+end
+
+function addon.functions.GetItemUpgradeDisplayText(itemInfo)
+	local itemUpgradeInfo = getItemUpgradeInfo(itemInfo)
+	local trackKey = getUpgradeTrackKeyFromUpgradeInfo(itemUpgradeInfo)
+	return buildItemUpgradeDisplayText(itemUpgradeInfo, trackKey)
+end
+
+function addon.functions.GetUpgradeTrackLabel(trackKey)
+	local canonical = getUpgradeTrackCanonicalKey(nil, trackKey)
+	if not canonical then return nil end
+	local info = upgradeTrackMeta[canonical]
+	return getUpgradeTrackLabelText(info)
+end
+
+function addon.functions.GetUpgradeTrackAbbreviation(trackKey)
+	local label = addon.functions.GetUpgradeTrackLabel(trackKey)
+	if not label then return nil end
+	return getFirstUtf8Char(label)
+end
+
+function addon.functions.GetUpgradeTrackColor(trackKey)
+	local canonical = getUpgradeTrackCanonicalKey(nil, trackKey)
+	if not canonical then return 1, 1, 1, 1 end
+	local quality = upgradeTrackMeta[canonical] and upgradeTrackMeta[canonical].quality
+	if quality ~= nil then
+		local r, g, b = C_Item.GetItemQualityColor(quality)
+		if r and g and b then return r, g, b, 1 end
+	end
+	return 1, 1, 1, 1
+end
+
 local function getTooltipInfo(bag, slot, classID, tBindType)
 	local key = bag .. "_" .. slot
 	local cached = tooltipCache[key]
@@ -407,6 +826,7 @@ local function getTooltipInfo(bag, slot, classID, tBindType)
 	local bType, bKey, upgradeKey, bAuc
 	local data = C_TooltipInfo.GetBagItem(bag, slot)
 	if data and data.lines then
+		upgradeKey = addon.functions.GetUpgradeTrackKeyFromBagSlot(bag, slot)
 		for i, v in pairs(data.lines) do
 			if v.type == 20 then
 				bAuc = true
@@ -421,12 +841,6 @@ local function getTooltipInfo(bag, slot, classID, tBindType)
 					bType = "WB"
 					bKey = "wb"
 				end
-			elseif v.type == 42 then
-				local text = v.rightText or v.leftText
-				if text then
-					local tier = text:gsub(".+:%s?", ""):gsub("%s?%d/%d", "")
-					if tier then upgradeKey = string.lower(tier) end
-				end
 			elseif v.type == 0 and v.leftText == ITEM_CONJURED then
 				bAuc = true
 			end
@@ -440,6 +854,78 @@ local function getTooltipInfo(bag, slot, classID, tBindType)
 	return bType, bKey, upgradeKey, bAuc
 end
 
+local function normalizeItemLevelOutline(outline)
+	if outline == nil then return "OUTLINE" end
+	if outline == "" or outline == "NONE" then return nil end
+	return outline
+end
+
+local function getItemLevelFontFace()
+	local configured = addon.db and addon.db["ilvlFontFace"]
+	return addon.functions.ResolveFontFace(configured, defaultFontFace())
+end
+
+local function getItemLevelFontSize()
+	local value = tonumber(addon.db and addon.db["ilvlFontSize"])
+	if not value then return 14 end
+	value = math.floor(value + 0.5)
+	if value < 8 then value = 8 end
+	if value > 32 then value = 32 end
+	return value
+end
+
+local function getItemLevelCustomColor()
+	local color = addon.db and addon.db["ilvlTextColor"]
+	local r = (color and color.r) or 1
+	local g = (color and color.g) or 1
+	local b = (color and color.b) or 1
+	local a = color and color.a
+	if a == nil then a = 1 end
+	return r, g, b, a
+end
+
+local function applyBagUpgradeTrackStyle(fontString)
+	if not fontString then return end
+	local face = getItemLevelFontFace()
+	local outline = normalizeItemLevelOutline(addon.db and addon.db["ilvlFontOutline"])
+	local size = math.max(8, getItemLevelFontSize() - 4)
+	local ok = fontString:SetFont(face, size, outline)
+	if ok == false then fontString:SetFont(addon.variables.defaultFont, size, outline) end
+	fontString:SetShadowOffset(1, -1)
+	fontString:SetShadowColor(0, 0, 0, 1)
+end
+
+function addon.functions.GetItemLevelTextColor(itemQuality)
+	if addon.db and addon.db["ilvlUseItemQualityColor"] ~= false then
+		if type(itemQuality) == "number" then
+			local r, g, b = C_Item.GetItemQualityColor(itemQuality)
+			if r and g and b then return r, g, b, 1 end
+		elseif type(itemQuality) == "table" then
+			local r = itemQuality.r or itemQuality[1]
+			local g = itemQuality.g or itemQuality[2]
+			local b = itemQuality.b or itemQuality[3]
+			local a = itemQuality.a or itemQuality[4] or 1
+			if r and g and b then return r, g, b, a end
+		end
+	end
+	return getItemLevelCustomColor()
+end
+
+function addon.functions.ApplyItemLevelTextStyle(fontString)
+	if not fontString then return end
+	local face = getItemLevelFontFace()
+	local size = getItemLevelFontSize()
+	local outline = normalizeItemLevelOutline(addon.db and addon.db["ilvlFontOutline"])
+	local ok = fontString:SetFont(face, size, outline)
+	if ok == false then fontString:SetFont(addon.variables.defaultFont, size, outline) end
+end
+
+function addon.functions.ApplyItemLevelTextColor(fontString, itemQuality)
+	if not fontString then return end
+	local r, g, b, a = addon.functions.GetItemLevelTextColor(itemQuality)
+	fontString:SetTextColor(r, g, b, a or 1)
+end
+
 local bagIlvlAnchors = {
 	TOPLEFT = { point = "TOPLEFT", x = 2, y = -2 },
 	TOP = { point = "TOP", x = 0, y = -2 },
@@ -450,6 +936,7 @@ local bagIlvlAnchors = {
 	BOTTOMLEFT = { point = "BOTTOMLEFT", x = 2, y = 2 },
 	BOTTOM = { point = "BOTTOM", x = 0, y = 2 },
 	BOTTOMRIGHT = { point = "BOTTOMRIGHT", x = 0, y = 2 },
+	OUTSIDE = { point = "TOPLEFT", relativePoint = "TOPRIGHT", x = 2, y = -2 },
 }
 
 local bagUpgradeAnchors = {
@@ -466,8 +953,14 @@ local UPGRADE_ICON_GLOW_SIZE = 24
 function addon.functions.ApplyBagItemLevelPosition(target, anchorFrame, position)
 	if not target or not anchorFrame then return end
 	local anchor = bagIlvlAnchors[position] or bagIlvlAnchors.TOPRIGHT
+	local relativePoint = anchor.relativePoint or anchor.point
 	target:ClearAllPoints()
-	target:SetPoint(anchor.point, anchorFrame, anchor.point, anchor.x, anchor.y)
+	target:SetPoint(anchor.point, anchorFrame, relativePoint, anchor.x, anchor.y)
+end
+
+function addon.functions.ApplyBagUpgradeTrackPosition(target, anchorFrame, position)
+	if not target or not anchorFrame then return end
+	addon.functions.ApplyBagItemLevelPosition(target, anchorFrame, position or "OUTSIDE")
 end
 
 local function resolveBoundAnchor(position)
@@ -578,12 +1071,12 @@ local function getCurrentSpecFilters()
 	return cachedSpecFilters
 end
 
-local function isItemRecommendedForSpec(itemLink, itemEquipLoc, classID, subclassID)
+function addon.functions.IsItemRecommendedForSpec(itemLink, itemEquipLoc, classID, subclassID)
 	if not itemLink then return false end
-	if not IsEquippableItem(itemLink) then return false end
+	if not IsEquippableItemFn(itemLink) then return false end
 
 	if itemEquipLoc == nil or classID == nil or subclassID == nil then
-		local _, _, _, equipLoc, _, instantClassID, instantSubclassID = GetItemInfoInstant(itemLink)
+		local _, _, _, equipLoc, _, instantClassID, instantSubclassID = GetItemInfoInstantFn(itemLink)
 		itemEquipLoc = itemEquipLoc or equipLoc
 		if classID == nil then classID = instantClassID end
 		if subclassID == nil then subclassID = instantSubclassID end
@@ -625,6 +1118,8 @@ local function isBagItemUpgrade(itemLink, itemEquipLoc, itemLevel)
 	return numericLevel > baseline
 end
 
+function addon.functions.IsBagItemUpgrade(itemLink, itemEquipLoc, itemLevel) return isBagItemUpgrade(itemLink, itemEquipLoc, itemLevel) end
+
 local function updateBagRarityGlow(itemButton, itemQuality, dimmed)
 	if not itemButton then return end
 	if not addon.db or addon.db["enhancedRarityGlow"] ~= true then
@@ -655,6 +1150,47 @@ local function updateBagRarityGlow(itemButton, itemQuality, dimmed)
 	glow:Show()
 end
 
+local function clearBagButtonInfo(itemButton)
+	if not itemButton then return end
+	itemButton:SetAlpha(1)
+	if itemButton.EQOLFilterOverlay then
+		itemButton.EQOLFilterOverlay:SetAlpha(1)
+		itemButton.EQOLFilterOverlay:Hide()
+	end
+	if itemButton.ItemLevelText then
+		itemButton.ItemLevelText:SetAlpha(1)
+		itemButton.ItemLevelText:Hide()
+	end
+	if itemButton.ItemBoundType then
+		itemButton.ItemBoundType:SetAlpha(1)
+		itemButton.ItemBoundType:Hide()
+	end
+	if itemButton.ItemUpgradeTrackText then
+		itemButton.ItemUpgradeTrackText:SetAlpha(1)
+		itemButton.ItemUpgradeTrackText:Hide()
+	end
+	if itemButton.ItemUpgradeArrow then
+		itemButton.ItemUpgradeArrow:SetAlpha(1)
+		itemButton.ItemUpgradeArrow:Hide()
+	end
+	if itemButton.ItemUpgradeIcon then
+		itemButton.ItemUpgradeIcon:SetAlpha(1)
+		itemButton.ItemUpgradeIcon:Hide()
+	end
+	if itemButton.ItemUpgradeIconGlow then
+		itemButton.ItemUpgradeIconGlow:SetAlpha(1)
+		itemButton.ItemUpgradeIconGlow:Hide()
+	end
+	if itemButton.ProfessionQualityOverlay and addon.db and addon.db["fadeBagQualityIcons"] then itemButton.ProfessionQualityOverlay:SetAlpha(1) end
+	updateBagRarityGlow(itemButton, nil, false)
+end
+
+local function shouldUpdateBagButtonInfo()
+	if addon.filterFrame then return true end
+	if not addon.db then return false end
+	return addon.db["showIlvlOnBagItems"] or addon.db["showBindOnBagItems"] or addon.db["showUpgradeArrowOnBagItems"] or addon.db["showUpgradeTrackOnBagItems"] or addon.db["enhancedRarityGlow"]
+end
+
 local function updateButtonInfo(itemButton, bag, slot, frameName)
 	itemButton:SetAlpha(1)
 	if itemButton.EQOLFilterOverlay then
@@ -670,6 +1206,11 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 		itemButton.ItemBoundType:SetAlpha(1)
 		itemButton.ItemBoundType:SetText("")
 	end
+	if itemButton.ItemUpgradeTrackText then
+		itemButton.ItemUpgradeTrackText:SetAlpha(1)
+		itemButton.ItemUpgradeTrackText:SetText("")
+		itemButton.ItemUpgradeTrackText:Hide()
+	end
 	-- Reset upgrade marker each update to avoid stale icons when buttons are recycled
 	if itemButton.ItemUpgradeArrow then
 		itemButton.ItemUpgradeArrow:SetAlpha(1)
@@ -683,9 +1224,11 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 		itemButton.ItemUpgradeIconGlow:SetAlpha(1)
 		itemButton.ItemUpgradeIconGlow:Hide()
 	end
+	local isBankFrame = frameName == "BankPanel" or frameName == "BankFrame"
+	local showItemLevel = isBankFrame and addon.db["showIlvlOnBankFrame"] or addon.db["showIlvlOnBagItems"]
 	local itemLink = C_Container.GetContainerItemLink(bag, slot)
 	if itemLink then
-		local _, _, itemQuality, _, _, _, _, _, itemEquipLoc, _, sellPrice, classID, subclassID, tBindType, expId = GetItemInfo(itemLink)
+		local _, _, itemQuality, _, _, _, _, _, itemEquipLoc, _, sellPrice, classID, subclassID, tBindType, expId = GetItemInfoFn(itemLink)
 		if itemQuality == nil and GetContainerItemInfo then
 			local containerInfo = GetContainerItemInfo(bag, slot)
 			if containerInfo and containerInfo.quality ~= nil then itemQuality = containerInfo.quality end
@@ -693,11 +1236,18 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 
 		local bType, bKey, upgradeKey, bAuc
 		local data
-		if addon.db["showBindOnBagItems"] or addon.itemBagFilters["bind"] or addon.itemBagFilters["upgrade"] or addon.itemBagFilters["misc_auctionhouse_sellable"] then
+		if
+			addon.db["showBindOnBagItems"]
+			or addon.db["showUpgradeTrackOnBagItems"]
+			or addon.itemBagFilters["bind"]
+			or addon.itemBagFilters["upgrade"]
+			or addon.itemBagFilters["misc_auctionhouse_sellable"]
+		then
 			bType, bKey, upgradeKey, bAuc = getTooltipInfo(bag, slot, classID, tBindType)
 		end
 		local setVisibility
 		local isUpgrade = nil
+		local isRecommended = nil
 
 		if addon.filterFrame then
 			if classID == 15 and subclassID == 0 then bAuc = true end -- ignore lockboxes etc.
@@ -716,8 +1266,13 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				if addon.itemBagFilters["currentExpension"] and LE_EXPANSION_LEVEL_CURRENT ~= expId then setVisibility = true end
 				if addon.itemBagFilters["equipment"] and (nil == itemEquipLoc or addon.variables.ignoredEquipmentTypes[itemEquipLoc]) then setVisibility = true end
 				if addon.itemBagFilters["upgradeOnly"] then
-					if isUpgrade == nil then isUpgrade = isBagItemUpgrade(itemLink, itemEquipLoc) end
-					if not isUpgrade then setVisibility = true end
+					if isRecommended == nil then isRecommended = addon.functions.IsItemRecommendedForSpec(itemLink, itemEquipLoc, classID, subclassID) end
+					if not isRecommended then
+						setVisibility = true
+					else
+						if isUpgrade == nil then isUpgrade = isBagItemUpgrade(itemLink, itemEquipLoc) end
+						if not isUpgrade then setVisibility = true end
+					end
 				end
 				if addon.itemBagFilters["bind"] then
 					if nil == addon.itemBagFiltersBound[bKey] or addon.itemBagFiltersBound[bKey] == false then setVisibility = true end
@@ -734,7 +1289,7 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				if
 					addon.itemBagFilters["usableOnly"]
 					and (
-						IsEquippableItem(itemLink) == false
+						IsEquippableItemFn(itemLink) == false
 						or (
 							(
 								nil == addon.itemBagFilterTypes[addon.variables.unitClass]
@@ -763,22 +1318,40 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				itemButton.ItemLevelText:SetShadowOffset(2, -2)
 				itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
 			end
+			addon.functions.ApplyItemLevelTextStyle(itemButton.ItemLevelText)
 
 			itemButton.ItemLevelText:ClearAllPoints()
 			local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
 			addon.functions.ApplyBagItemLevelPosition(itemButton.ItemLevelText, itemButton, pos)
 			if nil ~= addon.variables.allowedEquipSlotsBagIlvl[itemEquipLoc] then
-				local r, g, b = C_Item.GetItemQualityColor(itemQuality)
 				local itemLevelText = C_Item.GetCurrentItemLevel(ItemLocation:CreateFromBagAndSlot(bag, slot))
 
 				itemButton.ItemLevelText:SetFormattedText(itemLevelText)
-				itemButton.ItemLevelText:SetTextColor(r, g, b, 1)
+				addon.functions.ApplyItemLevelTextColor(itemButton.ItemLevelText, itemQuality)
 
-				itemButton.ItemLevelText:Show()
+				if showItemLevel then
+					itemButton.ItemLevelText:Show()
+				else
+					itemButton.ItemLevelText:Hide()
+				end
+
+				if addon.db["showUpgradeTrackOnBagItems"] and upgradeKey then
+					if not itemButton.ItemUpgradeTrackText then
+						itemButton.ItemUpgradeTrackText = itemButton:CreateFontString(nil, "ARTWORK")
+						itemButton.ItemUpgradeTrackText:SetDrawLayer("ARTWORK", 1)
+					end
+					applyBagUpgradeTrackStyle(itemButton.ItemUpgradeTrackText)
+					addon.functions.ApplyBagUpgradeTrackPosition(itemButton.ItemUpgradeTrackText, itemButton, addon.db["bagTrackPosition"])
+					itemButton.ItemUpgradeTrackText:SetText(addon.functions.GetItemUpgradeDisplayText(itemLink) or addon.functions.GetUpgradeTrackAbbreviation(upgradeKey) or "")
+					itemButton.ItemUpgradeTrackText:SetTextColor(addon.functions.GetUpgradeTrackColor(upgradeKey))
+					itemButton.ItemUpgradeTrackText:Show()
+				elseif itemButton.ItemUpgradeTrackText then
+					itemButton.ItemUpgradeTrackText:Hide()
+				end
 
 				-- Upgrade arrow (bag): indicate if this item is higher ilvl than equipped
 				if addon.db["showUpgradeArrowOnBagItems"] then
-					local isRecommended = isItemRecommendedForSpec(itemLink, itemEquipLoc, classID, subclassID)
+					if isRecommended == nil then isRecommended = addon.functions.IsItemRecommendedForSpec(itemLink, itemEquipLoc, classID, subclassID) end
 					if isRecommended and isUpgrade == nil then isUpgrade = isBagItemUpgrade(itemLink, itemEquipLoc, itemLevelText) end
 					if isRecommended and isUpgrade then
 						addon.functions.EnsureBagUpgradeIcon(itemButton)
@@ -815,6 +1388,7 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				end
 			elseif itemButton.ItemLevelText then
 				if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
+				if itemButton.ItemUpgradeTrackText then itemButton.ItemUpgradeTrackText:Hide() end
 				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
 				itemButton.ItemLevelText:Hide()
 			end
@@ -831,6 +1405,7 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 
 			if itemButton.ItemLevelText then itemButton.ItemLevelText:SetAlpha(0.1) end
 			if itemButton.ItemBoundType then itemButton.ItemBoundType:SetAlpha(0.1) end
+			if itemButton.ItemUpgradeTrackText then itemButton.ItemUpgradeTrackText:SetAlpha(0.1) end
 			if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:SetAlpha(0.1) end
 			if itemButton.ProfessionQualityOverlay and addon.db["fadeBagQualityIcons"] then itemButton.ProfessionQualityOverlay:SetAlpha(0.1) end
 		else
@@ -838,6 +1413,7 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 			if itemButton.EQOLFilterOverlay then itemButton.EQOLFilterOverlay:Hide() end
 			if itemButton.ItemLevelText then itemButton.ItemLevelText:SetAlpha(1) end
 			if itemButton.ItemBoundType then itemButton.ItemBoundType:SetAlpha(1) end
+			if itemButton.ItemUpgradeTrackText then itemButton.ItemUpgradeTrackText:SetAlpha(1) end
 			if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:SetAlpha(1) end
 			if itemButton.ProfessionQualityOverlay and addon.db["fadeBagQualityIcons"] then itemButton.ProfessionQualityOverlay:SetAlpha(1) end
 		end
@@ -845,13 +1421,14 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 		-- end)
 	else
 		if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
+		if itemButton.ItemUpgradeTrackText then itemButton.ItemUpgradeTrackText:Hide() end
 		if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
 		if itemButton.ItemLevelText then itemButton.ItemLevelText:Hide() end
 		updateBagRarityGlow(itemButton, nil, false)
 	end
 end
 
-function addon.functions.updateBank(itemButton, bag, slot) updateButtonInfo(itemButton, bag, slot) end
+function addon.functions.updateBank(itemButton, bag, slot) updateButtonInfo(itemButton, bag, slot, "BankFrame") end
 
 local filterData = {
 	{
@@ -887,10 +1464,12 @@ local filterData = {
 	{
 		label = L["bagFilterUpgradeLevel"],
 		child = {
-			{ type = "CheckBox", key = "upgrade_veteran", label = L["upgradeLevelVeteran"], uFilter = L["upgradeLevelVeteran"] },
-			{ type = "CheckBox", key = "upgrade_champion", label = L["upgradeLevelChampion"], uFilter = L["upgradeLevelChampion"] },
-			{ type = "CheckBox", key = "upgrade_hero", label = L["upgradeLevelHero"], uFilter = L["upgradeLevelHero"] },
-			{ type = "CheckBox", key = "upgrade_mythic", label = L["upgradeLevelMythic"], uFilter = L["upgradeLevelMythic"] },
+			{ type = "CheckBox", key = "upgrade_explorer", label = "Explorer", uFilter = "explorer" },
+			{ type = "CheckBox", key = "upgrade_adventurer", label = "Adventurer", uFilter = "adventurer" },
+			{ type = "CheckBox", key = "upgrade_veteran", label = L["upgradeLevelVeteran"], uFilter = "veteran" },
+			{ type = "CheckBox", key = "upgrade_champion", label = L["upgradeLevelChampion"], uFilter = "champion" },
+			{ type = "CheckBox", key = "upgrade_hero", label = L["upgradeLevelHero"], uFilter = "hero" },
+			{ type = "CheckBox", key = "upgrade_mythic", label = L["upgradeLevelMythic"], uFilter = "myth" },
 		},
 	},
 	{
@@ -1056,7 +1635,7 @@ local function CreateFilterMenu()
 						checkActiveBindFilter()
 					end
 					if item.uFilter then
-						addon.itemBagFiltersUpgrade[string.lower(item.uFilter)] = value
+						addon.itemBagFiltersUpgrade[item.uFilter] = value
 						checkActiveUpgradeFilter()
 					end
 					-- Hier könnte man die Filterlogik triggern, z. B.:
@@ -1247,10 +1826,10 @@ function addon.functions.updateBags(frame)
 	else
 		for _, itemButton in frame:EnumerateValidItems() do
 			if itemButton then
-				if addon.db["showIlvlOnBagItems"] then
+				if shouldUpdateBagButtonInfo() then
 					updateButtonInfo(itemButton, itemButton:GetBagID(), itemButton:GetID(), frame:GetName())
-				elseif itemButton.ItemLevelText then
-					itemButton.ItemLevelText:Hide()
+				else
+					clearBagButtonInfo(itemButton)
 				end
 			end
 		end
@@ -1420,6 +1999,13 @@ local function toggleQuickKeybindMode()
 	frame:SetShown(not frame:IsShown())
 end
 
+local function toggleClickCastBindings()
+	if InCombatLockdown and InCombatLockdown() then return end
+	if C_GameRules and C_GameRules.IsPlunderstorm and C_GameRules.IsPlunderstorm() then return end
+	local toggleFrame = _G.ToggleClickBindingFrame
+	if toggleFrame then toggleFrame() end
+end
+
 function addon.functions.registerCooldownManagerSlashCommand()
 	if not SlashCmdList then return end
 	local isLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or _G.IsAddOnLoaded
@@ -1467,6 +2053,18 @@ function addon.functions.registerQuickKeybindSlashCommand()
 	if not canClaim("/kb") then return end
 	_G.SLASH_EQOLKB1 = "/kb"
 	SlashCmdList["EQOLKB"] = function() toggleQuickKeybindMode() end
+end
+
+function addon.functions.registerClickCastSlashCommand()
+	if not SlashCmdList then return end
+	local commands = {}
+	local function canClaim(command) return isSlashCommandOwnedByEQOL(command, "EQOLCCB", "EQOLCCB", 2) or not isSlashCommandRegistered(command) end
+	if canClaim("/ccb") then commands[#commands + 1] = "/ccb" end
+	if canClaim("/clickcast") then commands[#commands + 1] = "/clickcast" end
+	if #commands == 0 then return end
+	_G.SLASH_EQOLCCB1 = commands[1]
+	_G.SLASH_EQOLCCB2 = commands[2]
+	SlashCmdList["EQOLCCB"] = function() toggleClickCastBindings() end
 end
 
 function addon.functions.registerReloadUISlashCommand()
